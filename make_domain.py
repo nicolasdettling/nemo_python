@@ -36,3 +36,14 @@ def coordinates_from_global (global_file='/gws/nopw/j04/terrafirma/kaight/input_
     # Select only the variables we need and write to file
     var_names = ['nav_lon', 'nav_lat', 'e2f', 'e2v', 'e2u', 'e2t', 'e1f', 'e1v', 'e1u', 'e1t', 'gphif', 'gphiv', 'gphiu', 'gphit', 'glamf', 'glamv', 'glamu', 'glamt']
     ds_regional[var_names].to_netcdf(out_file)
+
+
+def interp_topo (source='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/BedMachineAntarctica-v3.nc', coordinates_file='coordinates.nc', out_file='topo.nc'):
+
+    if source == 'BedMachine3':
+        ds = xr.open_dataset(topo_file)
+        bathy = ds['bed']
+        draft = ds['thickness']
+        mask = ds['mask']  # 0 ocean, 1 rock, 2 grounded, 3 floating, 4 subglacial lake
+    else:
+        raise Exception('source dataset not supported')
