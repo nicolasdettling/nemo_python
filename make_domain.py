@@ -1,6 +1,5 @@
 import xarray as xr
 import numpy as np
-from .utils import polar_stereo_inv
 
 # Given a pre-existing global domain (eg eORCA025), slice out a regional domain.
 # Inputs:
@@ -42,13 +41,24 @@ def coordinates_from_global (global_file='/gws/nopw/j04/terrafirma/kaight/input_
 def interp_topo (source='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/BedMachineAntarctica-v3.nc', coordinates_file='coordinates.nc', out_file='topo.nc'):
 
     if source == 'BedMachine3':
-        ds = xr.open_dataset(topo_file)
-        bathy = ds['bed']
-        draft = ds['thickness']
-        mask = ds['mask']  # 0 ocean, 1 rock, 2 grounded, 3 floating, 4 subglacial lake
-        x = ds['x']
-        y = ds['y']
-        x_2d, y_2d = np.meshgrid(x, y)
-        lon, lat = polar_stereo_inv(x_2d, y_2d)
+        print('Reading input data')
+        ds_source = xr.open_dataset(topo_file)
+        bathy = ds_source['bed']
+        draft = ds_source['thickness']
+        mask = ds_source['mask']  # 0 ocean, 1 rock, 2 grounded, 3 floating, 4 subglacial lake
+        x = ds_source['x'].astype('float32')  # Source dataset is ints which can overflow later
+        y = ds_source['y'].astype('float32')
+        pster_source = True
     else:
         raise Exception('source dataset not supported')
+
+    print('Reading target coordinates')
+    ds_target = xr.open_dataset(coordinates_file)
+    target_lon = ds_target['nav_lon']
+    target_lat = ds_target['nav_lat']
+    # Infer whether it's a periodic grid
+    periodic = np.amin(target_lon) < -178 and np.amax(target_lon) > 178
+
+    print('Interpolating')
+    [bathy_interp, draft_interp, mask_interp] = interp_latlon_cf([bathy, draft, mask], x, y, target_lon, target_lat, pster_source=pster_source, periodic_target=periodic, method='conservative')
+        
