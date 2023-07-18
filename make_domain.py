@@ -45,5 +45,7 @@ def interp_topo (source='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaigh
         bathy = ds['bed']
         draft = ds['thickness']
         mask = ds['mask']  # 0 ocean, 1 rock, 2 grounded, 3 floating, 4 subglacial lake
+        x = ds['x']
+        y = ds['y']
     else:
         raise Exception('source dataset not supported')
