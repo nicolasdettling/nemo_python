@@ -1,5 +1,6 @@
 import xarray as xr
 import numpy as np
+from .utils import polar_stereo_inv
 
 # Given a pre-existing global domain (eg eORCA025), slice out a regional domain.
 # Inputs:
@@ -40,25 +41,36 @@ def coordinates_from_global (global_file='/gws/nopw/j04/terrafirma/kaight/input_
 
 def interp_topo (source='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/BedMachineAntarctica-v3.nc', coordinates_file='coordinates.nc', out_file='topo.nc'):
 
-    if source == 'BedMachine3':
-        print('Reading input data')
+    import xesmf as xe
+
+    print('Processing input data')
+    if source == 'BedMachine3':        
         ds_source = xr.open_dataset(topo_file)
+        # x and y coordinates are ints which can overflow later; cast to floats
+        ds_source['x'] = ds_source['x'].astype('float32')
+        ds_source['y'] = ds_source['y'].astype('float32')
+        # Bathymetry is the variable "bed"
         bathy = ds_source['bed']
-        draft = ds_source['thickness']
-        mask = ds_source['mask']  # 0 ocean, 1 rock, 2 grounded, 3 floating, 4 subglacial lake
-        x = ds_source['x'].astype('float32')  # Source dataset is ints which can overflow later
-        y = ds_source['y'].astype('float32')
-        pster_source = True
+        # Ice draft is the surface minus thickness
+        draft = ds_source['surface'] - ds_source['thickness']
+        # Ocean mask includes open ocean (0) and floating ice (3)
+        omask = xr.where((ds_source['mask']==0)+(ds_source['mask']==3), 1, 0)
+        # Ice sheet mask includes everything except open ocean (1=rock, 2=grounded ice, 3=floating ice, 4=subglacial lake)
+        imask = xr.where(ds_source['mask']!=0, 1, 0)
+        # Calculate latitude and longitude
+        lon, lat = polar_stereo_inv(ds_source['x'], ds_source['y'])
+        # Now keep just the variables we need
+        ds_source = xr.merge([bathy, draft, omask, imask, lon, lat])
     else:
         raise Exception('source dataset not supported')
+    # Now we have a nice xarray dataset with the following variables: lon, lat, bathy, draft, omask, imask.
 
-    print('Reading target coordinates')
+    print('Reading NEMO coordinates')
     ds_target = xr.open_dataset(coordinates_file)
-    target_lon = ds_target['nav_lon']
-    target_lat = ds_target['nav_lat']
+    ds_target = ds_target.rename({'nav_lon':'lon', 'nav_lat':'lat'})
     # Infer whether it's a periodic grid
-    periodic = np.amin(target_lon) < -178 and np.amax(target_lon) > 178
+    periodic = np.amin(target_lon.values) < -178 and np.amax(target_lon.values) > 178
 
     print('Interpolating')
-    [bathy_interp, draft_interp, mask_interp] = interp_latlon_cf([bathy, draft, mask], x, y, target_lon, target_lat, pster_source=pster_source, periodic_target=periodic, method='conservative')
+    regridder = xe.Regridder(ds_source, ds_target, 'conservative')
         

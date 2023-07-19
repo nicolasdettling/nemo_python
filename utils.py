@@ -1,26 +1,26 @@
 import numpy as np
+import xarray as xr
 from .constants import deg2rad
 
 # Given an array containing longitude, make sure it's in the range (max_lon-360, max_lon). Default is (-180, 180). If max_lon is None, nothing will be done to the array.
 def fix_lon_range (lon, max_lon=180):
 
-    if max_lon is not None:
+    if isinstance(lon, xr.DataArray):
+        lon = xr.where(lon >= max_lon, lon-360, lon)
+        lon = xr.where(lon < max_lon-360, lon+360, lon)
+    elif isinstance(lon, np.ndarray):
         index = lon >= max_lon
-        try:
-            lon[index] = lon[index] - 360
-        except(TypeError):
-            # lon could be a single value
-            return fix_lon_range(np.array([lon]), max_lon=max_lon)[0]
+        lon[index] = lon[index] - 360
         index = lon < max_lon-360
         lon[index] = lon[index] + 360
+    elif np.isscalar(lon):
+        lon = fix_lon_range(np.array([lon]), max_lon=max_lon)[0]
+    else:
+        raise Exception('unsupported data type')
     return lon
 
 # Convert longitude and latitude to Antarctic polar stereographic projection. Adapted from polarstereo_fwd.m in the MITgcm Matlab toolbox for Bedmap.
 def polar_stereo (lon, lat, a=6378137., e=0.08181919, lat_c=-71, lon0=0):
-
-    # Deep copies of arrays in case they are reused
-    lon = np.copy(lon)
-    lat = np.copy(lat)
 
     if lat_c < 0:
         # Southern hemisphere
@@ -30,18 +30,18 @@ def polar_stereo (lon, lat, a=6378137., e=0.08181919, lat_c=-71, lon0=0):
         pm = 1
 
     # Prepare input
-    lon = lon*pm*deg2rad
-    lat = lat*pm*deg2rad
+    lon_rad = lon*pm*deg2rad
+    lat_rad = lat*pm*deg2rad
     lat_c = lat_c*pm*deg2rad
     lon0 = lon0*pm*deg2rad
 
     # Calculations
-    t = np.tan(np.pi/4 - lat/2)/((1 - e*np.sin(lat))/(1 + e*np.sin(lat)))**(e/2)
+    t = np.tan(np.pi/4 - lat_rad/2)/((1 - e*np.sin(lat_rad))/(1 + e*np.sin(lat_rad)))**(e/2)
     t_c = np.tan(np.pi/4 - lat_c/2)/((1 - e*np.sin(lat_c))/(1 + e*np.sin(lat_c)))**(e/2)
     m_c = np.cos(lat_c)/np.sqrt(1 - (e*np.sin(lat_c))**2)
     rho = a*m_c*t/t_c
-    x = pm*rho*np.sin(lon - lon0)
-    y = -pm*rho*np.cos(lon - lon0)
+    x = pm*rho*np.sin(lon_rad - lon0)
+    y = -pm*rho*np.cos(lon_rad - lon0)
 
     return x, y
 
@@ -50,8 +50,6 @@ def polar_stereo (lon, lat, a=6378137., e=0.08181919, lat_c=-71, lon0=0):
 # This is about twice as fast as the pyproj Transformer function (for BedMachine v3 at least), but it is limited to this specific case so could consider changing in the future if I end up using more projections than just these two.
 def polar_stereo_inv (x, y, a=6378137., e=0.08181919, lat_c=-71, lon0=0):
 
-    x = np.copy(x)
-    y = np.copy(y)
     if lat_c < 0:
         pm = -1
     else:
