@@ -45,25 +45,29 @@ def interp_topo (source='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaigh
 
     print('Processing input data')
     if source == 'BedMachine3':        
-        ds_source = xr.open_dataset(topo_file)
+        ds = xr.open_dataset(topo_file)
         # x and y coordinates are ints which can overflow later; cast to floats
-        ds_source['x'] = ds_source['x'].astype('float32')
-        ds_source['y'] = ds_source['y'].astype('float32')
+        ds['x'] = ds['x'].astype('float32')
+        ds['y'] = ds['y'].astype('float32')
         # Bathymetry is the variable "bed"
-        bathy = ds_source['bed']
+        bathy = ds['bed']
+        print('...calculating ice draft')
         # Ice draft is the surface minus thickness
-        draft = ds_source['surface'] - ds_source['thickness']
+        draft = ds['surface'] - ds['thickness']
+        print('...combining masks')
         # Ocean mask includes open ocean (0) and floating ice (3)
-        omask = xr.where((ds_source['mask']==0)+(ds_source['mask']==3), 1, 0)
+        omask = xr.where((ds['mask']==0)+(ds['mask']==3), 1, 0)
         # Ice sheet mask includes everything except open ocean (1=rock, 2=grounded ice, 3=floating ice, 4=subglacial lake)
-        imask = xr.where(ds_source['mask']!=0, 1, 0)
+        imask = xr.where(ds['mask']!=0, 1, 0)
+        print('...converting to polar spherical projection')
         # Calculate latitude and longitude
-        lon, lat = polar_stereo_inv(ds_source['x'], ds_source['y'])
-        # Now keep just the variables we need
-        ds_source = xr.merge([bathy, draft, omask, imask, lon, lat])
+        lon, lat = polar_stereo_inv(ds['x'], ds['y'])
+        # Now combine the variables we need into a new Dataset
+        ds_source = xr.Dataset({'lon':lon, 'lat':lat, 'bathy':bathy, 'draft':draft, 'omask':omask, 'imask':imask})
+        # Close the original Dataset to save memory
+        ds.close()
     else:
-        raise Exception('source dataset not supported')
-    # Now we have a nice xarray dataset with the following variables: lon, lat, bathy, draft, omask, imask.
+        raise Exception('source dataset not yet supported')
 
     print('Reading NEMO coordinates')
     ds_target = xr.open_dataset(coordinates_file)
@@ -72,5 +76,5 @@ def interp_topo (source='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaigh
     periodic = np.amin(target_lon.values) < -178 and np.amax(target_lon.values) > 178
 
     print('Interpolating')
-    regridder = xe.Regridder(ds_source, ds_target, 'conservative')
+    regridder = xe.Regridder(ds_source, ds_target, 'conservative', periodic=periodic)
         

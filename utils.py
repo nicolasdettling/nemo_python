@@ -75,5 +75,10 @@ def polar_stereo_inv (x, y, a=6378137., e=0.08181919, lat_c=-71, lon0=0):
     lat = lat*pm/deg2rad
     lon = fix_lon_range(lon/deg2rad)
 
+    if isinstance(lon, xr.DataArray):
+        # Default casting is to have x as the first coordinate; this is not what we want
+        lon = lon.transpose('y', 'x')
+        lat = lat.transpose('y', 'x')
+
     return lon, lat
 
