@@ -39,7 +39,7 @@ def coordinates_from_global (global_file='/gws/nopw/j04/terrafirma/kaight/input_
     ds_regional[var_names].to_netcdf(out_file)
 
 
-def interp_topo (source='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/BedMachineAntarctica-v3.nc', coordinates_file='coordinates.nc', out_file='topo.nc', periodic=False):
+def interp_topo (source='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/BedMachineAntarctica-v3.nc', coordinates_file='coordinates.nc', out_file='topo.nc', periodic=True):
 
     print('Processing input data')
     if source == 'BedMachine3':        
@@ -58,7 +58,7 @@ def interp_topo (source='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaigh
         # Ice sheet mask includes everything except open ocean (1=rock, 2=grounded ice, 3=floating ice, 4=subglacial lake)
         imask = xr.where(ds_b['mask']!=0, 1, 0)
         # Now make a new Dataset containing only the variables we need
-        ds_b = xr.Dataset({'x':x, 'y':y, 'bathy':bathy, 'draft':draft, 'omask':omask, 'imask':imask})
+        ds_source = xr.Dataset({'x':x, 'y':y, 'bathy':bathy, 'draft':draft, 'omask':omask, 'imask':imask})
     else:
         raise Exception('source dataset not yet supported')
 
@@ -68,3 +68,6 @@ def interp_topo (source='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaigh
     print('...converting to polar stereographic projection')
     x_t, y_t = polar_stereo(ds_n['glamt'], ds_n['gphit'])
     x_f, y_f = polar_stereo(ds_n['glamf'], ds_n['gphif'])
+    ds_target = xr.Dataset({'x_t':x_t, 'y_t':y_t, 'x_f':x_f, 'y_f':y_f})
+
+    ds_interp = interp_cell_binning(ds_source, ds_target, plot=True, pster=True, periodic=periodic)
