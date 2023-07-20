@@ -1,6 +1,6 @@
 import xarray as xr
 import numpy as np
-from .utils import polar_stereo_inv
+from .utils import polar_stereo
 
 # Given a pre-existing global domain (eg eORCA025), slice out a regional domain.
 # Inputs:
@@ -23,9 +23,9 @@ def coordinates_from_global (global_file='/gws/nopw/j04/terrafirma/kaight/input_
 
     # Now set default values for i and j slicing
     if imin is None:
-        imin = 1  # Remove periodic halo
+        imin = 0
     if imax is None:
-        imax = ds.sizes['x'] - 1
+        imax = ds.sizes['x']
     if jmin is None:
         jmin = 0
     if jmax is None:
@@ -39,42 +39,32 @@ def coordinates_from_global (global_file='/gws/nopw/j04/terrafirma/kaight/input_
     ds_regional[var_names].to_netcdf(out_file)
 
 
-def interp_topo (source='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/BedMachineAntarctica-v3.nc', coordinates_file='coordinates.nc', out_file='topo.nc'):
-
-    import xesmf as xe
+def interp_topo (source='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/BedMachineAntarctica-v3.nc', coordinates_file='coordinates.nc', out_file='topo.nc', periodic=False):
 
     print('Processing input data')
     if source == 'BedMachine3':        
-        ds = xr.open_dataset(topo_file, chunks={})
+        ds_b = xr.open_dataset(topo_file)
         # x and y coordinates are ints which can overflow later; cast to floats
-        ds['x'] = ds['x'].astype('float32')
-        ds['y'] = ds['y'].astype('float32')
+        x = ds_b['x'].astype('float32')
+        y = ds_b['y'].astype('float32')
         # Bathymetry is the variable "bed"
-        bathy = ds['bed']
+        bathy = ds_b['bed']
         print('...calculating ice draft')
         # Ice draft is the surface minus thickness
-        draft = ds['surface'] - ds['thickness']
+        draft = ds_b['surface'] - ds_b['thickness']
         print('...combining masks')
         # Ocean mask includes open ocean (0) and floating ice (3)
-        omask = xr.where((ds['mask']==0)+(ds['mask']==3), 1, 0)
+        omask = xr.where((ds_b['mask']==0)+(ds_b['mask']==3), 1, 0)
         # Ice sheet mask includes everything except open ocean (1=rock, 2=grounded ice, 3=floating ice, 4=subglacial lake)
-        imask = xr.where(ds['mask']!=0, 1, 0)
-        print('...converting to polar spherical projection')
-        # Calculate latitude and longitude
-        lon, lat = polar_stereo_inv(ds['x'], ds['y'])
-        # Now combine the variables we need into a new Dataset
-        ds_source = xr.Dataset({'lon':lon, 'lat':lat, 'bathy':bathy, 'draft':draft, 'omask':omask, 'imask':imask})
-        # Close the original Dataset to save memory
-        ds.close()
+        imask = xr.where(ds_b['mask']!=0, 1, 0)
+        # Now make a new Dataset containing only the variables we need
+        ds_b = xr.Dataset({'x':x, 'y':y, 'bathy':bathy, 'draft':draft, 'omask':omask, 'imask':imask})
     else:
         raise Exception('source dataset not yet supported')
 
     print('Reading NEMO coordinates')
-    ds_target = xr.open_dataset(coordinates_file, chunks={})
-    ds_target = ds_target.rename({'nav_lon':'lon', 'nav_lat':'lat'})    
-    # Infer whether it's a periodic grid
-    periodic = np.amin(ds_target['lon'].values) < -178 and np.amax(ds_target['lon'].values) > 178
-    
-    print('Interpolating')
-    regridder = xe.Regridder(ds_source, ds_target, 'conservative', periodic=periodic)
-    ds_target = regridder(ds_source)
+    ds_n = xr.open_dataset(coordinates_file).squeeze()    
+    # Convert t-grids and f-grids to polar stereographic
+    print('...converting to polar stereographic projection')
+    x_t, y_t = polar_stereo(ds_n['glamt'], ds_n['gphit'])
+    x_f, y_f = polar_stereo(ds_n['glamf'], ds_n['gphif'])

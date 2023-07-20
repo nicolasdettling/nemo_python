@@ -19,6 +19,7 @@ def fix_lon_range (lon, max_lon=180):
         raise Exception('unsupported data type')
     return lon
 
+
 # Convert longitude and latitude to Antarctic polar stereographic projection. Adapted from polarstereo_fwd.m in the MITgcm Matlab toolbox for Bedmap.
 def polar_stereo (lon, lat, a=6378137., e=0.08181919, lat_c=-71, lon0=0):
 
@@ -42,6 +43,11 @@ def polar_stereo (lon, lat, a=6378137., e=0.08181919, lat_c=-71, lon0=0):
     rho = a*m_c*t/t_c
     x = pm*rho*np.sin(lon_rad - lon0)
     y = -pm*rho*np.cos(lon_rad - lon0)
+
+    if isinstance(x, xr.DataArray) and len(lon.shape)==1:
+        # Case that input arrays were 1D: default casting is to have x as the first coordinate; this is not what we want
+        lon = lon.transpose()
+        lat = lat.transpose()
 
     return x, y
 
@@ -75,10 +81,9 @@ def polar_stereo_inv (x, y, a=6378137., e=0.08181919, lat_c=-71, lon0=0):
     lat = lat*pm/deg2rad
     lon = fix_lon_range(lon/deg2rad)
 
-    if isinstance(lon, xr.DataArray):
-        # Default casting is to have x as the first coordinate; this is not what we want
-        lon = lon.transpose('y', 'x')
-        lat = lat.transpose('y', 'x')
+    if isinstance(lon, xr.DataArray) and len(x.shape)==1:
+        # Case that input arrays were 1D: default casting is to have x as the first coordinate; this is not what we want
+        lon = lon.transpose()
+        lat = lat.transpose()
 
     return lon, lat
-
