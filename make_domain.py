@@ -23,9 +23,9 @@ def coordinates_from_global (global_file='/gws/nopw/j04/terrafirma/kaight/input_
 
     # Now set default values for i and j slicing
     if imin is None:
-        imin = 0
+        imin = 1  # Remove periodic halo
     if imax is None:
-        imax = ds.sizes['x']
+        imax = ds.sizes['x'] - 1
     if jmin is None:
         jmin = 0
     if jmax is None:
