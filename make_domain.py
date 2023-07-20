@@ -45,7 +45,7 @@ def interp_topo (source='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaigh
 
     print('Processing input data')
     if source == 'BedMachine3':        
-        ds = xr.open_dataset(topo_file)
+        ds = xr.open_dataset(topo_file, chunks={})
         # x and y coordinates are ints which can overflow later; cast to floats
         ds['x'] = ds['x'].astype('float32')
         ds['y'] = ds['y'].astype('float32')
@@ -70,11 +70,11 @@ def interp_topo (source='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaigh
         raise Exception('source dataset not yet supported')
 
     print('Reading NEMO coordinates')
-    ds_target = xr.open_dataset(coordinates_file)
-    ds_target = ds_target.rename({'nav_lon':'lon', 'nav_lat':'lat'})
+    ds_target = xr.open_dataset(coordinates_file, chunks={})
+    ds_target = ds_target.rename({'nav_lon':'lon', 'nav_lat':'lat'})    
     # Infer whether it's a periodic grid
-    periodic = np.amin(target_lon.values) < -178 and np.amax(target_lon.values) > 178
-
+    periodic = np.amin(ds_target['lon'].values) < -178 and np.amax(ds_target['lon'].values) > 178
+    
     print('Interpolating')
     regridder = xe.Regridder(ds_source, ds_target, 'conservative', periodic=periodic)
-        
+    ds_target = regridder(ds_source)
