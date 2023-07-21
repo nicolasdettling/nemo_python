@@ -1,6 +1,5 @@
 import xarray as xr
 import numpy as np
-from .utils import polar_stereo
 
 # Given a pre-existing global domain (eg eORCA025), slice out a regional domain.
 # Inputs:
@@ -58,16 +57,11 @@ def interp_topo (source='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaigh
         # Ice sheet mask includes everything except open ocean (1=rock, 2=grounded ice, 3=floating ice, 4=subglacial lake)
         imask = xr.where(ds_b['mask']!=0, 1, 0)
         # Now make a new Dataset containing only the variables we need
-        ds_source = xr.Dataset({'x':x, 'y':y, 'bathy':bathy, 'draft':draft, 'omask':omask, 'imask':imask})
+        ds_b = xr.Dataset({'x':x, 'y':y, 'bathy':bathy, 'draft':draft, 'omask':omask, 'imask':imask})
     else:
         raise Exception('source dataset not yet supported')
 
     print('Reading NEMO coordinates')
-    ds_n = xr.open_dataset(coordinates_file).squeeze()    
-    # Convert t-grids and f-grids to polar stereographic
-    print('...converting to polar stereographic projection')
-    x_t, y_t = polar_stereo(ds_n['glamt'], ds_n['gphit'])
-    x_f, y_f = polar_stereo(ds_n['glamf'], ds_n['gphif'])
-    ds_target = xr.Dataset({'x_t':x_t, 'y_t':y_t, 'x_f':x_f, 'y_f':y_f})
+    ds_n = xr.open_dataset(coordinates_file).squeeze()  
 
-    ds_interp = interp_cell_binning(ds_source, ds_target, plot=True, pster=True, periodic=periodic)
+    ds_interp = interp_cell_binning(ds_b, ds_n, plot=True, pster=True, periodic=periodic)

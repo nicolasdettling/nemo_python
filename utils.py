@@ -87,3 +87,25 @@ def polar_stereo_inv (x, y, a=6378137., e=0.08181919, lat_c=-71, lon0=0):
         lat = lat.transpose()
 
     return lon, lat
+
+
+# Given an array of grid values on the edges (gtype=u, v) or corners (gtype=f) of the grid, extend by one column to the west and/or row to the south so that all of the tracer points have edges defined on both sides.
+# Note that the index convention of the resulting array will change relative to the tracer grid. A t-point (j,i) at the centre of the cell originally has the corresponding f-point (j,i) to the northeast corner of the cell, but after this padding of the f-grid, the corresponding f-point (j,i) will be at the southwest corne of the cell.
+# This should also work if "array" is a Dataset instead of a DataArray.
+def extend_grid_edges (array, gtype, periodic=True):
+
+    if gtype in ['u', 'f']:
+        # New column to the west
+        if periodic:
+            # With the 2-cell periodic halo, the western edge already exists on the other side.
+            edge_W = array.isel(x=-3)
+        else:
+            # Extrapolate
+            edge_W = 2*array.isel(x=0) - array.isel(x=1)
+        array = xr.concat([edge_W, array], dim='x')
+    if gtype in ['v', 'f']:
+        # New column to the south: extrapolate
+        edge_S = 2*array.isel(y=0) - array.isel(y=1)
+        array = xr.concat([edge_S, array], dim='y')
+    return array
+    
