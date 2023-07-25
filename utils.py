@@ -107,5 +107,5 @@ def extend_grid_edges (array, gtype, periodic=True):
         # New column to the south: extrapolate
         edge_S = 2*array.isel(y=0) - array.isel(y=1)
         array = xr.concat([edge_S, array], dim='y')
-    return array
+    return array.transpose('y', 'x')
     
