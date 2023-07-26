@@ -56,6 +56,10 @@ def polar_stereo (lon, lat, a=6378137., e=0.08181919, lat_c=-71, lon0=0):
 # This is about twice as fast as the pyproj Transformer function (for BedMachine v3 at least), but it is limited to this specific case so could consider changing in the future if I end up using more projections than just these two.
 def polar_stereo_inv (x, y, a=6378137., e=0.08181919, lat_c=-71, lon0=0):
 
+    if not isinstance(x, xr.DataArray) and len(x.shape)==1:
+        # Need to broadcast dimensions.
+        x, y = np.meshgrid(x, y)
+
     if lat_c < 0:
         pm = -1
     else:

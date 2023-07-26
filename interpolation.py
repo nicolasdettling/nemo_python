@@ -1,6 +1,6 @@
 import xarray as xr
 import numpy as np
-from .utils import polar_stereo, fix_lon_range, extend_grid_edges
+from .utils import polar_stereo, fix_lon_range, extend_grid_edges, polar_stereo_inv
 
 def interp_cell_binning (source, nemo, plot=False, pster=True, periodic=True):
 
@@ -80,6 +80,118 @@ def interp_cell_binning (source, nemo, plot=False, pster=True, periodic=True):
     # Mask all variables where there are no points
     
     # Plot diagnostics for number of points, error in mean x and y compared to t-point, mean of each variable
-            
+
+    
+# Helper function to construct a minimal CF field so cf-python can do regridding.
+# Mostly following Robin Smith's Unicicles coupling code in UKESM.
+# If the coordinate axes (1D) x and y are not lat-lon, pass in auxiliary lat-lon values (2D).
+def construct_cf (data, x, y, lon=None, lat=None, lon_bounds=None, lat_bounds=None):
+
+    import cf
+    native_latlon = lon is not None and lat is not None
+    
+    field = cf.Field(properties={'name':data.name})
+    if native_latlon:
+        dim_x = cf.DimensionCoordinate(data=cf.Data(x, 'degrees_east'), properties={'axis':'X', 'standard_name':'longitude'})
+        dim_y = cf.DimensionCoordinate(data=cf.Data(y, 'degrees_north'), properties={'axis':'Y', 'standard_name':'latitude'})
+        dim_lon = dim_x
+        dim_lat = dim_y
+    else:
+        dim_x = cf.DimensionCoordinate(data=cf.Data(x, 'm'))
+        dim_y = cf.DimensionCoordinate(data=cf.Data(y, 'm'))
+    field.set_construct(cf.DomainAxis(size=x.size), key='X')
+    field.set_construct(dim_x, axes='X')
+    field.set_construct(cf.DomainAxis(size=y.size), key='Y')
+    field.set_construct(dim_y, axes='Y')
+    if not native_latlon:
+        dim_lon = cf.AuxiliaryCoordinate(data=cf.Data(lon, 'degrees_east'), properties={'standard_name':'longitude'})
+        field.set_construct(dim_lon, axes=('Y','X'))
+        dim_lat = cf.AuxiliaryCoordinate(data=cf.Data(lat, 'degrees_north'), properties={'standard_name':'latitude'})
+        field.set_construct(dim_lat, axes=('Y','X'))
+    if lon_bounds is not None:
+        dim_lon.set_bounds(lon_bounds)
+    if lat_bounds is not None:
+        dim_lat.set_bounds(lat_bounds)
+    field.set_data(cf.Data(data), axes=('Y', 'X'))
+    return field
+
+
+def interp_latlon_cf (source, nemo, pster_src=False, periodic_src=False, periodic_nemo=True, method='conservative'):
+
+    # Helper function to get an xarray DataArray of edges (size N+1 by M+1) into a Numpy array of bounds for CF (size 4 x N x M)
+    def edges_to_bounds (edges):
+        bounds = np.empty([4, edges.shape[1]-1, edges.shape[0]-1])
+        bounds[0,:] = edges.values[:-1,:-1]  # SW corner
+        bounds[1,:] = edges.values[:-1,1:] # SE
+        bounds[2,:] = edges.values[1:,1:] # NE
+        bounds[3,:] = edges.values[1:,:-1] # NW
+        return bounds
+
+    # Get source grid and data in CF format
+    if pster_src:
+        print('Converting to lat-lon projection')
+        x_src = source['x']
+        y_src = source['y']
+        lon_src, lat_src = polar_stereo_inv(source['x'], source['y'])
+    else:
+        x_src = source['lon']
+        y_src = source['lat']
+        lon_src = None
+        lat_src = None
+    if method == 'conservative':
+        if pster_src and not periodic_src and len(source['x'].shape)==1:
+            # Regular grid in x-y, not periodic
+            # Get grid cell edges for x and y
+            def construct_edges (array, dim):
+                centres = 0.5*(array[:-1] + array[1:])
+                first_edge = 2*array[0] - array[1]
+                last_edge = 2*array[-1] - array[-2]
+                edges = np.concatenate(([first_edge], centres, [last_edge]))
+                return xr.DataArray(edges, coords={dim:edges})
+            x_edges = construct_edges(source['x'].values, 'x')
+            y_edges = construct_edges(source['y'].values, 'y')
+            # Now convert to lat-lon
+            print('Converting edges to lat-lon projection')
+            lon_edges, lat_edges = polar_stereo_inv(x_bounds, y_bounds)
+            print('Creating bounds')
+            lon_bounds_src = edges_to_bounds(lon_edges)
+            lat_bounds_src = edges_to_bounds(lat_edges)
+        else:
+            raise Exception('Need to code definition of bounds for this type of input dataset')
+    else:
+        lon_bounds_src = None
+        lat_bounds_src = None
+    # Loop over data fields and convert each to CF
+    data_cf = []
+    for var in source:
+        data_cf.append(construct_cf(source[var], x_src, y_src, lon=lon_src, lat=lat_src, lon_bounds=lon_bounds_src, lat_bounds=lat_bounds_src))
+
+    # Get NEMO grid in CF format
+    dummy_data = np.zeros([nemo.sizes['y'], nemo.sizes['x']])
+    if method == 'conservative':
+        def construct_nemo_bounds (array):
+            edges = extend_grid_edges(array, 'f', periodic=periodic_nemo)
+            return edges_to_bounds(edges)
+        lon_bounds_nemo = construct_nemo_bounds(nemo['glamf'])
+        lat_bounds_nemo = construct_nemo_bounds(nemo['gphif'])
+    else:
+        lon_bounds_nemo = None
+        lat_bounds_nemo = None
+    target_cf = construct_cf(dummy_data, nemo['x'], nemo['y'], lon=nemo['glamt'], lat=nemo['gphit'], lon_bounds=lon_bounds_nemo, lat_bounds=lat_bounds_nemo)
+    
+    # Get weights with CF, using the first data field
+    regrid_operator = data_cf[0].regrids(target_cf, src_cyclic=periodic_src, dst_cyclic=periodic_nemo, method=method, return_operator=True)
+
+    # Now interpolate each field, re-using the weights each time
+    data_interp = []
+    for data_cf0 in data_cf:
+        data_interp.append(data_cf0.regrids(regrid_operator).array)
+
+    # Add the interpolated fields to the nemo Dataset and return it
+
+    return data_interp    
+
+    
+    
             
         
