@@ -45,11 +45,11 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
 
     # TODO when new domain is up and running: remove the periodic halo
     # For now: have to chop off the northern boundary as near-zero salinity: why?
-    for dim in data.dims:
+    '''for dim in data.dims:
         if dim.startswith('y_grid'):
             data = data.isel({dim:slice(0,-1)})
     x_edges = x_edges.isel(y_grid_T_vertices=slice(0,-1))
-    y_edges = y_edges.isel(y_grid_T_vertices=slice(0,-1))
+    y_edges = y_edges.isel(y_grid_T_vertices=slice(0,-1))'''
 
     if new_fig:
         fig, ax = plt.subplots()
@@ -64,8 +64,9 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
         return fig, ax
     elif fig_name is not None:
         fig.savefig(fig_name)
+        plt.close_all()
     elif new_fig:
-        plt.show()  # fig.show()
+        plt.show()
 
     
 
