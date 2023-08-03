@@ -103,8 +103,8 @@ def set_colours (data, ctype='viridis', vmin=None, vmax=None, change_points=None
         vmin = data_min
     if vmax is None:
         vmax = data_max
-    vmin = float(data_min)  # just in case user input an integer
-    vmax = float(data_max)
+    vmin = float(vmin)  # just in case user input an integer
+    vmax = float(vmax)
 
     if ctype == 'plusminus':
         return plusminus_cmap(vmin, vmax, 0), vmin, vmax
