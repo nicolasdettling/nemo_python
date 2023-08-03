@@ -6,7 +6,7 @@ from ..utils import select_bottom
 # Everything uses TEOS-10 (conservative temperature and absolute salinity) so we're golden.
 def bottom_TS_vs_obs (nemo, schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/schmidtko_TS.txt', woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/woa18_decav_*00_04.nc', fig_name=None):
 
-    from .interpolation immport interp_latlon_cf
+    from .interpolation import interp_latlon_cf
 
     # Read Schmidtko data on continental shelf
     obs = np.loadtxt(schmidtko_file, dtype=np.str)[1:,:]
