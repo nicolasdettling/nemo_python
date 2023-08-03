@@ -45,7 +45,7 @@ def bottom_TS_vs_obs (nemo, schmidtko_file='/gws/nopw/j04/terrafirma/kaight/inpu
     woa_temp = select_bottom(woa['t_an'], 'depth').where(~mask)
     woa_salt = select_bottom(woa['s_an'], 'depth').where(~mask)
     # Now wrap up into a new Dataset
-    woa = xr.Dataset({'temp':woa_temp, 'salt':woa_salt})
+    woa = xr.Dataset({'temp':woa_temp, 'salt':woa_salt}) # Need to drop dimensions somehow
 
     # Regrid to the NEMO grid
     # Rename a few bits in the NEMO dataset for interpolation
