@@ -112,4 +112,17 @@ def extend_grid_edges (array, gtype, periodic=True):
         edge_S = 2*array.isel(y=0) - array.isel(y=1)
         array = xr.concat([edge_S, array], dim='y')
     return array.transpose('y', 'x')
+
+
+# Return the deepest unmasked values along the named z-dimension of the given xarray DataArray.
+# Following https://stackoverflow.com/questions/74172428/calculate-the-first-instance-of-a-value-in-axis-xarray
+def select_bottom (array, zdim):
+
+    bottom_depth = array.coords[zdim].where(array.notnull()).max(dim=zdim)
+    return array.sel({zdim:bottom_depth.fillna(0).astype(int)}).where(bottom_depth.notnull())
+
+
+    
+
+    
     

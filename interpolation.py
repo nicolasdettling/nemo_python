@@ -87,7 +87,7 @@ def interp_cell_binning (source, nemo, pster=True, periodic=True):
 def construct_cf (data, x, y, lon=None, lat=None, lon_bounds=None, lat_bounds=None):
 
     import cf
-    native_latlon = lon is not None and lat is not None
+    native_latlon = lon is None and lat is None
     
     field = cf.Field()
     if native_latlon:
@@ -166,29 +166,49 @@ def interp_latlon_cf (source, nemo, pster_src=False, periodic_src=False, periodi
         data_cf.append(construct_cf(source[var], x_src, y_src, lon=lon_src, lat=lat_src, lon_bounds=lon_bounds_src, lat_bounds=lat_bounds_src))
 
     # Get NEMO grid in CF format
-    dummy_data = np.zeros([nemo.sizes['y'], nemo.sizes['x']])
+    # Figure out some dimension and coordinate names
+    if 'glamt' in nemo:
+        # domain_cfg type
+        x_name = 'x'
+        y_name = 'y'
+        lon_name = 'glamt'
+        lat_name = 'gphit'
+    elif 'nav_lon_grid_T' in nemo:
+        # model output type
+        x_name = 'x_grid_T'
+        y_name = 'y_grid_T'
+        lon_name = 'nav_lon_grid_T'
+        lat_name = 'nav_lat_grid_T'
+    else:
+        raise Exception('Unknown type of NEMO dataset.')
+        
+    dummy_data = np.zeros([nemo.sizes[y_name], nemo.sizes[x_name]])
     if method == 'conservative':
         def construct_nemo_bounds (array):
             edges = extend_grid_edges(array, 'f', periodic=periodic_nemo)
             return edges_to_bounds(edges)
-        lon_bounds_nemo = construct_nemo_bounds(nemo['glamf'])
-        lat_bounds_nemo = construct_nemo_bounds(nemo['gphif'])
+        if lon_name == 'glamt':
+            lon_bounds_nemo = construct_nemo_bounds(nemo['glamf'])
+            lat_bounds_nemo = construct_nemo_bounds(nemo['gphif'])
+        else:
+            lon_bounds_nemo = nemo['bounds_nav_lon_grid_T']
+            lat_bounds_nemo = nemo['bounds_nav_lat_grid_T']
     else:
         lon_bounds_nemo = None
         lat_bounds_nemo = None
-    target_cf = construct_cf(dummy_data, nemo['x'], nemo['y'], lon=nemo['glamt'], lat=nemo['gphit'], lon_bounds=lon_bounds_nemo, lat_bounds=lat_bounds_nemo)
+    target_cf = construct_cf(dummy_data, nemo[x_name], nemo[y_name], lon=nemo[lon_name], lat=nemo[lat_name], lon_bounds=lon_bounds_nemo, lat_bounds=lat_bounds_nemo)
     
     # Get weights with CF, using the first data field
-    regrid_operator = data_cf[0].regrids(target_cf, src_cyclic=periodic_src, dst_cyclic=periodic_nemo, method=method, return_operator=True)
+    regrid_operator = data_cf[0].regrids(target_cf, src_cyclic=periodic_src, dst_cyclic=periodic_nemo, dst_axes={'X':'X', 'Y':'Y'}, method=method, return_operator=True)
 
-    # Now interpolate each field, re-using the weights each time
-    data_interp = []
-    for data_cf0 in data_cf:
-        data_interp.append(data_cf0.regrids(regrid_operator).array)
+    # Now interpolate each field, re-using the weights each time, and add it to a new Dataset
+    interp = xr.Dataset()
+    for var, data_cf0 in zip(source, data_cf):
+        data_interp = data_cf0.regrids(regrid_operator).array
+        data_interp = xr.DataArray(data_interp, dims=['y', 'x'])
+        interp = interp.assign({var:data_interp})     
 
-    # Add the interpolated fields to the nemo Dataset and return it
-
-    return data_interp    
+    return interp
 
     
     
