@@ -4,6 +4,7 @@ import cf_xarray as cfxr
 import socket
 import numpy as np
 from .utils import polar_stereo
+from .plot_utils import set_colours
 
 # Plot a 2D field (lat-lon) on a polar stereographic projection of Antarctica. Assumes it's a periodic grid covering all longitudes.
 # Arguments:
