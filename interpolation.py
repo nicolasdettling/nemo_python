@@ -2,13 +2,11 @@ import xarray as xr
 import numpy as np
 from .utils import polar_stereo, fix_lon_range, extend_grid_edges, polar_stereo_inv
 
-def interp_cell_binning (source, nemo, plot=False, pster=True, periodic=True):
+def interp_cell_binning (source, nemo, pster=True, periodic=True):
 
     from shapely.geometry import Point, Polygon
     import geopandas as gpd
     from tqdm import trange
-    if plot:
-        import matplotlib.pyplot as plt
 
     if pster:
         # Antarctic polar stereographic
@@ -78,8 +76,9 @@ def interp_cell_binning (source, nemo, plot=False, pster=True, periodic=True):
             # Now fill in this point in the interpolated dataset
             interp = xr.where((interp.coords['x']==i)*(interp.coords['y']==j), source_mean, interp)
     # Mask all variables where there are no points
-    
-    # Plot diagnostics for number of points, error in mean x and y compared to t-point, mean of each variable
+    interp = interp.where(interp['num_points']>0)
+
+    return interp
 
     
 # Helper function to construct a minimal CF field so cf-python can do regridding.

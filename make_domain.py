@@ -69,6 +69,8 @@ def interp_topo (dataset='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaig
     nemo = xr.open_dataset(coordinates_file).squeeze()
     
     print('Interpolating')
-    data_interp = interp_latlon_cf(source, nemo, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic, method='conservative')
+    data_interp = interp_cell_binning(source, nemo, pster=pster_src, periodic=periodic_src)
+    data_interp.to_dataset(out_file)
+    #data_interp = interp_latlon_cf(source, nemo, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic, method='conservative')
         
 
