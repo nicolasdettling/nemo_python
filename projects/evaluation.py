@@ -1,10 +1,12 @@
 import xarray as xr
 import numpy as np
-from .utils import select_bottom
+from ..utils import select_bottom
 
 # Compare the bottom temperature and salinity in NEMO (time-averaged over the given xarray Dataset) to observations: Schmidtko on the continental shelf, World Ocean Atlas 2018 in the deep ocean.
 # Everything uses TEOS-10 (conservative temperature and absolute salinity) so we're golden.
 def bottom_TS_vs_obs (nemo, schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/schmidtko_TS.txt', woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/woa18_decav_*00_04.nc', fig_name=None):
+
+    from .interpolation immport interp_latlon_cf
 
     # Read Schmidtko data on continental shelf
     obs = np.loadtxt(schmidtko_file, dtype=np.str)[1:,:]
