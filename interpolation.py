@@ -90,7 +90,7 @@ def construct_cf (data, x, y, lon=None, lat=None, lon_bounds=None, lat_bounds=No
     import cf
     native_latlon = lon is not None and lat is not None
     
-    field = cf.Field(properties={'name':data.name})
+    field = cf.Field()
     if native_latlon:
         dim_x = cf.DimensionCoordinate(data=cf.Data(x, 'degrees_east'), properties={'axis':'X', 'standard_name':'longitude'})
         dim_y = cf.DimensionCoordinate(data=cf.Data(y, 'degrees_north'), properties={'axis':'Y', 'standard_name':'latitude'})
