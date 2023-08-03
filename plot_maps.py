@@ -1,5 +1,3 @@
-import matplotlib
-matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import xarray as xr
 import cf_xarray as cfxr
@@ -20,9 +18,11 @@ from .utils import polar_stereo
 # fig_name: optional filename for figure (otherwise show interactively)
 # return_fig: if True, return the figure and axes handles
 # vmin, vmax: optional bounds on colour map
+# ctype: colourmap type (see set_colours in plot_utils.py)
+# change_points: arguments to ismr colourmap (see above)
 
 # TODO colour maps, contour ice front, shade land in grey
-def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None):
+def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None):
 
     new_fig = ax is None
     if title is None:
@@ -41,19 +41,14 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
     # Get axes bounds
     x_bounds, y_bounds = polar_stereo(np.array([0, 90, 180, -90]), np.array([lat_max]*4))
     xlim = [x_bounds[3], x_bounds[1]]
-    ylim = [y_bounds[2], y_bounds[0]]    
+    ylim = [y_bounds[2], y_bounds[0]]
 
-    # TODO when new domain is up and running: remove the periodic halo
-    # For now: have to chop off the northern boundary as near-zero salinity: why?
-    '''for dim in data.dims:
-        if dim.startswith('y_grid'):
-            data = data.isel({dim:slice(0,-1)})
-    x_edges = x_edges.isel(y_grid_T_vertices=slice(0,-1))
-    y_edges = y_edges.isel(y_grid_T_vertices=slice(0,-1))'''
+    # Set up colour map
+    cmap, vmin, vmax = set_colours(data, ctype=ctype, vmin=vmin, vmax=vmax, change_points=change_points)
 
     if new_fig:
         fig, ax = plt.subplots()
-    img = ax.pcolormesh(x_edges, y_edges, data, vmin=vmin, vmax=vmax)
+    img = ax.pcolormesh(x_edges, y_edges, data, cmap=cmap, vmin=vmin, vmax=vmax)
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
     ax.axis('off')
@@ -64,9 +59,8 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
         return fig, ax
     elif fig_name is not None:
         fig.savefig(fig_name)
-        plt.close_all()
     elif new_fig:
-        plt.show()
+        fig.show()
 
     
 
