@@ -6,6 +6,16 @@ import numpy as np
 from .utils import polar_stereo
 from .plot_utils import set_colours
 
+# If a figure name is defined, save the figure to that file. Otherwise, display the figure on screen.
+def finished_plot (fig, fig_name=None, dpi=None):
+
+    if fig_name is not None:
+        print(('Saving ' + fig_name))
+        fig.savefig(fig_name, dpi=dpi)
+    else:
+        fig.show()
+        
+
 # Plot a 2D field (lat-lon) on a polar stereographic projection of Antarctica. Assumes it's a periodic grid covering all longitudes.
 # Arguments:
 # data: an xarray DataArray of a 2D field (lat-lon)

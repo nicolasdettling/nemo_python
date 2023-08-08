@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from ..utils import select_bottom
 from ..constants import deg_string, gkg_string
-from ..plots import circumpolar_plot
+from ..plots import circumpolar_plot, finished_plot
 from ..interpolation import interp_latlon_cf
 
 # Compare the bottom temperature and salinity in NEMO (time-averaged over the given xarray Dataset) to observations: Schmidtko on the continental shelf, World Ocean Atlas 2018 in the deep ocean.
@@ -93,10 +93,7 @@ def bottom_TS_vs_obs (nemo, schmidtko_file='/gws/nopw/j04/terrafirma/kaight/inpu
             if n != 1:
                 cax = fig.add_axes([0.01+0.46*n, 0.58-0.48*v, 0.02, 0.3])
                 plt.colorbar(img, cax=cax, extend='both' if n==0 else 'neither')
-    if fig_name is not None:
-        fig.savefig(fig_name)
-    else:
-        fig.show()
+    finished_plot(fig, fig_name=fig_name)
                 
             
     
