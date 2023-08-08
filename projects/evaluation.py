@@ -1,6 +1,9 @@
 import xarray as xr
 import numpy as np
+import matplotlib.pyplot as plt
 from ..utils import select_bottom
+from ..constants import deg_string, gkg_string
+from ..plots import circumpolar_plot
 
 # Compare the bottom temperature and salinity in NEMO (time-averaged over the given xarray Dataset) to observations: Schmidtko on the continental shelf, World Ocean Atlas 2018 in the deep ocean.
 # Everything uses TEOS-10 (conservative temperature and absolute salinity) so we're golden.
@@ -51,6 +54,40 @@ def bottom_TS_vs_obs (nemo, schmidtko_file='/gws/nopw/j04/terrafirma/kaight/inpu
     # Rename a few bits in the NEMO dataset for interpolation
     obs_interp = interp_latlon_cf(obs, nemo, method='bilinear')
     woa_interp = interp_latlon_cf(woa, nemo, method='bilinear')
+    # Now combine them, giving precedence to the Schmidtko obs where both datasets exist
+    obs_plot = xr.where(obs_interp.isnull(), woa_interp, obs_interp)
+
+    # Select bottom temperature and salinity from NEMO output, and time-average
+    nemo_plot = nemo.rename({'sbt':'temp', 'sbs':'salt', 'x_grid_T_inner':'x', 'y_grid_T_inner':'y'}).mean(dim='time_counter')
+    # Get difference from obs
+    bias = nemo_plot - obs_plot
+
+    # Make the plot
+    fig = plt.figure(figsize=(10,8))
+    gs = plt.GridSpec(2,3)
+    gs.update(left=0.1, right=0.9, bottom=0.1, top=0.9, hspace=0.2, wspace=0.1)
+    data_plot = [nemo_plot, obs_plot, bias]
+    var_plot = ['temp', 'salt']
+    var_titles = ['Bottom temperature ('+deg_string+'C)', 'Bottom salinity ('+gkg_string+')']
+    alt_titles = [None, 'Observations', 'Model bias']
+    vmin = [-2, 34.3]
+    vmax = [4, 35]
+    ctype = ['RdBu_r', 'RdBu_r', 'plusminus']
+    for v in range(2):
+        for n in range(3):
+            ax = plt.subplot(gs[v,n])
+            img = circumpolar_plot(data_plot[n][var_plot[v]], nemo_plot, ax=ax, make_cbar=False, title=(var_titles[v] if n==0 else alt_titles[n]), vmin=(vmin[v] if n<2 else None), vmax=(vmax[v] if n<2 else None), ctype=ctype[n])
+            if n != 1:
+                cax = fig.add_axes([0.01+0.45*n, 0.6-0.5*v, 0.02, 0.3])
+                plt.cbar(img, cax=cax, extend='both' if n==0 else 'neither')
+    if fig_name is not None:
+        fig.savefig(fig_name)
+    else:
+        fig.show()
+                
+            
+    
+    
     
     
     
