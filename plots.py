@@ -62,6 +62,8 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
         fig.savefig(fig_name)
     elif new_fig:
         fig.show()
+    else:
+        return img
 
     
 

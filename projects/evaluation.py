@@ -4,12 +4,13 @@ import matplotlib.pyplot as plt
 from ..utils import select_bottom
 from ..constants import deg_string, gkg_string
 from ..plots import circumpolar_plot
+from ..interpolation import interp_latlon_cf
 
 # Compare the bottom temperature and salinity in NEMO (time-averaged over the given xarray Dataset) to observations: Schmidtko on the continental shelf, World Ocean Atlas 2018 in the deep ocean.
 # Everything uses TEOS-10 (conservative temperature and absolute salinity) so we're golden.
 def bottom_TS_vs_obs (nemo, schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/schmidtko_TS.txt', woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/woa18_decav_*00_04.nc', fig_name=None):
 
-    from .interpolation import interp_latlon_cf
+    import gsw
 
     # Read Schmidtko data on continental shelf
     obs = np.loadtxt(schmidtko_file, dtype=np.str)[1:,:]
@@ -42,11 +43,16 @@ def bottom_TS_vs_obs (nemo, schmidtko_file='/gws/nopw/j04/terrafirma/kaight/inpu
     woa = xr.open_mfdataset(woa_files, decode_times=False)
     # Find seafloor depth
     woa_bathy = -1*woa['t_an'].coords['depth'].where(woa['t_an'].notnull()).max(dim='depth')
+    # Pressure in dbar is approx depth in m
+    woa_press = np.abs(woa_bathy)
     # Mask shallow regions in the Amundsen and Bellingshausen Seas where weird things happen
     mask = (woa['lon'] >= -130)*(woa['lon'] <= -60)*(woa_bathy >= -500)
     # Now get bottom temperature and salinity    
     woa_temp = select_bottom(woa['t_an'], 'depth').where(~mask)
     woa_salt = select_bottom(woa['s_an'], 'depth').where(~mask)
+    # Have to convert to conservative temperature and absolute salinity to match NEMO; pretty sure the source data is in-situ temperature and practical salinity
+    woa_salt = gsw.SA_from_SP(woa_salt, woa_press, woa['lon'], woa['lat'])
+    woa_temp = gsw.CT_from_t(woa_salt, woa_temp, woa_press)
     # Now wrap up into a new Dataset
     woa = xr.Dataset({'temp':woa_temp, 'salt':woa_salt}).drop_vars('depth').squeeze()
 
@@ -57,29 +63,36 @@ def bottom_TS_vs_obs (nemo, schmidtko_file='/gws/nopw/j04/terrafirma/kaight/inpu
     # Now combine them, giving precedence to the Schmidtko obs where both datasets exist
     obs_plot = xr.where(obs_interp.isnull(), woa_interp, obs_interp)
 
-    # Select bottom temperature and salinity from NEMO output, and time-average
-    nemo_plot = nemo.rename({'sbt':'temp', 'sbs':'salt', 'x_grid_T_inner':'x', 'y_grid_T_inner':'y'}).mean(dim='time_counter')
+    # Select the NEMO variables we need and time-average
+    nemo_plot = xr.Dataset({'temp':nemo['sbt'], 'salt':nemo['sbs']}).mean(dim='time_counter')
+    nemo_plot = nemo_plot.rename({'x_grid_T_inner':'x', 'y_grid_T_inner':'y'})
+    # Apply NEMO land mask to both
+    nemo_plot = nemo_plot.where(nemo_plot['temp']!=0)
+    obs_plot = obs_plot.where(nemo_plot['temp'].notnull()*obs_plot.notnull())
+    obs_plot = obs_plot.where(nemo_plot['temp']!=0)
+    nemo_plot = nemo_plot.where(nemo_plot['temp']!=0)
     # Get difference from obs
     bias = nemo_plot - obs_plot
 
     # Make the plot
-    fig = plt.figure(figsize=(10,8))
+    fig = plt.figure(figsize=(10,7))
     gs = plt.GridSpec(2,3)
-    gs.update(left=0.1, right=0.9, bottom=0.1, top=0.9, hspace=0.2, wspace=0.1)
+    gs.update(left=0.1, right=0.9, bottom=0.05, top=0.95, hspace=0.2, wspace=0.1)
     data_plot = [nemo_plot, obs_plot, bias]
     var_plot = ['temp', 'salt']
     var_titles = ['Bottom temperature ('+deg_string+'C)', 'Bottom salinity ('+gkg_string+')']
     alt_titles = [None, 'Observations', 'Model bias']
-    vmin = [-2, 34.3]
-    vmax = [4, 35]
+    vmin = [-2, 34.5]
+    vmax = [2, 35]
     ctype = ['RdBu_r', 'RdBu_r', 'plusminus']
     for v in range(2):
         for n in range(3):
             ax = plt.subplot(gs[v,n])
-            img = circumpolar_plot(data_plot[n][var_plot[v]], nemo_plot, ax=ax, make_cbar=False, title=(var_titles[v] if n==0 else alt_titles[n]), vmin=(vmin[v] if n<2 else None), vmax=(vmax[v] if n<2 else None), ctype=ctype[n])
+            ax.axis('equal')
+            img = circumpolar_plot(data_plot[n][var_plot[v]], nemo, ax=ax, masked=True, make_cbar=False, title=(var_titles[v] if n==0 else alt_titles[n]), vmin=(vmin[v] if n<2 else None), vmax=(vmax[v] if n<2 else None), ctype=ctype[n])
             if n != 1:
-                cax = fig.add_axes([0.01+0.45*n, 0.6-0.5*v, 0.02, 0.3])
-                plt.cbar(img, cax=cax, extend='both' if n==0 else 'neither')
+                cax = fig.add_axes([0.01+0.46*n, 0.58-0.48*v, 0.02, 0.3])
+                plt.colorbar(img, cax=cax, extend='both' if n==0 else 'neither')
     if fig_name is not None:
         fig.savefig(fig_name)
     else:
