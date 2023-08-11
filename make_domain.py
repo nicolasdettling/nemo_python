@@ -1,5 +1,6 @@
 import xarray as xr
 import numpy as np
+from ..interpolation import interp_cell_binning, interp_latlon_cf
 
 # Given a pre-existing global domain (eg eORCA025), slice out a regional domain.
 # Inputs:
@@ -7,7 +8,7 @@ import numpy as np
 # out_file: path to desired output NetCDF file
 # imin, imax, jmin, jmax: optional bounds on the i and j indicies to slice. Uses the python convention of 0-indexing, and selecting the indices up to but not including the last value. So, jmin=0, jmax=10 will select the southernmost 10 rows.
 # nbdry: optional latitude of the desired northern boundary. The code will generate the value of jmax that corresponds to this on the zonal mean.
-def coordinates_from_global (global_file='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA025_v3.nc', out_file='coordinates.nc', imin=None, imax=None, jmin=None, jmax=None, nbdry=None):
+def coordinates_from_global (global_file='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA025_v3.nc', out_file='coordinates.nc', imin=None, imax=None, jmin=None, jmax=None, nbdry=None, remove_halo=True):
 
     ds = xr.open_dataset(global_file)
 
@@ -22,11 +23,17 @@ def coordinates_from_global (global_file='/gws/nopw/j04/terrafirma/kaight/input_
 
     # Now set default values for i and j slicing
     if imin is None:
-        # Remove the periodic halo (for NEMO 4.2): slice off first index
-        imin = 1
+        if remove_halo:
+            # Remove the periodic halo (for NEMO 4.2): slice off first index
+            imin = 1
+        else:
+            imin = 0
     if imax is None:
-        # also last index
-        imax = ds.sizes['x'] - 1
+        if remove_halo:
+            # also last index
+            imax = ds.sizes['x'] - 1
+        else:
+            imax = ds.sizes['x']
     if jmin is None:
         jmin = 0
     if jmax is None:
