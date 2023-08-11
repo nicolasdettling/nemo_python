@@ -48,7 +48,7 @@ def interp_cell_binning (source, nemo, pster=True, periodic=True, tmp_file=None)
     for j in trange(ny):
         # First pass at narrowing down the source points to search: throw away anything that's too far south or north of the extent of this latitude row (based on grid corners). This will drastically speed up the search later.
         source_search1 = source.where((source['y'] >= np.amin(y_f[j,:]))*(source['y'] <= np.amax(y_f[j+1,:])), drop=True)        
-        for i in range(nx):
+        for i in trange(nx, leave=False):
             # Get the cell boundaries
             x_corners = np.array([x_f[j,i], x_f[j,i+1], x_f[j+1,i+1], x_f[j+1,i]])
             y_corners = np.array([y_f[j,i], y_f[j,i+1], y_f[j+1,i+1], y_f[j+1,i]])
@@ -69,7 +69,9 @@ def interp_cell_binning (source, nemo, pster=True, periodic=True, tmp_file=None)
             if points_within.size == 0:
                 # There are no points within this grid cell
                 continue            
-            source_within = xr.Dataset.from_dataframe(points_within).drop(['index_right','geometry','time_counter'])
+            source_within = xr.Dataset.from_dataframe(points_within).drop(['index_right','geometry'])
+            if 'time_counter' in source_within:
+                source_within = source_within.drop('time_counter')
             source_mean = source_within.mean()
             source_mean = source_mean.rename({'x':'x2d', 'y':'y2d'})
             source_mean = source_mean.assign({'num_points':xr.DataArray(source_within.sizes['index'])})
