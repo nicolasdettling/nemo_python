@@ -48,7 +48,7 @@ def interp_cell_binning (source, nemo, pster=True, periodic=True, tmp_file=None)
     for j in trange(ny):
         # First pass at narrowing down the source points to search: throw away anything that's too far south or north of the extent of this latitude row (based on grid corners). This will drastically speed up the search later.
         source_search1 = source.where((source['y'] >= np.amin(y_f[j,:]))*(source['y'] <= np.amax(y_f[j+1,:])), drop=True)        
-        for i in trange(nx, leave=False):
+        for i in range(nx):
             # Get the cell boundaries
             x_corners = np.array([x_f[j,i], x_f[j,i+1], x_f[j+1,i+1], x_f[j+1,i]])
             y_corners = np.array([y_f[j,i], y_f[j,i+1], y_f[j+1,i+1], y_f[j+1,i]])
