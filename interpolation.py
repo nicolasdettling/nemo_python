@@ -2,7 +2,7 @@ import xarray as xr
 import numpy as np
 from .utils import polar_stereo, fix_lon_range, extend_grid_edges, polar_stereo_inv
 
-def interp_cell_binning (source, nemo, pster=True, periodic=True):
+def interp_cell_binning (source, nemo, pster=True, periodic=True, tmp_file=None):
 
     from shapely.geometry import Point, Polygon
     import geopandas as gpd
@@ -48,7 +48,7 @@ def interp_cell_binning (source, nemo, pster=True, periodic=True):
     for j in trange(ny):
         # First pass at narrowing down the source points to search: throw away anything that's too far south or north of the extent of this latitude row (based on grid corners). This will drastically speed up the search later.
         source_search1 = source.where((source['y'] >= np.amin(y_f[j,:]))*(source['y'] <= np.amax(y_f[j+1,:])), drop=True)        
-        for i in trange(nx, leave=False):
+        for i in range(nx):
             # Get the cell boundaries
             x_corners = np.array([x_f[j,i], x_f[j,i+1], x_f[j+1,i+1], x_f[j+1,i]])
             y_corners = np.array([y_f[j,i], y_f[j,i+1], y_f[j+1,i+1], y_f[j+1,i]])
@@ -75,6 +75,9 @@ def interp_cell_binning (source, nemo, pster=True, periodic=True):
             source_mean = source_mean.assign({'num_points':xr.DataArray(source_within.sizes['index'])})
             # Now fill in this point in the interpolated dataset
             interp = xr.where((interp.coords['x']==i)*(interp.coords['y']==j), source_mean, interp)
+        if tmp_file is not None:
+            # Save after each latitude row in case the job dies
+            interp.to_netcdf(tmp_file)
     # Mask all variables where there are no points
     interp = interp.where(interp['num_points']>0)
 
