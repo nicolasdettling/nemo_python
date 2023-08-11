@@ -79,5 +79,29 @@ def interp_topo (dataset='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaig
     data_interp = interp_cell_binning(source, nemo, pster=pster_src, periodic=periodic, tmp_file=tmp_file)
     data_interp.to_netcdf(out_file)
     #data_interp = interp_latlon_cf(source, nemo, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic, method='conservative')
+
+
+def interp_ics_TS (dataset='WOA18', source_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_decav_*01_04.nc', nemo_dom='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domain_cfg_eANT025.L121.nc'):
+
+    import gsw
+
+    if dataset == 'WOA':
+        # Read temperature and salinity from January as a single dataset
+        woa = xr.open_mfdataset(in_files, decode_times=False).squeeze()
+        # Convert to TEOS10
+        # Need pressure in dbar at every 3D point: approx depth in m
+        woa_press = np.abs(xr.broadcast(woa['depth'], woa['t_an'])[0])
+        # Also need 3D lat and lon
+        woa_lon = xr.broadcast(woa['lon'], woa['t_an'])[0]
+        woa_lat = xr.broadcast(woa['lat'], woa['t_an'])[0]
+        # Get absolute salinity
+        woa_salt = gsw.SA_from_SP(woa['s_an'], woa_press, woa_lon, woa_lat)
+        # Get conservative temperature
+        woa_temp = gsw.CT_from_t(woa_salt, woa['t_an'], woa_press)
+        # Now wrap up into a new Dataset
+        source = xr.Dataset({'temp':woa_temp, 'salt':woa_salt})
+        
+        
+    
         
 
