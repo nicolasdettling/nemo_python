@@ -1,6 +1,6 @@
 import xarray as xr
 import numpy as np
-from ..interpolation import interp_cell_binning, interp_latlon_cf
+from .interpolation import interp_cell_binning, interp_latlon_cf
 
 # Given a pre-existing global domain (eg eORCA025), slice out a regional domain.
 # Inputs:
