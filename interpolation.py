@@ -47,7 +47,7 @@ def interp_cell_binning (source, nemo, pster=True, periodic=True, tmp_file=None)
     # Any vectorised way of doing this (using existing packages like cf or xesmf) overflows when you throw all of BedMachine3 at it. This could be solved using parallelisation, but a slower approach using less memory is preferable to asking users to sort out a SLURM job especially for something that won't be done very often (domain generation). Also NEMO is not CF compliant so even the existing tools are a headache when they require cell boundaries...
     for j in trange(ny):
         # First pass at narrowing down the source points to search: throw away anything that's too far south or north of the extent of this latitude row (based on grid corners). This will drastically speed up the search later.
-        source_search1 = source.where((source['y'] >= np.amin(y_f[j,:]))*(source['y'] <= np.amax(y_f[j+1,:])), drop=True)        
+        source_search1 = source.where((source['y'] >= np.amin(y_f[j:j+2,:]))*(source['y'] <= np.amax(y_f[j:j+2,:])), drop=True)        
         for i in range(nx):
             # Get the cell boundaries
             x_corners = np.array([x_f[j,i], x_f[j,i+1], x_f[j+1,i+1], x_f[j+1,i]])
