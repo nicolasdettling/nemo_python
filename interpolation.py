@@ -1,5 +1,6 @@
 import xarray as xr
 import numpy as np
+import os
 from .utils import polar_stereo, fix_lon_range, extend_grid_edges, polar_stereo_inv
 
 def interp_cell_binning (source, nemo, pster=True, periodic=True, tmp_file=None):
@@ -27,25 +28,37 @@ def interp_cell_binning (source, nemo, pster=True, periodic=True, tmp_file=None)
     # Pad x_f, y_f with an extra row and column on the west and south so we have all the grid cell edges. Note this changes the indexing convention relative to the t-grid.
     x_f = extend_grid_edges(x_f, 'f', periodic=periodic)
     y_f = extend_grid_edges(y_f, 'f', periodic=periodic)
-    
-    # Make a copy of the source dataset trimmed to the dimensions of nemo, to fill in later.
-    interp = source.isel(x=slice(0,nx), y=slice(0,ny))
-    # Make sure x and y are dummy axes, with 2D versions ready to fill in with real values
-    if len(interp['x'].shape) == 1:
-        y2d, x2d = xr.broadcast(interp['y'], interp['x'])
-        interp['x2d'] = x2d
-        interp['y2d'] = y2d
+
+    if os.path.isfile(tmp_file):
+        # Read the partially completed dataset
+        interp = xr.open_dataset(tmp_file)
+        # Figure out the first latitude index with no interpolated data
+        points_in_row = interp['num_points'].sum(dim='x').values
+        if points_in_row[-1] == 0:
+            j_start = np.argwhere(points_in_row==0)[0][0]
+        else:
+            raise Exception('The interpolation appears to be finished. If you want to start again, delete the temporary file.')
     else:
-        interp['x2d'] = interp['x']
-        interp['y2d'] = interp['y']
-    interp = interp.assign_coords(x=np.arange(nx), y=np.arange(ny))
-    # Also add extra array showing the number of data points in each grid cell
-    interp = interp.assign({'num_points':interp['y2d']*0})
+        # Start from scratch
+        # Make a copy of the source dataset trimmed to the dimensions of nemo, to fill in later.
+        interp = source.isel(x=slice(0,nx), y=slice(0,ny))
+        # Make sure x and y are dummy axes, with 2D versions ready to fill in with real values
+        if len(interp['x'].shape) == 1:
+            y2d, x2d = xr.broadcast(interp['y'], interp['x'])
+            interp['x2d'] = x2d
+            interp['y2d'] = y2d
+        else:
+            interp['x2d'] = interp['x']
+            interp['y2d'] = interp['y']
+        interp = interp.assign_coords(x=np.arange(nx), y=np.arange(ny))
+        # Also add extra array showing the number of data points in each grid cell
+        interp = interp.assign({'num_points':interp['y2d']*0})
+        j_start = 0
 
     print('Interpolating')
     # Loop over grid cells in NEMO...sorry.
     # Any vectorised way of doing this (using existing packages like cf or xesmf) overflows when you throw all of BedMachine3 at it. This could be solved using parallelisation, but a slower approach using less memory is preferable to asking users to sort out a SLURM job especially for something that won't be done very often (domain generation). Also NEMO is not CF compliant so even the existing tools are a headache when they require cell boundaries...
-    for j in trange(ny):
+    for j in trange(j_start, ny):
         # First pass at narrowing down the source points to search: throw away anything that's too far south or north of the extent of this latitude row (based on grid corners). This will drastically speed up the search later.
         source_search1 = source.where((source['y'] >= np.amin(y_f[j:j+2,:]))*(source['y'] <= np.amax(y_f[j:j+2,:])), drop=True)        
         for i in range(nx):
