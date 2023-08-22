@@ -1,5 +1,6 @@
 import xarray as xr
 import numpy as np
+import datetime
 from .interpolation import interp_cell_binning, interp_latlon_cf
 from .utils import polar_stereo, remove_islands
 from .plots import circumpolar_plot
@@ -184,7 +185,9 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
     # Replace the global values with regional ones in this mask
     # Loop over variables rather than doing entire dataset at once, because if so some variables like nav_lat, nav_lon get lost
     for var in ds_global:
+        # Take the inverse of the mask so we can put ds_global first and keep its attributes.
         ds_global[var] = xr.where(~mask, ds_global[var], ds_regional[var], keep_attrs=True)
+    ds_global.attrs['history'] = ds_global.attrs['history'] + 'Antarctic topography updated to BedMachine3 by Kaitlin Naughten ('+str(datetime.date.today())+')'
     ds_global.to_netcdf(out_file)
     
 
