@@ -184,7 +184,7 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
     # Replace the global values with regional ones in this mask
     # Loop over variables rather than doing entire dataset at once, because if so some variables like nav_lat, nav_lon get lost
     for var in ds_global:
-        ds_global[var] = xr.where(mask, ds_regional[var], ds_global[var], keep_attrs=True)
+        ds_global[var] = xr.where(~mask, ds_global[var], ds_regional[var], keep_attrs=True)
     ds_global.to_netcdf(out_file)
     
 
