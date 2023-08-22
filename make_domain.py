@@ -105,14 +105,14 @@ def process_topo (in_file='topo.nc', coordinates_file='coordinates.nc', out_file
     if plot:
         import matplotlib.pyplot as plt
 
-    topo = xr.open_dataset(in_file)
+    topo = xr.open_dataset(in_file).transpose('y', 'x')
     if np.count_nonzero(topo['bathy'].isnull()):
         # There are missing points
         if will_splice:
             print('Warning: there are missing points. Hopefully this will be dealt with by your splicing later - check to make sure.')
         else:
             raise Exception('Missing points')
-    nemo = xr.open_dataset(coordinates_file)
+    nemo = xr.open_dataset(coordinates_file).squeeze()
 
     # Set masks where they fall between 0 and 1
     topo['omask'] = np.round(topo['omask'])
@@ -135,10 +135,11 @@ def process_topo (in_file='topo.nc', coordinates_file='coordinates.nc', out_file
             x = nemo['nav_lon']
             y = nemo['nav_lat']
         # Make a bunch of plots
-        circumpolar_plot(x-x2d, nemo, title='Error in x-coordinate (m)', ctype='plusminus')
-        circumpolar_plot(y-y2d, nemo, title='Error in y-coordinate (m)', ctype='plusminus')
+        circumpolar_plot(x-topo['x2d'], nemo, title='Error in x-coordinate (m)', ctype='plusminus', masked=True)
+        circumpolar_plot(y-topo['y2d'], nemo, title='Error in y-coordinate (m)', ctype='plusminus', masked=True)
+        circumpolar_plot(topo['num_points'], nemo, title='num_points', masked=True)
         for var in ['Bathymetry', 'Bathymetry_isf', 'isf_draft', 'tmaskutil']:
-            circumpolar_plot(topo[var], nemo, title=var)
+            circumpolar_plot(output[var], nemo, title=var, masked=True)
 
 
 def interp_ics_TS (dataset='WOA18', source_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_decav_*01_04.nc', nemo_dom='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domain_cfg_eANT025.L121.nc'):

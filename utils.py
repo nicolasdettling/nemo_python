@@ -101,8 +101,8 @@ def extend_grid_edges (array, gtype, periodic=True):
     if gtype in ['u', 'f']:
         # New column to the west
         if periodic:
-            # With the 2-cell periodic halo, the western edge already exists on the other side.
-            edge_W = array.isel(x=-3)
+            # The western edge already exists on the other side
+            edge_W = array.isel(x=-1)
         else:
             # Extrapolate
             edge_W = 2*array.isel(x=0) - array.isel(x=1)

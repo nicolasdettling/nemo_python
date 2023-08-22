@@ -39,7 +39,7 @@ def interp_cell_binning (source, nemo, pster=True, periodic=True, tmp_file=None)
     x_f = extend_grid_edges(x_f, 'f', periodic=periodic)
     y_f = extend_grid_edges(y_f, 'f', periodic=periodic)
 
-    if os.path.isfile(tmp_file):
+    if tmp_file is not None and os.path.isfile(tmp_file):
         # Read the partially completed dataset
         interp = xr.open_dataset(tmp_file)
         # Figure out the first latitude index with no interpolated data
