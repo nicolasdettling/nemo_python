@@ -47,7 +47,16 @@ def coordinates_from_global (global_file='/gws/nopw/j04/terrafirma/kaight/input_
     ds_regional[var_names].to_netcdf(out_file)
 
 
-def interp_topo (dataset='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/BedMachineAntarctica-v3.nc', coordinates_file='coordinates.nc', out_file='topo.nc', tmp_file='topo_tmp.nc', periodic=True):
+# Interpolate topography from a dataset (default BedMachine3) to the given NEMO coordinates.
+# Warning, this is currently VERY SLOW due to memory constraints meaning a double loop is needed but I am hoping CF will come to my rescue soon!
+# Inputs:
+# dataset: name of source dataset, only 'BedMachine3' supported now
+# topo_file: path to file containing dataset
+# coordinates_file: path to file containing NEMO coordinates (could be created by coordinates_from_global above)
+# out_file: desired path to output file for interpolated dataset
+# tmp_file: optional path to temporary output file which the interpolation routine will write to every latitude row. This is useful if the job dies in the middle.
+# periodic: whether the NEMO grid is periodic in longitude
+def interp_topo (dataset='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/BedMachineAntarctica-v3.nc', coordinates_file='coordinates.nc', out_file='topo.nc', tmp_file=None, periodic=True):
 
     print('Processing input data')
     if dataset == 'BedMachine3':        

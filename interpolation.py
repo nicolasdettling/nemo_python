@@ -3,6 +3,16 @@ import numpy as np
 import os
 from .utils import polar_stereo, fix_lon_range, extend_grid_edges, polar_stereo_inv
 
+# Interpolate the source dataset to the NEMO coordinates using a binning approach. This assumes the source dataset is much finer resolution, and will simply average over all source points in each NEMO grid cell.
+# Warning, this is VERY SLOW but hopefully it's a temporary measure while CF vectorises their weighting. It loops over every grid cell - this is necessary because the BedMachine source dataset is just too massive to vectorise without overflowing memory.
+# Inputs:
+# source: xarray Dataset containing the coordinates 'x' and 'y' (could be either lat/lon or polar stereographic), and any data variables you want
+# nemo: xarray Dataset containing the NEMO grid: must contain at least glamt, gphit, glamf, gphif
+# pster: whether the source dataset is polar stereographic
+# periodic: whether the NEMO grid is periodic in longitude
+# tmp_file: optional path to temporary output file which this routine will write to every latitude row. This is useful if the job dies in the middle. If it already exists, this function will pick up where it left off. If it doesn't exist yet, it will create the file.
+# Returns:
+# interp: xarray Dataset containing all data variables from source on the nemo grid, as well as extra variables x2d, y2d (source coordinates interpolated to new grid) and num_points (number of source points used for each grid cell; all data variables will be masked where num_points=0).
 def interp_cell_binning (source, nemo, pster=True, periodic=True, tmp_file=None):
 
     from shapely.geometry import Point, Polygon
@@ -133,6 +143,14 @@ def construct_cf (data, x, y, lon=None, lat=None, lon_bounds=None, lat_bounds=No
     return field
 
 
+# Interpolate the source dataset to the NEMO coordinates using CF. This is good for smaller interpolation jobs (i.e. not BedMachine3) and hopefully will be good for big interpolation jobs once CF is next updated.
+# Inputs:
+# source: xarray Dataset containing the coordinates 'x' and 'y' (could be either lat/lon or polar stereographic), and any data variables you want
+# nemo: xarray Dataset containing the NEMO grid: must contain at least (option 1:) glamt, gphit, glamf, gphif, and dimensions x and y, or (option 2): nav_lon_grid_T, nav_lat_grid_T, bounds_nav_lon_grid_T, bounds_nav_lat_grid_T, and dimensions x_grid_T and y_grid_T
+# pster_src: whether the source dataset is polar stereographic
+# periodic_src: whether the source dataset is periodic in the x dimension
+# periodic_nemo: whether the NEMO grid is periodic in longitude
+# method: CF interpolation method (bilinear or conservative both tested)
 def interp_latlon_cf (source, nemo, pster_src=False, periodic_src=False, periodic_nemo=True, method='conservative'):
 
     # Helper function to get an xarray DataArray of edges (size N+1 by M+1) into a Numpy array of bounds for CF (size 4 x N x M)
