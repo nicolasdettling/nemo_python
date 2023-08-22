@@ -122,6 +122,42 @@ def select_bottom (array, zdim):
     return array.sel({zdim:bottom_depth.fillna(0).astype(int)}).where(bottom_depth.notnull())
 
 
+# Given a mask (numpy array, 1='land', 2='ocean') and point0 (j,i) on the "mainland", remove any disconnected "islands" from the mask and return.
+def remove_islands (mask, point0):
+
+    if not mask[point0]:
+        raise Exception('point0 is not on the mainland')
+
+    connected = np.zeros(mask.shape)
+    connected[point0] = 1
+    ny = mask.shape[0]
+    nx = mask.shape[1]
+
+    queue = [point0]
+    while len(queue) > 0:
+        (j,i) = queue.pop(0)
+        neighbours = []
+        if j > 0:
+            neighbours.append((j-1,i))
+        if j < ny-1:
+            neighbours.append((j+1,i))
+        if i > 0:
+            neighbours.append((j,i-1))
+        if i < nx-1:
+            neighbours.append((j,i+1))
+        for point in neighbours:
+            if connected[point]:
+                continue
+            if mask[point]:
+                connected[point] = True
+                queue.append(point)
+
+    return connected
+        
+
+    
+
+
     
 
     

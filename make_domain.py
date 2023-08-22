@@ -1,7 +1,7 @@
 import xarray as xr
 import numpy as np
 from .interpolation import interp_cell_binning, interp_latlon_cf
-from .utils import polar_stereo
+from .utils import polar_stereo, remove_islands
 from .plots import circumpolar_plot
 
 # Given a pre-existing global domain (eg eORCA025), slice out a regional domain.
@@ -135,11 +135,49 @@ def process_topo (in_file='topo.nc', coordinates_file='coordinates.nc', out_file
             x = nemo['nav_lon']
             y = nemo['nav_lat']
         # Make a bunch of plots
-        circumpolar_plot(x-topo['x2d'], nemo, title='Error in x-coordinate (m)', ctype='plusminus', masked=True)
-        circumpolar_plot(y-topo['y2d'], nemo, title='Error in y-coordinate (m)', ctype='plusminus', masked=True)
-        circumpolar_plot(topo['num_points'], nemo, title='num_points', masked=True)
+        circumpolar_plot((x-topo['x2d']).where(topo['omask']==1), nemo, title='Error in x-coordinate (m)', ctype='plusminus', masked=True)
+        circumpolar_plot(y-topo['y2d'].where(topo['omask']==1), nemo, title='Error in y-coordinate (m)', ctype='plusminus', masked=True)
+        circumpolar_plot(topo['num_points'].where(topo['omask']==1), nemo, title='num_points', masked=True)
         for var in ['Bathymetry', 'Bathymetry_isf', 'isf_draft', 'tmaskutil']:
-            circumpolar_plot(output[var], nemo, title=var, masked=True)
+            circumpolar_plot(output[var].where(topo['omask']==1), nemo, title=var, masked=True)
+
+
+def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/terrafirma/kaight/input_data/grids/eORCA_R1_bathy_meter_v2.2x.nc', out_file='bathy_meter_eORCA1_spliceBedMachine3.nc', halo=True, lat0=-57, depth0=2500):
+
+    ds_regional = xr.open_dataset(topo_regional)
+    ds_global = xr.open_dataset(topo_global)
+    # Mask out missing regions
+    ds_regional = ds_regional.where(ds_regional['tmaskutil'].notnull())
+
+    if ds_regional.sizes['x'] == ds_global.sizes['x']-2:
+        # The global domain has a halo, but the regional one doesn't.
+        if halo:
+            # Need to create the halo in ds_regional
+            ds_regional = xr.concat([ds_regional.isel(x=-1), ds_regional, ds_regional.isel(x=0)], dim='x')
+            ds_regional['x'] = ds_global['x']
+        else:
+            # Need to remove the halo from global
+            ds_global = ds_global.isel(x=slice(1,-1))
+            ds_global['x'] = ds_regional['x']
+
+    # Make sure the regional dataset has the same coordinates and variables as the global one
+    ds_regional = ds_regional.assign_coords(nav_lon=ds_regional['nav_lon'], nav_lat=ds_regional['nav_lat'])
+    ds_regional = ds_regional.drop_vars(['x','y'])
+    ds_regional = ds_regional[[var for var in ds_global]]
+    # Extend the regional dataset to cover the global domain (just copy the rest of the global domain over)
+    ny = ds_regional.sizes['y']
+    ds_regional = xr.concat([ds_regional, ds_global.isel(y=slice(ny,None))], dim='y')
+
+    # Now choose the points we want to update
+    mask = (ds_regional['nav_lat']<lat0)*(ds_regional['Bathymetry']<depth0)*(dds_regional.notnull())
+    # Remove seamounts
+    connected = remove_islands(mask, (1,1))
+    mask = xr.where(connected, mask, 0)
+
+    # Replace the global values with regional ones in this mask
+    ds_global = xr.where(mask, ds_regional, ds_global)
+    ds_global.to_netcdf(out_file)
+    
 
 
 def interp_ics_TS (dataset='WOA18', source_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_decav_*01_04.nc', nemo_dom='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domain_cfg_eANT025.L121.nc'):
