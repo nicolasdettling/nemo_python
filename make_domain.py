@@ -120,11 +120,10 @@ def process_topo (in_file='topo.nc', coordinates_file='coordinates.nc', out_file
     # Make bathymetry and ice draft positive, and mask with zeros
     topo['bathy'] = xr.where(topo['omask']==1, -topo['bathy'], 0)
     topo['draft'] = xr.where(topo['imask']*topo['omask']==1, -topo['draft'], 0)
-    # Now split bathymetry into cavity and non-cavity
+    # Now get bathymetry outside of cavities
     topo['Bathymetry'] = xr.where(topo['imask']==0, topo['bathy'], 0)
-    topo['Bathymetry_isf'] = xr.where(topo['imask']==1, topo['bathy'], 0)
     # Make a new dataset with all the variables we need
-    output = xr.Dataset({'nav_lon':nemo['nav_lon'], 'nav_lat':nemo['nav_lat'], 'tmaskutil':topo['omask'], 'Bathymetry':topo['Bathymetry'], 'Bathymetry_isf':topo['Bathymetry_isf'], 'isf_draft':topo['draft']})
+    output = xr.Dataset({'nav_lon':nemo['nav_lon'], 'nav_lat':nemo['nav_lat'], 'tmaskutil':topo['omask'], 'Bathymetry':topo['Bathymetry'], 'Bathymetry_isf':topo['bathy'], 'isf_draft':topo['draft']})
     output.to_netcdf(out_file)
 
     if plot:
@@ -169,7 +168,7 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
     ds_regional = xr.concat([ds_regional, ds_global.isel(y=slice(ny,None))], dim='y')
 
     # Now choose the points we want to update
-    mask = (ds_regional['nav_lat']<lat0)*(ds_regional['Bathymetry']<depth0)*(dds_regional.notnull())
+    mask = (ds_regional['nav_lat']<lat0)*(ds_regional['Bathymetry']<depth0)
     # Remove seamounts
     connected = remove_islands(mask, (1,1))
     mask = xr.where(connected, mask, 0)
