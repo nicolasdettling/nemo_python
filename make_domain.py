@@ -1,6 +1,8 @@
 import xarray as xr
 import numpy as np
 from .interpolation import interp_cell_binning, interp_latlon_cf
+from .utils import polar_stereo
+from .plots import circumpolar_plot
 
 # Given a pre-existing global domain (eg eORCA025), slice out a regional domain.
 # Inputs:
@@ -88,6 +90,55 @@ def interp_topo (dataset='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaig
     data_interp = interp_cell_binning(source, nemo, pster=pster_src, periodic=periodic, tmp_file=tmp_file)
     data_interp.to_netcdf(out_file)
     #data_interp = interp_latlon_cf(source, nemo, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic, method='conservative')
+
+
+# Following interpolation of topography, get everything in the right format for the NEMO tool DOMAINcfg, make diagnostic plots (optional), and save to a file.
+# Inputs:
+# in_file: path to file created by interp_topo above
+# coordinates_file: path to file containing NEMO coordinates (could be created by coordinates_from_global above)
+# out_file: desired path to output file
+# will_splice: will this new topography be spliced into an existing domain (like eORCA1 for UKESM)? If so, turn errors about missing points into warnings.
+# plot: whether to make diagnostic plots
+# pster_src: whether the source dataset (eg BedMachine3) was polar stereographic (and hence the x2d, y2d variables in in_file); only matters if plot=True
+def process_topo (in_file='topo.nc', coordinates_file='coordinates.nc', out_file='topo_processed.nc', will_splice=False, plot=True, pster_src=True):
+
+    if plot:
+        import matplotlib.pyplot as plt
+
+    topo = xr.open_dataset(in_file)
+    if np.count_nonzero(topo['bathy'].isnull()):
+        # There are missing points
+        if will_splice:
+            print('Warning: there are missing points. Hopefully this will be dealt with by your splicing later - check to make sure.')
+        else:
+            raise Exception('Missing points')
+    nemo = xr.open_dataset(coordinates_file)
+
+    # Set masks where they fall between 0 and 1
+    topo['omask'] = np.round(topo['omask'])
+    topo['imask'] = np.round(topo['imask'])
+    # Make bathymetry and ice draft positive, and mask with zeros
+    topo['bathy'] = xr.where(topo['omask']==1, -topo['bathy'], 0)
+    topo['draft'] = xr.where(topo['imask']*topo['omask']==1, -topo['draft'], 0)
+    # Now split bathymetry into cavity and non-cavity
+    topo['Bathymetry'] = xr.where(topo['imask']==0, topo['bathy'], 0)
+    topo['Bathymetry_isf'] = xr.where(topo['imask']==1, topo['bathy'], 0)
+    # Make a new dataset with all the variables we need
+    output = xr.Dataset({'nav_lon':nemo['nav_lon'], 'nav_lat':nemo['nav_lat'], 'tmaskutil':topo['omask'], 'Bathymetry':topo['Bathymetry'], 'Bathymetry_isf':topo['Bathymetry_isf'], 'isf_draft':topo['draft']})
+    output.to_netcdf(out_file)
+
+    if plot:
+        if pster_src:
+            # Convert nemo lat and lon into polar stereographic for direct comparison with x2d and y2d
+            x, y = polar_stereo(nemo['nav_lon'], nemo['nav_lat'])
+        else:
+            x = nemo['nav_lon']
+            y = nemo['nav_lat']
+        # Make a bunch of plots
+        circumpolar_plot(x-x2d, nemo, title='Error in x-coordinate (m)', ctype='plusminus')
+        circumpolar_plot(y-y2d, nemo, title='Error in y-coordinate (m)', ctype='plusminus')
+        for var in ['Bathymetry', 'Bathymetry_isf', 'isf_draft', 'tmaskutil']:
+            circumpolar_plot(topo[var], nemo, title=var)
 
 
 def interp_ics_TS (dataset='WOA18', source_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_decav_*01_04.nc', nemo_dom='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domain_cfg_eANT025.L121.nc'):

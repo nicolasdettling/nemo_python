@@ -1,9 +1,8 @@
 import matplotlib.pyplot as plt
 import xarray as xr
-import cf_xarray as cfxr
 import socket
 import numpy as np
-from .utils import polar_stereo
+from .utils import polar_stereo, extend_grid_edges
 from .plot_utils import set_colours
 
 # If a figure name is defined, save the figure to that file. Otherwise, display the figure on screen.
@@ -19,7 +18,7 @@ def finished_plot (fig, fig_name=None, dpi=None):
 # Plot a 2D field (lat-lon) on a polar stereographic projection of Antarctica. Assumes it's a periodic grid covering all longitudes.
 # Arguments:
 # data: an xarray DataArray of a 2D field (lat-lon)
-# grid: an xarray Dataset containing the fields nav_lon_grid_T, nav_lat_grid_T, bounds_nav_lon_grid_T, bounds_nav_lat_grid_T
+# grid: an xarray Dataset containing the fields (option 1:) nav_lon_grid_T, nav_lat_grid_T, bounds_nav_lon_grid_T, bounds_nav_lat_grid_T or (option 2): glamt, gphit, glamf, gphif
 # Optional keyword arguments:
 # ax: handle to Axes object to make the plot in
 # make_cbar: whether to make a colourbar (default True)
@@ -33,7 +32,7 @@ def finished_plot (fig, fig_name=None, dpi=None):
 # change_points: arguments to ismr colourmap (see above)
 
 # TODO colour maps, contour ice front, shade land in grey
-def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None):
+def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None, periodic=True):
 
     new_fig = ax is None
     if title is None:
@@ -42,13 +41,20 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
     if not masked:
         # Mask where identically zero
         data = data.where(data!=0)
-        
-    lon_edges = cfxr.bounds_to_vertices(grid['bounds_nav_lon_grid_T'], 'nvertex_grid_T')
-    lat_edges = cfxr.bounds_to_vertices(grid['bounds_nav_lat_grid_T'], 'nvertex_grid_T')
+
+    if 'bounds_nav_lon_grid_T' in grid:
+        import cf_xarray as cfxr
+        lon_edges = cfxr.bounds_to_vertices(grid['bounds_nav_lon_grid_T'], 'nvertex_grid_T')
+        lat_edges = cfxr.bounds_to_vertices(grid['bounds_nav_lat_grid_T'], 'nvertex_grid_T')
+        lat_name = 'nav_lat_grid_T'
+    elif 'glamf' in grid:
+        lon_edges = extend_grid_edges(grid['glamf'], 'f', periodic=True)
+        lat_edges = extend_grid_edges(grid['gphif'], 'f', periodic=True)
+        lat_name = 'gphit'
     x_edges, y_edges = polar_stereo(lon_edges, lat_edges)
 
     # Manually find northern boundary - careful with -1 used as missing values
-    lat_max = grid['nav_lat_grid_T'].where(grid['nav_lat_grid_T']!=-1).max().item()
+    lat_max = grid[lat_name].where(grid[lat_name]!=-1).max().item()
     # Get axes bounds
     x_bounds, y_bounds = polar_stereo(np.array([0, 90, 180, -90]), np.array([lat_max]*4))
     xlim = [x_bounds[3], x_bounds[1]]
