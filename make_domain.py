@@ -147,9 +147,9 @@ def process_topo (in_file='topo.nc', coordinates_file='coordinates.nc', out_file
 # topo_global: path to global bathy_meter file. The domain covered by topo_regional has to be the southernmost N rows of this global domain, but they don't both have to have a halo.
 # out_file: path to desired output merged bathy_meter file.
 # halo: whether to keep the halo on the periodic boundary - only matters if it exists in the global file but not the regional file.
-# lat0: latitude bound to search for isobath
-# depth0: isobath to define Antarctica
-def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/terrafirma/kaight/input_data/grids/eORCA_R1_bathy_meter_v2.2x.nc', out_file='bathy_meter_eORCA1_spliceBedMachine3.nc', halo=True, lat0=-57, depth0=2500):
+# lat0: latitude bound to search for isobath (negative, degrees)
+# depth0: isobath to define Antarctica (positive, metres)
+def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/terrafirma/kaight/input_data/grids/eORCA_R1_bathy_meter_v2.2x.nc', out_file='bathy_meter_eORCA1_spliceBedMachine3_withhalo.nc', halo=True, lat0=-57, depth0=2500):
 
     ds_regional = xr.open_dataset(topo_regional)
     ds_global = xr.open_dataset(topo_global)
@@ -182,8 +182,10 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
     mask = xr.where(connected, mask, 0)
 
     # Replace the global values with regional ones in this mask
-    ds_merged = xr.where(mask, ds_regional, ds_global)
-    ds_merged.to_netcdf(out_file)
+    # Loop over variables rather than doing entire dataset at once, because if so some variables like nav_lat, nav_lon get lost
+    for var in ds_global:
+        ds_global[var] = xr.where(mask, ds_regional[var], ds_global[var], keep_attrs=True)
+    ds_global.to_netcdf(out_file)
     
 
 
