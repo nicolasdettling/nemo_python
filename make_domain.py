@@ -141,6 +141,14 @@ def process_topo (in_file='topo.nc', coordinates_file='coordinates.nc', out_file
             circumpolar_plot(output[var].where(topo['omask']==1), nemo, title=var, masked=True)
 
 
+# Given a global bathy_meter topography file, update the region around Antarctica (south of 57S and the 2500m isobath, seamounts excluded) using the supplied regional file.
+# Inputs:
+# topo_regional: path to regional bathy_meter file, created by process_topo above.
+# topo_global: path to global bathy_meter file. The domain covered by topo_regional has to be the southernmost N rows of this global domain, but they don't both have to have a halo.
+# out_file: path to desired output merged bathy_meter file.
+# halo: whether to keep the halo on the periodic boundary - only matters if it exists in the global file but not the regional file.
+# lat0: latitude bound to search for isobath
+# depth0: isobath to define Antarctica
 def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/terrafirma/kaight/input_data/grids/eORCA_R1_bathy_meter_v2.2x.nc', out_file='bathy_meter_eORCA1_spliceBedMachine3.nc', halo=True, lat0=-57, depth0=2500):
 
     ds_regional = xr.open_dataset(topo_regional)
@@ -174,8 +182,8 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
     mask = xr.where(connected, mask, 0)
 
     # Replace the global values with regional ones in this mask
-    ds_global = xr.where(mask, ds_regional, ds_global)
-    ds_global.to_netcdf(out_file)
+    ds_merged = xr.where(mask, ds_regional, ds_global)
+    ds_merged.to_netcdf(out_file)
     
 
 
