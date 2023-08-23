@@ -136,9 +136,9 @@ def construct_cf (data, x, y, lon=None, lat=None, lon_bounds=None, lat_bounds=No
         dim_lat = cf.AuxiliaryCoordinate(data=cf.Data(lat, 'degrees_north'), properties={'standard_name':'latitude'})
         field.set_construct(dim_lat, axes=('Y','X'))
     if lon_bounds is not None:
-        dim_lon.set_bounds(lon_bounds)
+        dim_lon.set_bounds(cf.Bounds(data=cf.Data(lon_bounds, 'degrees_east')))
     if lat_bounds is not None:
-        dim_lat.set_bounds(lat_bounds)
+        dim_lat.set_bounds(cf.Bounds(data=cf.Data(lat_bounds, 'degrees_north')))
     field.set_data(cf.Data(data), axes=('Y', 'X'))
     return field
 
@@ -155,16 +155,15 @@ def interp_latlon_cf (source, nemo, pster_src=False, periodic_src=False, periodi
 
     # Helper function to get an xarray DataArray of edges (size N+1 by M+1) into a Numpy array of bounds for CF (size 4 x N x M)
     def edges_to_bounds (edges):
-        bounds = np.empty([4, edges.shape[1]-1, edges.shape[0]-1])
-        bounds[0,:] = edges.values[:-1,:-1]  # SW corner
-        bounds[1,:] = edges.values[:-1,1:] # SE
-        bounds[2,:] = edges.values[1:,1:] # NE
-        bounds[3,:] = edges.values[1:,:-1] # NW
+        bounds = np.empty([edges.shape[0]-1, edges.shape[1]-1, 4])
+        bounds[...,0] = edges.values[:-1,:-1]  # SW corner
+        bounds[...,1] = edges.values[:-1,1:] # SE
+        bounds[...,2] = edges.values[1:,1:] # NE
+        bounds[...,3] = edges.values[1:,:-1] # NW
         return bounds
 
     # Get source grid and data in CF format
     if pster_src:
-        print('Converting to lat-lon projection')
         x_src = source['x']
         y_src = source['y']
         lon_src, lat_src = polar_stereo_inv(source['x'], source['y'])
@@ -186,9 +185,7 @@ def interp_latlon_cf (source, nemo, pster_src=False, periodic_src=False, periodi
             x_edges = construct_edges(source['x'].values, 'x')
             y_edges = construct_edges(source['y'].values, 'y')
             # Now convert to lat-lon
-            print('Converting edges to lat-lon projection')
-            lon_edges, lat_edges = polar_stereo_inv(x_bounds, y_bounds)
-            print('Creating bounds')
+            lon_edges, lat_edges = polar_stereo_inv(x_edges, y_edges)
             lon_bounds_src = edges_to_bounds(lon_edges)
             lat_bounds_src = edges_to_bounds(lat_edges)
         else:
@@ -235,17 +232,99 @@ def interp_latlon_cf (source, nemo, pster_src=False, periodic_src=False, periodi
     target_cf = construct_cf(dummy_data, nemo[x_name], nemo[y_name], lon=nemo[lon_name], lat=nemo[lat_name], lon_bounds=lon_bounds_nemo, lat_bounds=lat_bounds_nemo)
     
     # Get weights with CF, using the first data field
-    regrid_operator = data_cf[0].regrids(target_cf, src_cyclic=periodic_src, dst_cyclic=periodic_nemo, dst_axes={'X':'X', 'Y':'Y'}, method=method, return_operator=True)
+    regrid_operator = data_cf[0].regrids(target_cf, src_cyclic=periodic_src, dst_cyclic=periodic_nemo, src_axes={'X':'X', 'Y':'Y'}, dst_axes={'X':'X', 'Y':'Y'}, method=method, return_operator=True)
 
     # Now interpolate each field, re-using the weights each time, and add it to a new Dataset
     interp = xr.Dataset()
     for var, data_cf0 in zip(source, data_cf):
-        data_interp = data_cf0.regrids(regrid_operator).array
+        data_interp = data_cf0.regrids(regrid_operator, src_axes={'X':'X', 'Y':'Y'}).array
         data_interp = xr.DataArray(data_interp, dims=['y', 'x'])
         interp = interp.assign({var:data_interp})     
 
     return interp
 
+
+def interp_latlon_cf_blocks (source, nemo, pster_src=True, periodic_src=False, periodic_nemo=True, method='conservative', blocks_x=10, blocks_y=10):
+
+    from tqdm import tqdm
+
+    block_buffer = 5
+
+    if len(source['x'].shape) > 1:
+        raise Exception('Block interpolation only works when source data is on regular grid')
+
+    # Get x and y coordinates of NEMO t-grid on same projection as source data
+    if pster_src:
+        x_t, y_t = polar_stereo(nemo['glamt'], nemo['gphit'])
+        x_f, y_f = polar_stereo(nemo['glamf'], nemo['gphif'])
+    else:
+        x_t = fix_lon_range(nemo['glamt'])
+        y_t = nemo['gphit']
+        x_f = fix_lon_range(nemo['glamf'])
+        y_f = nemo['gphif']
+    x_f = extend_grid_edges(x_f, 'f', periodic=periodic)
+    y_f = extend_grid_edges(y_f, 'f', periodic=periodic)
+
+    # Work out dimensions of each block
+    nx = nemo.sizes['x']
+    ny = nemo.sizes['y']
+    nx_block = int(np.ceil(nx/blocks_x))
+    ny_block = int(np.ceil(ny/blocks_y))
+
+    # Helper function to trim axis, which could be either ascending or descending, to the given min and max bounds
+    def trim_axis (array, vmin, vmax):
+        if array[1] > array[0]:
+            # Ascending
+            start = np.argwhere(array > vmin)[0][0] - 1
+            end = np.argwhere(array > vmax)[0][0]
+        elif array[1] < array[0]:
+            # Descending
+            start = np.argwhere(array < vmax)[0][0] - 1
+            end = np.argwhere(array < vmin)[0][0]
+        else:
+            raise Exception('Axis has duplicated values')
+        # Apply buffer and axis limits
+        start = max(start-block_buffer, 0)
+        end =  min(end+block_buffer, array.size)
+        return start, end
+
+    # Double loop over blocks
+    for j in tqdm(range(blocks_y), desc=' blocks in y', position=0):
+        j_start = ny_block*j
+        j_end = min(ny_block*(j+1), ny)
+        for i in tqdm(range(blocks_x), desc=' blocks in x', position=1, leave=False):
+            i_start = nx_block*i
+            i_end = min(nx_block*(i+1), nx)
+            # Slice NEMO dataset, plus the grid cell edges (1 dimension larger)
+            nemo_block = nemo.isel(x=slice(i_start,i_end), y=slice(j_start,j_end))
+            x_f_block = x_f.isel(x=slice(i_start,i_end+1), y=slice(j_start, j_end+1))
+            y_f_block = y_f.isel(x=slice(i_start,i_end+1), y=slice(j_start, j_end+1))
+            # Now find the smallest rectangular block of the source dataset which will cover this NEMO block plus a few cells buffer
+            i_start_source, i_end_source = trim_axis(source['x'].values, np.amin(x_f_block.values), np.amax(x_f_block.values))
+            j_start_source, j_end_source = trim_axis(source['y'].values, np.amin(y_f_block.values), np.amax(y_f_block.values))                
+            # Slice the source dataset
+            source_block = source.isel(x=slice(i_start_source,i_end_source), y=slice(j_start_source,j_end_source))
+            # Now interpolate this block with CF
+            interp_block = interp_latlon_cf(source_block, nemo_block, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic_nemo, method=method)
+            # Concatenate with rest of blocks in x
+            if i == 0:
+                interp_x = interp_block
+            else:
+                interp_x = xr.concat([interp_x, interp_block], dim='x')
+        # Concatenate with rest of blocks in y
+        if j == 0:
+            interp = interp_x
+        else:
+            interp = xr.concat([interp, interp_x], dim='y')
+
+    return interp
+            
+            
+            
+            
+            
+
+    
     
     
             
