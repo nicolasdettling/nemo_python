@@ -284,11 +284,17 @@ def interp_latlon_cf_blocks (source, nemo, pster_src=True, periodic_src=False, p
         if array[1] > array[0]:
             # Ascending
             start = np.argwhere(array > vmin)[0][0] - 1
-            end = np.argwhere(array > vmax)[0][0]
+            try:
+                end = np.argwhere(array > vmax)[0][0]
+            except(IndexError):
+                end = array.size
         elif array[1] < array[0]:
             # Descending
             start = np.argwhere(array < vmax)[0][0] - 1
-            end = np.argwhere(array < vmin)[0][0]
+            try:
+                end = np.argwhere(array < vmin)[0][0]
+            except(IndexError):
+                end = array.size
         else:
             raise Exception('Axis has duplicated values')
         # Apply buffer and axis limits
