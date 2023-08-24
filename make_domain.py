@@ -51,15 +51,14 @@ def coordinates_from_global (global_file='/gws/nopw/j04/terrafirma/kaight/input_
 
 
 # Interpolate topography from a dataset (default BedMachine3) to the given NEMO coordinates.
-# Warning, this is currently VERY SLOW due to memory constraints meaning a double loop is needed but I am hoping CF will come to my rescue soon!
 # Inputs:
 # dataset: name of source dataset, only 'BedMachine3' supported now
 # topo_file: path to file containing dataset
 # coordinates_file: path to file containing NEMO coordinates (could be created by coordinates_from_global above)
 # out_file: desired path to output file for interpolated dataset
-# tmp_file: optional path to temporary output file which the interpolation routine will write to every latitude row. This is useful if the job dies in the middle.
 # periodic: whether the NEMO grid is periodic in longitude
-def interp_topo (dataset='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/BedMachineAntarctica-v3.nc', coordinates_file='coordinates.nc', out_file='topo.nc', tmp_file=None, periodic=True):
+# blocks_x, blocks_y: number of subdomains in x and y to split the domain into: iterating over smaller domains prevents memory overflowing when the entirety of BedMachine3 is being used. If you have a little domain which won't overflow, set them both to 1.
+def interp_topo (dataset='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/BedMachineAntarctica-v3.nc', coordinates_file='coordinates.nc', out_file='topo.nc', periodic=True, blocks_x=10, blocks_y=10):
 
     print('Processing input data')
     if dataset == 'BedMachine3':        
@@ -88,9 +87,11 @@ def interp_topo (dataset='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaig
     nemo = xr.open_dataset(coordinates_file).squeeze()
     
     print('Interpolating')
-    data_interp = interp_cell_binning(source, nemo, pster=pster_src, periodic=periodic, tmp_file=tmp_file)
-    data_interp.to_netcdf(out_file)
+    #data_interp = interp_cell_binning(source, nemo, pster=pster_src, periodic=periodic, tmp_file=tmp_file)
     #data_interp = interp_latlon_cf(source, nemo, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic, method='conservative')
+    data_interp = interp_latlon_cf_blocks(source, nemo, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic_nemo, method='conservative', blocks_x=blocks_x, blocks_y=blocks_y)
+    data_interp.to_netcdf(out_file)
+    
 
 
 # Following interpolation of topography, get everything in the right format for the NEMO tool DOMAINcfg, make diagnostic plots (optional), and save to a file.
