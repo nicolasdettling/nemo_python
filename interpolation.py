@@ -270,8 +270,8 @@ def interp_latlon_cf_blocks (source, nemo, pster_src=True, periodic_src=False, p
         y_t = nemo['gphit']
         x_f = fix_lon_range(nemo['glamf'])
         y_f = nemo['gphif']
-    x_f = extend_grid_edges(x_f, 'f', periodic=periodic)
-    y_f = extend_grid_edges(y_f, 'f', periodic=periodic)
+    x_f = extend_grid_edges(x_f, 'f', periodic=periodic_nemo)
+    y_f = extend_grid_edges(y_f, 'f', periodic=periodic_nemo)
 
     # Work out dimensions of each block
     nx = nemo.sizes['x']
