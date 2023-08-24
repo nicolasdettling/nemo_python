@@ -132,13 +132,13 @@ def construct_cf (data, x, y, lon=None, lat=None, lon_bounds=None, lat_bounds=No
     field.set_construct(dim_y, axes='Y')
     if not native_latlon:
         dim_lon = cf.AuxiliaryCoordinate(data=cf.Data(lon, 'degrees_east'), properties={'standard_name':'longitude'})
+        if lon_bounds is not None:
+            dim_lon.set_bounds(cf.Bounds(data=cf.Data(lon_bounds, 'degrees_east')))
         field.set_construct(dim_lon, axes=('Y','X'))
         dim_lat = cf.AuxiliaryCoordinate(data=cf.Data(lat, 'degrees_north'), properties={'standard_name':'latitude'})
+        if lat_bounds is not None:
+            dim_lat.set_bounds(cf.Bounds(data=cf.Data(lat_bounds, 'degrees_north')))
         field.set_construct(dim_lat, axes=('Y','X'))
-    if lon_bounds is not None:
-        dim_lon.set_bounds(cf.Bounds(data=cf.Data(lon_bounds, 'degrees_east')))
-    if lat_bounds is not None:
-        dim_lat.set_bounds(cf.Bounds(data=cf.Data(lat_bounds, 'degrees_north')))
     field.set_data(cf.Data(data), axes=('Y', 'X'))
     return field
 
