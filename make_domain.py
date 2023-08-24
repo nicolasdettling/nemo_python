@@ -1,7 +1,7 @@
 import xarray as xr
 import numpy as np
 import datetime
-from .interpolation import interp_cell_binning, interp_latlon_cf
+from .interpolation import interp_latlon_cf_blocks
 from .utils import polar_stereo, remove_islands
 from .plots import circumpolar_plot
 
