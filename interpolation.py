@@ -283,14 +283,20 @@ def interp_latlon_cf_blocks (source, nemo, pster_src=True, periodic_src=False, p
     def trim_axis (array, vmin, vmax):
         if array[1] > array[0]:
             # Ascending
-            start = np.argwhere(array > vmin)[0][0] - 1
+            try:
+                start = np.argwhere(array > vmin)[0][0] - 1
+            except(IndexError):
+                return None, None
             try:
                 end = np.argwhere(array > vmax)[0][0]
             except(IndexError):
                 end = array.size
         elif array[1] < array[0]:
             # Descending
-            start = np.argwhere(array < vmax)[0][0] - 1
+            try:
+                start = np.argwhere(array < vmax)[0][0] - 1
+            except(IndexError):
+                return None, None
             try:
                 end = np.argwhere(array < vmin)[0][0]
             except(IndexError):
@@ -315,11 +321,16 @@ def interp_latlon_cf_blocks (source, nemo, pster_src=True, periodic_src=False, p
             y_f_block = y_f.isel(x=slice(i_start,i_end+1), y=slice(j_start, j_end+1))
             # Now find the smallest rectangular block of the source dataset which will cover this NEMO block plus a few cells buffer
             i_start_source, i_end_source = trim_axis(source['x'].values, np.amin(x_f_block.values), np.amax(x_f_block.values))
-            j_start_source, j_end_source = trim_axis(source['y'].values, np.amin(y_f_block.values), np.amax(y_f_block.values))                
-            # Slice the source dataset
-            source_block = source.isel(x=slice(i_start_source,i_end_source), y=slice(j_start_source,j_end_source))
-            # Now interpolate this block with CF
-            interp_block = interp_latlon_cf(source_block, nemo_block, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic_nemo, method=method)
+            j_start_source, j_end_source = trim_axis(source['y'].values, np.amin(y_f_block.values), np.amax(y_f_block.values))
+            if None in [i_start_source, i_end_source, j_start_source, j_end_source]:
+                # This NEMO block is entirely outside the source dataset
+                # Make a copy of the source dataset (so we have all the right variables), trimmed to the dimensions of nemo_block (so it's the right size), entirely masked
+                interp_block = source.isel(x=slice(i_start,i_end), y=slice(j_start,j_end)).where(False)
+            else:
+                # Slice the source dataset
+                source_block = source.isel(x=slice(i_start_source,i_end_source), y=slice(j_start_source,j_end_source))
+                # Now interpolate this block with CF
+                interp_block = interp_latlon_cf(source_block, nemo_block, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic_nemo, method=method)
             # Concatenate with rest of blocks in x
             if i == 0:
                 interp_x = interp_block
