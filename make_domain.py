@@ -119,10 +119,11 @@ def process_topo (in_file='topo.nc', coordinates_file='coordinates.nc', out_file
     # Set masks where they fall between 0 and 1
     topo['omask'] = np.round(topo['omask'])
     topo['imask'] = np.round(topo['imask'])
-    # Make bathymetry and ice draft positive, and mask with zeros
-    topo['bathy'] = xr.where(topo['omask']==1, -topo['bathy'], 0)
-    topo['draft'] = xr.where(topo['imask']*topo['omask']==1, -topo['draft'], 0)
-    # Now get bathymetry outside of cavities
+    # Make bathymetry and ice draft positive
+    # Don't need to mask with zeros as NEMO will do that for us (and if coupled ice sheet is active need to know bathymetry of grounded ice)
+    topo['bathy'] = -topo['bathy']
+    topo['draft'] = -topo['draft']
+    # Now get bathymetry outside of cavities, masked with zeros where there's grounded or floating ice
     topo['Bathymetry'] = xr.where(topo['imask']==0, topo['bathy'], 0)
     # Make a new dataset with all the variables we need
     output = xr.Dataset({'nav_lon':nemo['nav_lon'], 'nav_lat':nemo['nav_lat'], 'tmaskutil':topo['omask'], 'Bathymetry':topo['Bathymetry'], 'Bathymetry_isf':topo['bathy'], 'isf_draft':topo['draft']})

@@ -256,8 +256,6 @@ def interp_latlon_cf_blocks (source, nemo, pster_src=True, periodic_src=False, p
 
     from tqdm import tqdm
 
-    block_buffer = 5
-
     if len(source['x'].shape) > 1:
         raise Exception('Block interpolation only works when source data is on regular grid')
 
@@ -272,6 +270,14 @@ def interp_latlon_cf_blocks (source, nemo, pster_src=True, periodic_src=False, p
         y_f = nemo['gphif']
     x_f = extend_grid_edges(x_f, 'f', periodic=periodic_nemo)
     y_f = extend_grid_edges(y_f, 'f', periodic=periodic_nemo)
+    # Choose the number of buffer cells for interpolation, so we don't get edge effects
+    # Want to be at least as large as the largest NEMO cell
+    dx_max = max(np.amax(np.abs(np.diff(x_f.values, axis=0))), np.amax(np.abs(np.diff(x_f.values, axis=1))))
+    dy_max = max(np.amax(np.abs(np.diff(y_f.values, axis=0))), np.amax(np.abs(np.diff(y_f.values, axis=1))))
+    dx_source = np.mean(np.abs(np.diff(source['x'].values)))
+    dy_source = np.mean(np.abs(np.diff(source['y'].values)))
+    block_buffer = max(int(np.ceil(dx_max/dx_source)), int(np.ceil(dy_max/dy_source)))
+    print('Buffer size of '+str(block_buffer))
 
     # Work out dimensions of each block
     nx = nemo.sizes['x']
