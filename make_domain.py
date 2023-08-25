@@ -1,5 +1,6 @@
 import xarray as xr
 import numpy as np
+import matplotlib.pyplot as plt
 import datetime
 from .interpolation import interp_latlon_cf_blocks
 from .utils import polar_stereo, remove_islands
@@ -107,7 +108,7 @@ def process_topo (in_file='topo.nc', coordinates_file='coordinates.nc', out_file
     if plot:
         import matplotlib.pyplot as plt
 
-    topo = xr.open_dataset(in_file).transpose('y', 'x')
+    topo = xr.open_dataset(in_file)
     if np.count_nonzero(topo['bathy'].isnull()):
         # There are missing points
         if will_splice:
@@ -165,6 +166,7 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
             # Need to create the halo in ds_regional
             ds_regional = xr.concat([ds_regional.isel(x=-1), ds_regional, ds_regional.isel(x=0)], dim='x')
             ds_regional['x'] = ds_global['x']
+            ds_regional = ds_regional.drop_vars('x')
         else:
             # Need to remove the halo from global
             ds_global = ds_global.isel(x=slice(1,-1))
@@ -172,7 +174,6 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
 
     # Make sure the regional dataset has the same coordinates and variables as the global one
     ds_regional = ds_regional.assign_coords(nav_lon=ds_regional['nav_lon'], nav_lat=ds_regional['nav_lat'])
-    ds_regional = ds_regional.drop_vars('x')
     ds_regional = ds_regional[[var for var in ds_global]]
     # Extend the regional dataset to cover the global domain (just copy the rest of the global domain over)
     ny = ds_regional.sizes['y']
