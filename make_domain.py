@@ -3,7 +3,7 @@ import numpy as np
 import datetime
 from .interpolation import interp_latlon_cf_blocks
 from .utils import polar_stereo, remove_islands
-from .plots import circumpolar_plot
+from .plots import circumpolar_plot, finished_plot
 
 # Given a pre-existing global domain (eg eORCA025), slice out a regional domain.
 # Inputs:
@@ -191,6 +191,71 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
         ds_global[var] = xr.where(mask==0, ds_global[var], ds_regional[var], keep_attrs=True)
     ds_global.attrs['history'] = ds_global.attrs['history'] + 'Antarctic topography updated to BedMachine3 by Kaitlin Naughten ('+str(datetime.date.today())+')'
     ds_global.to_netcdf(out_file)
+
+
+# Plot up the differences resulting from splicing.
+# old_file: as in topo_global for splice_topo above
+# new_file: as in out_file for splice_topo above
+# grid_file: file with all the coordinates for this grid, to be used in plotting
+# old_halo, new_halo: whether the old and new files respectively contain the halo (True if used for NEMO 3.6)
+# nbdry: northern boundary to plot
+def plot_splice_diff (old_file='/gws/nopw/j04/terrafirma/kaight/input_data/grids/eORCA_R1_bathy_meter_v2.2x.nc', new_file='bathy_meter_eORCA1_spliceBedMachine3_withhalo.nc', grid_file='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc', old_halo=True, new_halo=True, nbdry=-60):
+
+    old = xr.open_dataset(old_file)
+    new = xr.open_dataset(new_file)
+    grid = xr.open_dataset(grid_file).squeeze()
+    
+    # Trim to the northern boundary for plotting
+    jmax = np.where(old['nav_lat'].mean(dim='x') > nbdry)[0][0]
+    old = old.isel(y=slice(0,jmax))
+    new = new.isel(y=slice(0,jmax))
+    grid = grid.isel(y=slice(0,jmax))
+    if old_halo:
+        # Have to remove the halo for plotting
+        old = old.isel(x=slice(1,-1))
+    if new_halo:
+        new = new.isel(x=slice(1,-1))
+    if grid.sizes['x'] == new.sizes['x']+2:
+        grid = grid.isel(x=slice(1,-1))
+
+    # Construct some new variables
+    old['open_ocean_mask'] = xr.where(old['Bathymetry']==0, 0, 1)
+    new['open_ocean_mask'] = xr.where(new['Bathymetry']==0, 0, 1)
+    old['ocean_mask'] = xr.where(old['Bathymetry_isf']==0, 0, 1)
+    new['ocean_mask'] = xr.where(np.abs(new['Bathymetry_isf']-new['isf_draft'])<1, 0, 1)
+    old['water_column_thickness'] = old['Bathymetry_isf']-old['isf_draft']
+    new['water_column_thickness'] = new['Bathymetry_isf']-new['isf_draft']
+    diff = new-old
+
+    for var in ['Bathymetry', 'Bathymetry_isf', 'isf_draft', 'water_column_thickness']:
+        # Apply most restrictive mask to difference
+        if var == 'Bathymetry':
+            mask_var = 'open_ocean_mask'
+        else:
+            mask_var = 'ocean_mask'
+        mask = (old[mask_var]==1)*(new[mask_var]==1)
+        diff[var] = diff[var].where(mask)
+
+    # Make plots
+    for var in ['Bathymetry', 'Bathymetry_isf', 'isf_draft', 'open_ocean_mask', 'ocean_mask', 'water_column_thickness']:
+        fig = plt.figure(figsize=(10,4))
+        gs = plt.GridSpec(1,3)
+        gs.update(left=0.1, right=0.9, bottom=0.05, top=0.8, wspace=0.1)
+        ds = [old, new, diff]
+        titles = ['Old', 'New', 'Difference']
+        vmin = min(np.amin(old[var].values), np.amin(new[var].values))
+        vmax = max(np.amax(old[var].values), np.amax(new[var].values))
+        for n in range(3):
+            ax = plt.subplot(gs[0,n])
+            ax.axis('equal')
+            img = circumpolar_plot(ds[n][var], grid, ax=ax, masked=(var.endswith('mask') or n==2), make_cbar=False, title=titles[n], vmin=(vmin if n<2 else None), vmax=(vmax if n<2 else None), ctype=('viridis' if n<2 else 'plusminus'), titlesize=14)
+            if n != 1:
+                cax = fig.add_axes([0.01+0.46*n, 0.15, 0.02, 0.6])
+                plt.colorbar(img, cax=cax)
+        plt.suptitle(var, fontsize=16)
+        finished_plot(fig)
+                                         
+        
     
 
 
