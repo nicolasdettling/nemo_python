@@ -126,7 +126,7 @@ def process_topo (in_file='topo.nc', coordinates_file='coordinates.nc', out_file
     # Now get bathymetry outside of cavities, masked with zeros where there's grounded or floating ice
     topo['Bathymetry'] = xr.where(topo['imask']==0, topo['bathy'], 0)
     # Make a new dataset with all the variables we need
-    output = xr.Dataset({'nav_lon':nemo['nav_lon'], 'nav_lat':nemo['nav_lat'], 'tmaskutil':topo['omask'], 'Bathymetry':topo['Bathymetry'], 'Bathymetry_isf':topo['bathy'], 'isf_draft':topo['draft']})
+    output = xr.Dataset({'nav_lon':nemo['nav_lon'], 'nav_lat':nemo['nav_lat'], 'Bathymetry':topo['Bathymetry'], 'Bathymetry_isf':topo['bathy'], 'isf_draft':topo['draft']})
     output.to_netcdf(out_file)
 
     if plot:
@@ -137,11 +137,11 @@ def process_topo (in_file='topo.nc', coordinates_file='coordinates.nc', out_file
             x = nemo['nav_lon']
             y = nemo['nav_lat']
         # Make a bunch of plots
-        circumpolar_plot((x-topo['x2d']).where(topo['omask']==1), nemo, title='Error in x-coordinate (m)', ctype='plusminus', masked=True)
-        circumpolar_plot(y-topo['y2d'].where(topo['omask']==1), nemo, title='Error in y-coordinate (m)', ctype='plusminus', masked=True)
-        circumpolar_plot(topo['num_points'].where(topo['omask']==1), nemo, title='num_points', masked=True)
-        for var in ['Bathymetry', 'Bathymetry_isf', 'isf_draft', 'tmaskutil']:
-            circumpolar_plot(output[var].where(topo['omask']==1), nemo, title=var, masked=True)
+        #circumpolar_plot((x-topo['x2d']).where(topo['omask']==1), nemo, title='Error in x-coordinate (m)', ctype='plusminus', masked=True)
+        #circumpolar_plot(y-topo['y2d'].where(topo['omask']==1), nemo, title='Error in y-coordinate (m)', ctype='plusminus', masked=True)
+        #circumpolar_plot(topo['num_points'].where(topo['omask']==1), nemo, title='num_points', masked=True)
+        for var in ['Bathymetry', 'Bathymetry_isf', 'isf_draft']:
+            circumpolar_plot(output[var], nemo, title=var, masked=True)
 
 
 # Given a global bathy_meter topography file, update the region around Antarctica (south of 57S and the 2500m isobath, seamounts excluded) using the supplied regional file.
@@ -157,7 +157,7 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
     ds_regional = xr.open_dataset(topo_regional)
     ds_global = xr.open_dataset(topo_global)
     # Mask out missing regions
-    ds_regional = ds_regional.where(ds_regional['tmaskutil'].notnull())
+    ds_regional = ds_regional.where(ds_regional['Bathymetry_isf'].notnull())
 
     if ds_regional.sizes['x'] == ds_global.sizes['x']-2:
         # The global domain has a halo, but the regional one doesn't.
@@ -172,7 +172,7 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
 
     # Make sure the regional dataset has the same coordinates and variables as the global one
     ds_regional = ds_regional.assign_coords(nav_lon=ds_regional['nav_lon'], nav_lat=ds_regional['nav_lat'])
-    ds_regional = ds_regional.drop_vars(['x','y'])
+    ds_regional = ds_regional.drop_vars('x')
     ds_regional = ds_regional[[var for var in ds_global]]
     # Extend the regional dataset to cover the global domain (just copy the rest of the global domain over)
     ny = ds_regional.sizes['y']

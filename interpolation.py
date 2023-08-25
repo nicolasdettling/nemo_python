@@ -248,11 +248,11 @@ def interp_latlon_cf (source, nemo, pster_src=False, periodic_src=False, periodi
 
 # Call interp_latlon_cf iteratively for subdomains within the whole domain (default split into 10x10 blocks so a loop of 100 calls). This reduces the memory usage of individual calls to CF and makes BedMachine a manageable problem!
 # Inputs:
-# source, nemo, pster_src, periodic_src, periodic_nemo, method: as for interp_latlon_cf
+# source, nemo, pster_src, method: as for interp_latlon_cf
 # blocks_x, blocks_y: number of subdomains in the x and y dimensions to split the domain into. Experiment and try to get the smallest number that still runs.
 # Returns:
 # interp: xarray Dataset containing all data variables from source on the nemo grid
-def interp_latlon_cf_blocks (source, nemo, pster_src=True, periodic_src=False, periodic_nemo=True, method='conservative', blocks_x=10, blocks_y=10):
+def interp_latlon_cf_blocks (source, nemo, pster_src=True, method='conservative', blocks_x=10, blocks_y=10):
 
     from tqdm import tqdm
 
