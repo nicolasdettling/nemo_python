@@ -329,7 +329,7 @@ def interp_latlon_cf_blocks (source, nemo, pster_src=True, periodic_src=False, p
                 # Slice the source dataset
                 source_block = source.isel(x=slice(i_start_source,i_end_source), y=slice(j_start_source,j_end_source))
                 # Now interpolate this block with CF
-                interp_block = interp_latlon_cf(source_block, nemo_block, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic_nemo, method=method)
+                interp_block = interp_latlon_cf(source_block, nemo_block, pster_src=pster_src, periodic_src=False, periodic_nemo=False, method=method)
             # Concatenate with rest of blocks in x
             if i == 0:
                 interp_x = interp_block
