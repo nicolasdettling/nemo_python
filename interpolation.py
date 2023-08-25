@@ -270,14 +270,6 @@ def interp_latlon_cf_blocks (source, nemo, pster_src=True, periodic_src=False, p
         y_f = nemo['gphif']
     x_f = extend_grid_edges(x_f, 'f', periodic=periodic_nemo)
     y_f = extend_grid_edges(y_f, 'f', periodic=periodic_nemo)
-    # Choose the number of buffer cells for interpolation, so we don't get edge effects
-    # Want to be at least as large as the largest NEMO cell
-    dx_max = max(np.amax(np.abs(np.diff(x_f.values, axis=0))), np.amax(np.abs(np.diff(x_f.values, axis=1))))
-    dy_max = max(np.amax(np.abs(np.diff(y_f.values, axis=0))), np.amax(np.abs(np.diff(y_f.values, axis=1))))
-    dx_source = np.mean(np.abs(np.diff(source['x'].values)))
-    dy_source = np.mean(np.abs(np.diff(source['y'].values)))
-    block_buffer = max(int(np.ceil(dx_max/dx_source)), int(np.ceil(dy_max/dy_source)))
-    print('Buffer size of '+str(block_buffer))
 
     # Work out dimensions of each block
     nx = nemo.sizes['x']
@@ -309,9 +301,9 @@ def interp_latlon_cf_blocks (source, nemo, pster_src=True, periodic_src=False, p
                 end = array.size
         else:
             raise Exception('Axis has duplicated values')
-        # Apply buffer and axis limits
-        start = max(start-block_buffer, 0)
-        end =  min(end+block_buffer, array.size)
+        # Apply axis limits
+        start = max(start, 0)
+        end =  min(end, array.size)
         return start, end
 
     # Double loop over blocks
@@ -321,13 +313,14 @@ def interp_latlon_cf_blocks (source, nemo, pster_src=True, periodic_src=False, p
         for i in tqdm(range(blocks_x), desc=' blocks in x', position=1, leave=False):
             i_start = nx_block*i
             i_end = min(nx_block*(i+1), nx)
-            # Slice NEMO dataset, plus the grid cell edges (1 dimension larger)
+            # Slice NEMO dataset
             nemo_block = nemo.isel(x=slice(i_start,i_end), y=slice(j_start,j_end))
-            x_f_block = x_f.isel(x=slice(i_start,i_end+1), y=slice(j_start, j_end+1))
-            y_f_block = y_f.isel(x=slice(i_start,i_end+1), y=slice(j_start, j_end+1))
+            # Now slice the grid cell edges with 2 cells buffer on either side to avoid edge effects - these are just used to trim the source dataset
+            x_f_block_buffer = x_f.isel(x=slice(max(i_start-2,0), min(i_end+3,nx)), y=slice(max(j_start-2,0), min(j_end+3,ny)))
+            y_f_block_buffer = y_f.isel(x=slice(max(i_start-2,0), min(i_end+3,nx)), y=slice(max(j_start-2,0), min(j_end+3,ny)))
             # Now find the smallest rectangular block of the source dataset which will cover this NEMO block plus a few cells buffer
-            i_start_source, i_end_source = trim_axis(source['x'].values, np.amin(x_f_block.values), np.amax(x_f_block.values))
-            j_start_source, j_end_source = trim_axis(source['y'].values, np.amin(y_f_block.values), np.amax(y_f_block.values))
+            i_start_source, i_end_source = trim_axis(source['x'].values, np.amin(x_f_block_buffer.values), np.amax(x_f_block_buffer.values))
+            j_start_source, j_end_source = trim_axis(source['y'].values, np.amin(y_f_block_buffer.values), np.amax(y_f_block_buffer.values))
             if None in [i_start_source, i_end_source, j_start_source, j_end_source]:
                 # This NEMO block is entirely outside the source dataset
                 # Make a copy of the source dataset (so we have all the right variables), trimmed to the dimensions of nemo_block (so it's the right size), entirely masked
