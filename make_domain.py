@@ -120,9 +120,9 @@ def process_topo (in_file='topo.nc', coordinates_file='coordinates.nc', out_file
     topo['omask'] = np.round(topo['omask'])
     topo['imask'] = np.round(topo['imask'])
     # Make bathymetry and ice draft positive
-    # Don't need to mask with zeros as NEMO will do that for us (and if coupled ice sheet is active need to know bathymetry of grounded ice)
+    # Don't need to mask grounded ice with zeros as NEMO will do that for us (and if coupled ice sheet is active need to know bathymetry of grounded ice)
     topo['bathy'] = -topo['bathy']
-    topo['draft'] = -topo['draft']
+    topo['draft'] = xr.where(topo['imask']==1, -topo['draft'], 0)
     # Now get bathymetry outside of cavities, masked with zeros where there's grounded or floating ice
     topo['Bathymetry'] = xr.where(topo['imask']==0, topo['bathy'], 0)
     # Make a new dataset with all the variables we need
