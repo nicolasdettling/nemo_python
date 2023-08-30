@@ -12,7 +12,7 @@ from .plots import circumpolar_plot, finished_plot
 # out_file: path to desired output NetCDF file
 # imin, imax, jmin, jmax: optional bounds on the i and j indicies to slice. Uses the python convention of 0-indexing, and selecting the indices up to but not including the last value. So, jmin=0, jmax=10 will select the southernmost 10 rows.
 # nbdry: optional latitude of the desired northern boundary. The code will generate the value of jmax that corresponds to this on the zonal mean.
-def coordinates_from_global (global_file='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA025_v3.nc', out_file='coordinates.nc', imin=None, imax=None, jmin=None, jmax=None, nbdry=None, remove_halo=True):
+def coordinates_from_global (global_file='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA025_v3.nc', out_file='coordinates_AIS.nc', imin=None, imax=None, jmin=None, jmax=None, nbdry=None, remove_halo=True):
 
     ds = xr.open_dataset(global_file)
 
@@ -59,7 +59,7 @@ def coordinates_from_global (global_file='/gws/nopw/j04/terrafirma/kaight/input_
 # out_file: desired path to output file for interpolated dataset
 # periodic: whether the NEMO grid is periodic in longitude
 # blocks_x, blocks_y: number of subdomains in x and y to split the domain into: iterating over smaller domains prevents memory overflowing when the entirety of BedMachine3 is being used. If you have a little domain which won't overflow, set them both to 1.
-def interp_topo (dataset='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/BedMachineAntarctica-v3.nc', coordinates_file='coordinates.nc', out_file='topo.nc', periodic=True, blocks_x=10, blocks_y=10):
+def interp_topo (dataset='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/BedMachineAntarctica-v3.nc', coordinates_file='coordinates_AIS.nc', out_file='eORCA025_BedMachine3_AIS.nc', periodic=True, blocks_x=10, blocks_y=10):
 
     print('Processing input data')
     if dataset == 'BedMachine3':        
@@ -92,6 +92,40 @@ def interp_topo (dataset='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaig
     #data_interp = interp_latlon_cf(source, nemo, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic, method='conservative')
     data_interp = interp_latlon_cf_blocks(source, nemo, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic, method='conservative', blocks_x=blocks_x, blocks_y=blocks_y)
     data_interp.to_netcdf(out_file)
+
+
+# Fill any missing cells from interp_topo near the northern boundary with another dataset (default GEBCO).
+def fill_missing_topo (dataset='GEBCO', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/IBCSO_v2_bed_WGS84.nc', coordinates_file='coordinates_AIS.nc', interp_file='eORCA025_BedMachine3_AIS.nc', out_file='eORCA025_BedMachine3_GEBCO_AIS.nc', periodic=True):
+
+    print('Processing input data')
+    if dataset == 'GEBCO':
+        source = xr.open_dataset(topo_file)
+        bathy = source['elevation']
+        omask = xr.where(bathy<0, 1, 0)
+        draft = source['elevation']*0  # No ice shelves in the region to interpolate
+        imask = source['omask']*0
+        pster_src = False
+        periodic_src = True
+        source = xr.Dataset({'lon':source['lon'], 'lat':source['lat'], 'bathy':bathy, 'draft':draft, 'omask':omask, 'imask':imask})
+    else:
+        raise Exception('source dataset not yet supported')
+
+    print('Reading NEMO coordinates')
+    nemo = xr.open_dataset(coordinates_file).squeeze()
+    print('Selecting missing regions')
+    nemo_interp1 = xr.open_dataset(interp_file)
+    # Find the southernmost row with missing data, and give it a few buffer cells to the south
+    missing_rows = nemo_interp1['bathy'].isnull().sum(dim='x')
+    jmin = np.where(missing_rows > 0)[0][0] - 2
+    # Now slice the NEMO datasets
+    nemo = nemo.isel(y=slice(jmin,None))
+    nemo_interp1 = nemo_interp1.isel(y=slice(jmin,None))
+
+    print('Interpolating')
+    # Use the block method so it trims the source dataset, but only do 1 block
+    nemo_interp2 = interp_latlon_cf_blocks(source, nemo, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic, method='conservative', blocks_x=1, blocks_y=1)
+
+    # TODO: merge them in the missing regions and have an intermediate transition in the neighbours of missing regions    
     
 
 
@@ -103,7 +137,7 @@ def interp_topo (dataset='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaig
 # will_splice: will this new topography be spliced into an existing domain (like eORCA1 for UKESM)? If so, turn errors about missing points into warnings.
 # plot: whether to make diagnostic plots
 # pster_src: whether the source dataset (eg BedMachine3) was polar stereographic (and hence the x2d, y2d variables in in_file); only matters if plot=True
-def process_topo (in_file='topo.nc', coordinates_file='coordinates.nc', out_file='topo_processed.nc', will_splice=False, plot=True, pster_src=True):
+def process_topo (in_file='eORCA025_BedMachine3_GEBCO_AIS.nc', coordinates_file='coordinates_AIS.nc', out_file='bathy_meter_eORCA025_BedMachine3_GEBCO_AIS.nc', will_splice=False, plot=True, pster_src=True):
 
     if plot:
         import matplotlib.pyplot as plt

@@ -166,32 +166,42 @@ def interp_latlon_cf (source, nemo, pster_src=False, periodic_src=False, periodi
 
     # Get source grid and data in CF format
     if pster_src:
+        x_name = 'x'
+        y_name = 'y'
         x_src = source['x']
         y_src = source['y']
         lon_src, lat_src = polar_stereo_inv(source['x'], source['y'])
     else:
+        x_name = 'lon'
+        y_name = 'lat'
         x_src = source['lon']
         y_src = source['lat']
         lon_src = None
         lat_src = None
     if method == 'conservative':
-        if pster_src and not periodic_src and len(source['x'].shape)==1:
-            # Regular grid in x-y, not periodic
-            # Get grid cell edges for x and y
-            def construct_edges (array, dim):
-                centres = 0.5*(array[:-1] + array[1:])
+        if len(source[x_name].shape != 1):
+            raise Exception('Cannot find bounds if source dataset not a regular grid')
+        # Get grid cell edges for x and y
+        def construct_edges (array, dim):
+            centres = 0.5*(array[:-1] + array[1:])
+            if periodic_src and dim=='lon':
+                first_edge = 0.5*(array[0] + array[-1] - 360)
+                last_edge = 0.5*(array[0] + 360 + array[-1])
+            else:
                 first_edge = 2*array[0] - array[1]
                 last_edge = 2*array[-1] - array[-2]
-                edges = np.concatenate(([first_edge], centres, [last_edge]))
-                return xr.DataArray(edges, coords={dim:edges})
-            x_edges = construct_edges(source['x'].values, 'x')
-            y_edges = construct_edges(source['y'].values, 'y')
+            edges = np.concatenate(([first_edge], centres, [last_edge]))
+            return xr.DataArray(edges, coords={dim:edges})
+        x_edges = construct_edges(source[x_name].values, x_name)
+        y_edges = construct_edges(source[y_name].values, y_name)
+        if pster_src:
             # Now convert to lat-lon
             lon_edges, lat_edges = polar_stereo_inv(x_edges, y_edges)
-            lon_bounds_src = edges_to_bounds(lon_edges)
-            lat_bounds_src = edges_to_bounds(lat_edges)
         else:
-            raise Exception('Need to code definition of bounds for this type of input dataset')
+            lon_edges = x_edges
+            lat_edges = y_edges
+        lon_bounds_src = edges_to_bounds(lon_edges)
+        lat_bounds_src = edges_to_bounds(lat_edges)
     else:
         lon_bounds_src = None
         lat_bounds_src = None
@@ -256,7 +266,14 @@ def interp_latlon_cf_blocks (source, nemo, pster_src=True, method='conservative'
 
     from tqdm import tqdm
 
-    if len(source['x'].shape) > 1:
+    if pster_src:
+        x_name = 'x'
+        y_name = 'y'
+    else:
+        x_name = 'lon'
+        y_name = 'lat'
+
+    if len(source[x_name].shape) > 1:
         raise Exception('Block interpolation only works when source data is on regular grid')
 
     # Get x and y coordinates of NEMO t-grid on same projection as source data
@@ -319,8 +336,8 @@ def interp_latlon_cf_blocks (source, nemo, pster_src=True, method='conservative'
             x_f_block_buffer = x_f.isel(x=slice(max(i_start-2,0), min(i_end+3,nx)), y=slice(max(j_start-2,0), min(j_end+3,ny)))
             y_f_block_buffer = y_f.isel(x=slice(max(i_start-2,0), min(i_end+3,nx)), y=slice(max(j_start-2,0), min(j_end+3,ny)))
             # Now find the smallest rectangular block of the source dataset which will cover this NEMO block plus a few cells buffer
-            i_start_source, i_end_source = trim_axis(source['x'].values, np.amin(x_f_block_buffer.values), np.amax(x_f_block_buffer.values))
-            j_start_source, j_end_source = trim_axis(source['y'].values, np.amin(y_f_block_buffer.values), np.amax(y_f_block_buffer.values))
+            i_start_source, i_end_source = trim_axis(source[x_name].values, np.amin(x_f_block_buffer.values), np.amax(x_f_block_buffer.values))
+            j_start_source, j_end_source = trim_axis(source[y_name].values, np.amin(y_f_block_buffer.values), np.amax(y_f_block_buffer.values))
             if None in [i_start_source, i_end_source, j_start_source, j_end_source]:
                 # This NEMO block is entirely outside the source dataset
                 # Make a copy of the source dataset (so we have all the right variables), trimmed to the dimensions of nemo_block (so it's the right size), entirely masked
@@ -329,7 +346,7 @@ def interp_latlon_cf_blocks (source, nemo, pster_src=True, method='conservative'
                 # Slice the source dataset
                 source_block = source.isel(x=slice(i_start_source,i_end_source), y=slice(j_start_source,j_end_source))
                 # Now interpolate this block with CF
-                interp_block = interp_latlon_cf(source_block, nemo_block, pster_src=pster_src, periodic_src=False, periodic_nemo=False, method=method)
+                interp_block = interp_latlon_cf(source_block, nemo_block, pster_src=pster_src, periodic_src=(periodic_src if blocks_x==1 else False), periodic_nemo=(periodic_nemo if blocks_x==1 else False), method=method)
             # Concatenate with rest of blocks in x
             if i == 0:
                 interp_x = interp_block
