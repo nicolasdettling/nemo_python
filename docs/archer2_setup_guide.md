@@ -112,15 +112,15 @@ The first step is to link in the forcing files using prepare_run.sh; this also c
 
     ./prepare_run.sh
 
-This script will also set up your namelists for the first year, by calling the python script update_namelists.py. If you don't want the first year to be 1979, you'll need to change that argument to update_namelists.py near the bottom of prepare_run.sh (the rest of the arguments don't matter here). Finally, it will set up a directory on JASMIN where the results will be automatically copied every year. Edit this directory if needed (for example if you're not in the terrafirma group workspace).
+This script will also set up your namelists for the first year, by calling the python script update_namelists.py. If you don't want the first year to be 1979, you'll need to change the first argument to update_namelists.py near the bottom of prepare_run.sh. Finally, it will set up a directory on JASMIN where the results will be automatically copied every year. Edit this directory if needed (for example if you're not in the terrafirma group workspace).
 
-If needed, edit the file postproc.sh which will be called after every year of simulation. It will update the namelists to cycle through the years with restarts handled correctly. In this file, check the arguments to update_namelist.py to set the start and end years you want for the simulation. The script postproc.sh will also copy the results to JASMIN every year and then delete them from ARCHER2 (if all is well) so they don't take up too much space. If you edited your JASMIN directory before, change it here too so it matches.
+If needed, edit the file postproc.sh which will be called after every year of simulation. It will update the namelists to cycle through the years with restarts handled correctly. In this file, check the arguments to update_namelist.py to set the start and end years you want for the simulation. The script postproc.sh will also copy the results to JASMIN every year and then delete them from ARCHER2 (after checking all is well) so they don't take up too much space. If you edited your JASMIN directory before, change it here too so it matches.
 
 Once you're happy, submit the first year with:
 
     sbatch runnemo_firstyear.sh
 
-This job script uses the nemo_qco executable to run one year of simulation. Then it will call postproc.sh, which will then call runnemo.sh (identical to runnemo_firstyear.sh except for the executable with no qco this time) which will call postproc.sh, and so on until the job is done.
+This job script uses the nemo_qco executable to run one year of simulation. Then it will call postproc.sh, which will then call runnemo.sh (identical to runnemo_firstyear.sh except for the executable) which will call postproc.sh, and so on until the job is done.
 
 So in summary, all you need to do to run a new experiment EXPNEW is
 
@@ -131,5 +131,5 @@ So in summary, all you need to do to run a new experiment EXPNEW is
     <edit postproc.sh>
     sbatch runnemo_firstyear.sh
 
-and hopefully all should work! Keep an eye on the queues with squeue --user=<username> and see what happens in ocean.output. Any problems, ask Kaitlin for advice on <kaight@bas.ac.uk>.
+and hopefully all should work! Keep an eye on the queues with squeue --user=your_username and see what happens in ocean.output. Any problems, ask Kaitlin for advice on <kaight@bas.ac.uk>.
     
