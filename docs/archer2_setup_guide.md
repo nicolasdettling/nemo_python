@@ -6,7 +6,20 @@ Many thanks to Christoph Kittel and Pierre Mathiot who have done all the hard wo
 
 # Installing NEMO and other bits
 
-Choose a directory in your /work space where you want to install NEMO and cd there. Then download the code from the repository:
+I recommend you install NEMO in your main work directory
+
+    /work/n02/n02/<username>
+
+and save this as an environment variable $WORK in your .bashrc, which you'll need later. Add this lines to your ~/.bashrc:
+
+    export WORK=/work/n02/n02/`whoami`
+
+then do
+
+    source ~/.bashrc
+    cd $WORK
+
+Now, download the code from the repository:
 
     git clone https://forge.nemo-ocean.eu/nemo/nemo.git
     cd nemo
@@ -36,11 +49,7 @@ Copy another file from the NOC group, which automates the division of processors
     cp /work/n01/shared/nemo/mkslurm_hetjob .
     chmod +x mkslurm_hetjob
 
-For some of Kaitlin's scripts you will need a python package which is not installed on ARCHER2. Follow the instructions [here](https://docs.archer2.ac.uk/user-guide/python/) to set up a new virtual environment named pyenv, to be stored in the following location:
-
-    /work/n02/n02/<username>/pyenv
-
-Activate this environment and use pip to install the package f90nml (all explained in the link above). Also, make sure the environment variable $WORK points to /work/n02/n02/<username>; you may have to set this in your .bashrc (then source .bashrc or log out and in again).
+For some of Kaitlin's scripts you will need a python package which is not installed on ARCHER2. Follow the instructions [here](https://docs.archer2.ac.uk/user-guide/python/) to set up a new virtual environment named pyenv, to be stored in $WORK/pyenv. Activate this environment and use pip to install the package f90nml (all explained in the link above).
 
 You will need to set up globus-url-copy to transfer data between ARCHER2 and JASMIN, following [these instructions](https://help.jasmin.ac.uk/article/4997-transfers-from-archer2) ("1st choice method"). Make sure you save the credentials file directly within $WORK. Some of Kaitlin's scripts assume your username is the same on ARCHER2 and JASMIN; ask her for help if this is not the case. 
 
