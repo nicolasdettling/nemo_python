@@ -10,7 +10,7 @@ I recommend you install NEMO in your main work directory
 
     /work/n02/n02/<username>
 
-and save this as an environment variable $WORK in your .bashrc, which you'll need later. Add this lines to your ~/.bashrc:
+and save this as an environment variable $WORK, which you'll need later. Add this line to your ~/.bashrc:
 
     export WORK=/work/n02/n02/`whoami`
 
@@ -23,8 +23,6 @@ Now, download the code from the repository:
 
     git clone https://forge.nemo-ocean.eu/nemo/nemo.git
     cd nemo
-
-(The rest of this guide will assume you're inside the directory nemo/, so cd back there after each step if you need to.)
 
 Now freeze the code at the 4.2 branch:
 
@@ -44,16 +42,18 @@ so that it says
 
 on the relevant line.
 
-Copy another file from the NOC group, which automates the division of processors between NEMO and XIOS. If you want to change the number of cores you can use this tool to regenerate most of runnemo.sh (a file we'll look at more later). You can learn how to use it [here](https://docs.archer2.ac.uk/research-software/nemo/):
+Copy another file from the NOC group, which automates the division of processors between NEMO and XIOS:
 
     cp /work/n01/shared/nemo/mkslurm_hetjob .
     chmod +x mkslurm_hetjob
 
-For some of Kaitlin's scripts you will need a python package which is not installed on ARCHER2. Follow the instructions [here](https://docs.archer2.ac.uk/user-guide/python/) to set up a new virtual environment named pyenv, to be stored in $WORK/pyenv. Activate this environment and use pip to install the package f90nml (all explained in the link above).
+If you want to change the number of cores you can use this tool to regenerate most of runnemo.sh (a file we'll look at more later). You can learn how to use it [here](https://docs.archer2.ac.uk/research-software/nemo/).
 
-You will need to set up globus-url-copy to transfer data between ARCHER2 and JASMIN, following [these instructions](https://help.jasmin.ac.uk/article/4997-transfers-from-archer2) ("1st choice method"). Make sure you save the credentials file directly within $WORK. Some of Kaitlin's scripts assume your username is the same on ARCHER2 and JASMIN; ask her for help if this is not the case. 
+For some of Kaitlin's scripts you will need a python package which is not installed on ARCHER2. Follow the instructions [here](https://docs.archer2.ac.uk/user-guide/python/) to set up a new virtual environment named pyenv, to be stored in $WORK/pyenv. Activate this environment and use pip to install the package f90nml (all explained in the link).
 
-Finally, ARCHER2 has a quirk where it expects booleans, and only booleans, to have trailing commas in the namelists. To fix all your namelists (in case you want to run test configurations), create edit_nmls and reverse_edit_nmls files following [these instructions](https://forge.ipsl.jussieu.fr/nemo/ticket/2653), and chmod +x them.    
+You will need to set up globus-url-copy to transfer data between ARCHER2 and JASMIN, following [these instructions](https://help.jasmin.ac.uk/article/4997-transfers-from-archer2) ("1st choice method"). Make sure you save the credentials file directly within $WORK. Some of Kaitlin's scripts assume your username is the same on ARCHER2 and JASMIN; ask her for help if this is not the case, or just have a go (search for "whoami").
+
+Finally, ARCHER2 has a quirk where it expects booleans, and only booleans, to have trailing commas in the namelists. To fix all the preinstalled namelists (in case you want to run any test configurations later), create edit_nmls and reverse_edit_nmls files following [these instructions](https://forge.ipsl.jussieu.fr/nemo/ticket/2653), and chmod +x them.    
 
 # Adding the new configuration
 
@@ -61,11 +61,7 @@ Copy over the configuration (including its custom source code, CPP defs, and run
 
     cp -r /work/n02/shared/kaight/NEMO_share/cfgs/eANT025.L121 cfgs/
 
-The input files (atmospheric forcing, boundary conditions, etc) are also stored in Kaitlin's shared space:
-
-    /work/n02/shared/kaight/NEMO_share/input/eANT025.L121
-
-and these will be linked in when you run a job, so we don't have to maintain multiple copies.
+The input files (atmospheric forcing, boundary conditions, etc) are also stored in Kaitlin's shared space (/work/n02/shared/kaight/NEMO_share/input/eANT025.L121 just for information) and these will be linked in when you run a job, so we don't have to maintain multiple copies.
 
 Also add this configuration to cfgs/ref_cfgs.txt so you can use it as a base to compile from. Add a new line to the bottom of that file that says:
 
@@ -81,15 +77,13 @@ Assuming you're using the Gnu compilers as suggested, you can compile the eANT02
     module load cray-netcdf-hdf5parallel/4.9.0.1
     ./makenemo -m X86_ARCHER2-Gnu_4.2 -r eANT025.L121 -j 8
 
-(You can play with the -j flag to try to speed it up, but I'm not sure it does much on the interactive login nodes which are presumably serial.)
-
-You might like to save this in a file somewhere so you can automate compiling if needed, although hopefully you won't need to do it too often as most options are set by the namelist.
+(I'm not sure the -j flag does anything as the interactive login nodes are presumably serial!) You might like to save this in a file somewhere so you can automate compiling if needed, although hopefully you won't need to do it too often as most options are set by the namelist.
 
 Now save the executable to the EXPREF directory so you don't lose it:
 
     cp cfgs/eANT025.L121/EXP00/nemo cfgs/eANT025.L121/EXPREF
 
-Finally, you'll need to compile an alternate executable with the extra CPP key key_qco; we need this just for the first year of the simulation to ensure stability (but it also goes unstable if you use it for too long!) The easiest way to do so is probably:
+Finally, you'll need to compile an alternate executable with the extra CPP key "key_qco"; we need this just for the first year of the simulation to ensure stability (but it also goes unstable if you use it for too long!) The easiest way to do so is probably:
 
     ./makenemo -m X86_ARCHER2-Gnu_4.2 -r eANT025.L121 -n 'eANT025.L121_qco' -j 8 add_key 'key_qco'
 
@@ -106,7 +100,7 @@ Now let's work within the configuration directory:
 
     cd cfgs/eANT025.L121
 
-The EXPREF/ directory should contain everything you need to run a job. Keep this fresh by never touching it and only making copies of it. You'll probably have EXP00/ autocreated by the compiler, but it will skip some of the important shell scripts in EXPREF/, so best to delete it and make a new one:
+The EXPREF/ directory should contain everything you need to run a job. Keep this fresh by never actually running it and only making copies of it. You'll probably have EXP00/ autocreated by the compiler, but it will skip some of the important shell scripts in EXPREF/, so best to delete it and make a new one:
 
     rm -rf EXP00
     cp -r EXPREF EXP00
@@ -114,7 +108,7 @@ The EXPREF/ directory should contain everything you need to run a job. Keep this
 
 You will run the experiment within EXP00.
 
-The first step is to link in the forcing files using prepare_run.sh:
+The first step is to link in the forcing files using prepare_run.sh; this also copies the XIOS executable from the NOC group:
 
     ./prepare_run.sh
 
