@@ -128,6 +128,8 @@ Once you're happy, submit the first year with:
 
 This job script uses the nemo_qco executable to run one year of simulation. Then it will call postproc.sh, which will then call runnemo.sh (identical to runnemo_firstyear.sh except for the executable) which will call postproc.sh, and so on until the job is done.
 
+Finally, you should copy the files prepare_run.sh, postproc.sh, runnemo.sh and runnemo_firstyear.sh to EXPREF if you made any changes to them that you want to use for all your experiments.
+
 So in summary, all you need to do to run a new experiment EXPNEW is
 
     cp -r EXPREF EXPNEW
