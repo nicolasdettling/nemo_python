@@ -108,13 +108,19 @@ The EXPREF/ directory should contain everything you need to run a job. Keep this
 
 You will run the experiment within EXP00.
 
-The first step is to link in the forcing files using prepare_run.sh; this also copies the XIOS executable from the NOC group:
+The first step is to link in the forcing files using prepare_run.sh; this also copies the XIOS executable from the NOC group. This script will also set up your namelists for the first year, by calling the python script update_namelists.py. If you don't want the first year to be 1979, you'll need to change the first argument to update_namelists.py near the bottom of prepare_run.sh. Finally, it will set up a directory on JASMIN where the results will be automatically copied every year. Edit this directory if needed (for example if you're not in the terrafirma group workspace).
+
+Once you're happy, call
 
     ./prepare_run.sh
 
-This script will also set up your namelists for the first year, by calling the python script update_namelists.py. If you don't want the first year to be 1979, you'll need to change the first argument to update_namelists.py near the bottom of prepare_run.sh. Finally, it will set up a directory on JASMIN where the results will be automatically copied every year. Edit this directory if needed (for example if you're not in the terrafirma group workspace).
+Now, if needed, edit the file postproc.sh which will be called after every year of simulation. It will update the namelists to cycle through the years with restarts handled correctly. In this file, check the arguments to update_namelist.py to set the start and end years you want for the simulation. The script postproc.sh will also copy the results to JASMIN every year and then delete them from ARCHER2 (after checking all is well) so they don't take up too much space. If you edited your JASMIN directory before, change it here too so it matches.
 
-If needed, edit the file postproc.sh which will be called after every year of simulation. It will update the namelists to cycle through the years with restarts handled correctly. In this file, check the arguments to update_namelist.py to set the start and end years you want for the simulation. The script postproc.sh will also copy the results to JASMIN every year and then delete them from ARCHER2 (after checking all is well) so they don't take up too much space. If you edited your JASMIN directory before, change it here too so it matches.
+Finally, update the headers in runnemo_firstyear.sh and runnemo.sh so that the line
+
+    #SBATCH --account=n02-TerraFIRMA
+
+has been changed to whichever project budget you are charging your CPU hours to.
 
 Once you're happy, submit the first year with:
 
