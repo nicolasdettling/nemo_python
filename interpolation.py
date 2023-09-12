@@ -262,7 +262,7 @@ def interp_latlon_cf (source, nemo, pster_src=False, periodic_src=False, periodi
 # blocks_x, blocks_y: number of subdomains in the x and y dimensions to split the domain into. Experiment and try to get the smallest number that still runs.
 # Returns:
 # interp: xarray Dataset containing all data variables from source on the nemo grid
-def interp_latlon_cf_blocks (source, nemo, pster_src=True, method='conservative', blocks_x=10, blocks_y=10):
+def interp_latlon_cf_blocks (source, nemo, pster_src=True, periodic_nemo=True, periodic_src=False, method='conservative', blocks_x=10, blocks_y=10):
 
     from tqdm import tqdm
 
@@ -341,10 +341,10 @@ def interp_latlon_cf_blocks (source, nemo, pster_src=True, method='conservative'
             if None in [i_start_source, i_end_source, j_start_source, j_end_source]:
                 # This NEMO block is entirely outside the source dataset
                 # Make a copy of the source dataset (so we have all the right variables), trimmed to the dimensions of nemo_block (so it's the right size), entirely masked
-                interp_block = source.isel(x=slice(i_start,i_end), y=slice(j_start,j_end)).where(False)
+                interp_block = source.isel({x_name:slice(i_start,i_end), y_name:slice(j_start,j_end)}).where(False)
             else:
                 # Slice the source dataset
-                source_block = source.isel(x=slice(i_start_source,i_end_source), y=slice(j_start_source,j_end_source))
+                source_block = source.isel({x_name:slice(i_start_source,i_end_source), y_name:slice(j_start_source,j_end_source)})
                 # Now interpolate this block with CF
                 interp_block = interp_latlon_cf(source_block, nemo_block, pster_src=pster_src, periodic_src=(periodic_src if blocks_x==1 else False), periodic_nemo=(periodic_nemo if blocks_x==1 else False), method=method)
             # Concatenate with rest of blocks in x

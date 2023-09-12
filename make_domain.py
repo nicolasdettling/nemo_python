@@ -95,7 +95,7 @@ def interp_topo (dataset='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaig
 
 
 # Fill any missing cells from interp_topo near the northern boundary with another dataset (default GEBCO).
-def fill_missing_topo (dataset='GEBCO', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/IBCSO_v2_bed_WGS84.nc', coordinates_file='coordinates_AIS.nc', interp_file='eORCA025_BedMachine3_AIS.nc', out_file='eORCA025_BedMachine3_GEBCO_AIS.nc', periodic=True):
+def fill_missing_topo (dataset='GEBCO', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/GEBCO_2023_sub_ice_topo.nc', coordinates_file='coordinates_AIS.nc', interp_file='eORCA025_BedMachine3_AIS.nc', out_file='eORCA025_BedMachine3_GEBCO_AIS.nc', periodic=True):
 
     print('Processing input data')
     if dataset == 'GEBCO':
@@ -103,7 +103,7 @@ def fill_missing_topo (dataset='GEBCO', topo_file='/gws/nopw/j04/terrafirma/kaig
         bathy = source['elevation']
         omask = xr.where(bathy<0, 1, 0)
         draft = source['elevation']*0  # No ice shelves in the region to interpolate
-        imask = source['omask']*0
+        imask = omask*0
         pster_src = False
         periodic_src = True
         source = xr.Dataset({'lon':source['lon'], 'lat':source['lat'], 'bathy':bathy, 'draft':draft, 'omask':omask, 'imask':imask})
@@ -118,12 +118,12 @@ def fill_missing_topo (dataset='GEBCO', topo_file='/gws/nopw/j04/terrafirma/kaig
     missing_rows = nemo_interp1['bathy'].isnull().sum(dim='x')
     jmin = np.where(missing_rows > 0)[0][0] - 2
     # Now slice the NEMO datasets
-    nemo = nemo.isel(y=slice(jmin,None))
-    nemo_interp1 = nemo_interp1.isel(y=slice(jmin,None))
+    nemo_N = nemo.isel(y=slice(jmin,None))
+    nemo_N_interp1 = nemo_interp1.isel(y=slice(jmin,None))
 
     print('Interpolating')
     # Use the block method so it trims the source dataset, but only do 1 block
-    nemo_interp2 = interp_latlon_cf_blocks(source, nemo, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic, method='conservative', blocks_x=1, blocks_y=1)
+    nemo_N_interp2 = interp_latlon_cf_blocks(source, nemo, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic, method='conservative', blocks_x=1, blocks_y=1)
 
     # TODO: merge them in the missing regions and have an intermediate transition in the neighbours of missing regions    
     
@@ -158,6 +158,9 @@ def process_topo (in_file='eORCA025_BedMachine3_GEBCO_AIS.nc', coordinates_file=
     # Don't need to mask grounded ice with zeros as NEMO will do that for us (and if coupled ice sheet is active need to know bathymetry of grounded ice)
     topo['bathy'] = -topo['bathy']
     topo['draft'] = xr.where(topo['imask']==1, -topo['draft'], 0)
+    # Turn negative values (above sea level) to 0 - they'll never be ocean cells
+    topo['bathy'] = xr.where(topo['bathy']>0, topo['bathy'], 0)
+    topo['draft'] = xr.where(topo['draft']>0, topo['draft'], 0)
     # Now get bathymetry outside of cavities, masked with zeros where there's grounded or floating ice
     topo['Bathymetry'] = xr.where(topo['imask']==0, topo['bathy'], 0)
     # Make a new dataset with all the variables we need
@@ -228,51 +231,30 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
     ds_global.to_netcdf(out_file)
 
 
-# Plot up the differences resulting from splicing.
-# old_file: as in topo_global for splice_topo above
-# new_file: as in out_file for splice_topo above
+# Plot up the differences resulting from splicing. Do this once you have a mesh_mask created by NEMO.
+# old_file, new_file: old and new files for mesh_mask
 # grid_file: file with all the coordinates for this grid, to be used in plotting
 # old_halo, new_halo: whether the old and new files respectively contain the halo (True if used for NEMO 3.6)
 # nbdry: northern boundary to plot
-def plot_splice_diff (old_file='/gws/nopw/j04/terrafirma/kaight/input_data/grids/eORCA_R1_bathy_meter_v2.2x.nc', new_file='bathy_meter_eORCA1_spliceBedMachine3_withhalo.nc', grid_file='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc', old_halo=True, new_halo=True, nbdry=-60):
+# fig_dir: directory in which to save figures (if not set, will show them on the screen instead)
+def plot_splice_diff (old_file='mesh_mask_old.nc', new_file='mesh_mask.nc', old_halo=True, new_halo=True, nbdry=-56, fig_dir=None):
 
-    old = xr.open_dataset(old_file)
-    new = xr.open_dataset(new_file)
-    grid = xr.open_dataset(grid_file).squeeze()
+    old = xr.open_dataset(old_file).squeeze()
+    new = xr.open_dataset(new_file).squeeze()
     
     # Trim to the northern boundary for plotting
     jmax = np.where(old['nav_lat'].mean(dim='x') > nbdry)[0][0]
     old = old.isel(y=slice(0,jmax))
     new = new.isel(y=slice(0,jmax))
-    grid = grid.isel(y=slice(0,jmax))
     if old_halo:
         # Have to remove the halo for plotting
         old = old.isel(x=slice(1,-1))
     if new_halo:
         new = new.isel(x=slice(1,-1))
-    if grid.sizes['x'] == new.sizes['x']+2:
-        grid = grid.isel(x=slice(1,-1))
-
-    # Construct some new variables
-    old['open_ocean_mask'] = xr.where(old['Bathymetry']==0, 0, 1)
-    new['open_ocean_mask'] = xr.where(new['Bathymetry']==0, 0, 1)
-    old['ocean_mask'] = xr.where(old['Bathymetry_isf']==0, 0, 1)
-    new['ocean_mask'] = xr.where(np.abs(new['Bathymetry_isf']-new['isf_draft'])<1, 0, 1)
-    old['water_column_thickness'] = old['Bathymetry_isf']-old['isf_draft']
-    new['water_column_thickness'] = new['Bathymetry_isf']-new['isf_draft']
     diff = new-old
 
-    for var in ['Bathymetry', 'Bathymetry_isf', 'isf_draft', 'water_column_thickness']:
-        # Apply most restrictive mask to difference
-        if var == 'Bathymetry':
-            mask_var = 'open_ocean_mask'
-        else:
-            mask_var = 'ocean_mask'
-        mask = (old[mask_var]==1)*(new[mask_var]==1)
-        diff[var] = diff[var].where(mask)
-
     # Make plots
-    for var in ['Bathymetry', 'Bathymetry_isf', 'isf_draft', 'open_ocean_mask', 'ocean_mask', 'water_column_thickness']:
+    for var in ['tmaskutil', 'bathy', 'isfdraft']:
         fig = plt.figure(figsize=(10,4))
         gs = plt.GridSpec(1,3)
         gs.update(left=0.1, right=0.9, bottom=0.05, top=0.8, wspace=0.1)
@@ -283,12 +265,15 @@ def plot_splice_diff (old_file='/gws/nopw/j04/terrafirma/kaight/input_data/grids
         for n in range(3):
             ax = plt.subplot(gs[0,n])
             ax.axis('equal')
-            img = circumpolar_plot(ds[n][var], grid, ax=ax, masked=(var.endswith('mask') or n==2), make_cbar=False, title=titles[n], vmin=(vmin if n<2 else None), vmax=(vmax if n<2 else None), ctype=('viridis' if n<2 else 'plusminus'), titlesize=14)
+            img = circumpolar_plot(ds[n][var], old, ax=ax, masked=True, make_cbar=False, title=titles[n], vmin=(vmin if n<2 else None), vmax=(vmax if n<2 else None), ctype=('viridis' if n<2 else 'plusminus'), titlesize=14)
             if n != 1:
                 cax = fig.add_axes([0.01+0.46*n, 0.15, 0.02, 0.6])
                 plt.colorbar(img, cax=cax)
         plt.suptitle(var, fontsize=16)
-        finished_plot(fig)
+        fig_name = None
+        if fig_dir is not None:
+            fig_name = fig_dir+var+'compare.png'
+        finished_plot(fig, fig_name=fig_name)
                                          
         
     
