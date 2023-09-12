@@ -6,6 +6,15 @@ from .interpolation import interp_latlon_cf_blocks
 from .utils import polar_stereo, remove_islands
 from .plots import circumpolar_plot, finished_plot
 
+# Steps to make new bathymetry on a given cut-out of a global grid (eg eORCA025):
+# 1. coordinates_from_global (to set the coordinates)
+# 2. interp_topo (to interpolate the bathymetry and ice draft)
+# 3. fill_missing_topo (only if the dataset in interp_topo didn't cover your entire domain)
+# 4. process_topo (to get everything in NEMO format)
+# 5. splice_topo (only if you want to copy the Antarctic bathymetry back into a larger grid without changing the rest of the domain)
+# 6. Copy the final file over to ARCHER2 and run it through DOMAINcfg (for NEMO 4.2) or just plug it straight into NEMO (for earlier versions).
+# NB, NEMO 4.2 doesn't want the periodic domain to have a 2-cell halo, whereas earlier versions do.
+
 # Given a pre-existing global domain (eg eORCA025), slice out a regional domain.
 # Inputs:
 # global_file = path to a NetCDF file for the global domain. The domain_cfg file is ideal, but any file that includes all of these variables will work: nav_lon, nav_lat, e2f, e2v, e2u, e2t, e1f, e1v, e1u, e1t, gphif, gphiv, gphiu, gphit, glamf, glamv, glamu, glamt
@@ -95,7 +104,7 @@ def interp_topo (dataset='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaig
 
 
 # Fill any missing cells from interp_topo near the northern boundary with another dataset (default GEBCO).
-def fill_missing_topo (dataset='GEBCO', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/GEBCO_2023_sub_ice_topo.nc', coordinates_file='coordinates_AIS.nc', interp_file='eORCA025_BedMachine3_AIS.nc', out_file='eORCA025_BedMachine3_GEBCO_AIS.nc', periodic=True):
+def fill_missing_topo (dataset='GEBCO', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/GEBCO_2023_sub_ice_topo.nc', coordinates_file='coordinates_AIS.nc', interp_file='eORCA025_BedMachine3_AIS.nc', out_file='eORCA025_BedMachine3_GEBCO_AIS.nc', periodic=True, blocks_x=10, blocks_y=1):
 
     print('Processing input data')
     if dataset == 'GEBCO':
@@ -122,10 +131,14 @@ def fill_missing_topo (dataset='GEBCO', topo_file='/gws/nopw/j04/terrafirma/kaig
     nemo_N_interp1 = nemo_interp1.isel(y=slice(jmin,None))
 
     print('Interpolating')
-    # Use the block method so it trims the source dataset, but only do 1 block
-    nemo_N_interp2 = interp_latlon_cf_blocks(source, nemo_N, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic, method='conservative', blocks_x=1, blocks_y=1)
+    nemo_N_interp2 = interp_latlon_cf_blocks(source, nemo_N, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic, method='conservative', blocks_x=blocks_x, blocks_y=blocks_y)
 
-    # TODO: merge them in the missing regions and have an intermediate transition in the neighbours of missing regions    
+    # Merge this new data into the missing regions
+    nemo_N_interp = xr.where(nemo_N.interp1.isnull(), nemo_N_interp2, nemo_N_interp1)
+    nemo_interp = xr.concat([nemo.isel(y=slice(0,jmin)), nemo_N_interp], dim='y')
+
+    # Save to file
+    nemo_interp.to_netcdf(out_file)
     
 
 
