@@ -262,7 +262,7 @@ def interp_latlon_cf (source, nemo, pster_src=False, periodic_src=False, periodi
     # Now interpolate each field, re-using the weights each time, and add it to a new Dataset
     interp = xr.Dataset()
     for var, data_cf0 in zip(source, data_cf):
-        data_interp = data_cf0.regrids(regrid_operator, src_axes={'X':'X', 'Y':'Y'}).array
+        data_interp = data_cf0.regrids(regrid_operator, src_axes=src_axes).array
         data_interp = xr.DataArray(data_interp, dims=['y', 'x'])
         interp = interp.assign({var:data_interp})     
 

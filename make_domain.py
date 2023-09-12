@@ -104,7 +104,7 @@ def interp_topo (dataset='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaig
 
 
 # Fill any missing cells from interp_topo near the northern boundary with another dataset (default GEBCO).
-def fill_missing_topo (dataset='GEBCO', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/GEBCO_2023_sub_ice_topo.nc', coordinates_file='coordinates_AIS.nc', interp_file='eORCA025_BedMachine3_AIS.nc', out_file='eORCA025_BedMachine3_GEBCO_AIS.nc', periodic=True, blocks_x=10, blocks_y=1):
+def fill_missing_topo (dataset='GEBCO', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/GEBCO_2023_sub_ice_topo.nc', coordinates_file='coordinates_AIS.nc', interp_file='eORCA025_BedMachine3_AIS.nc', out_file='eORCA025_BedMachine3_GEBCO_AIS.nc', periodic=True, blocks_x=10, blocks_y=2):
 
     print('Processing input data')
     if dataset == 'GEBCO':
