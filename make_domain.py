@@ -123,7 +123,7 @@ def fill_missing_topo (dataset='GEBCO', topo_file='/gws/nopw/j04/terrafirma/kaig
 
     print('Interpolating')
     # Use the block method so it trims the source dataset, but only do 1 block
-    nemo_N_interp2 = interp_latlon_cf_blocks(source, nemo, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic, method='conservative', blocks_x=1, blocks_y=1)
+    nemo_N_interp2 = interp_latlon_cf_blocks(source, nemo_N, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic, method='conservative', blocks_x=1, blocks_y=1)
 
     # TODO: merge them in the missing regions and have an intermediate transition in the neighbours of missing regions    
     

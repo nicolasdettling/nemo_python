@@ -121,8 +121,10 @@ def construct_cf (data, x, y, lon=None, lat=None, lon_bounds=None, lat_bounds=No
     if native_latlon:
         dim_x = cf.DimensionCoordinate(data=cf.Data(x, 'degrees_east'), properties={'axis':'X', 'standard_name':'longitude'})
         dim_y = cf.DimensionCoordinate(data=cf.Data(y, 'degrees_north'), properties={'axis':'Y', 'standard_name':'latitude'})
-        dim_lon = dim_x
-        dim_lat = dim_y
+        if lon_bounds is not None:
+            dim_x.set_bounds(cf.Bounds(data=cf.Data(lon_bounds, 'degrees_east')))
+        if lat_bounds is not None:
+            dim_y.set_bounds(cf.Bounds(data=cf.Data(lat_bounds, 'degrees_north')))   
     else:
         dim_x = cf.DimensionCoordinate(data=cf.Data(x, 'm'))
         dim_y = cf.DimensionCoordinate(data=cf.Data(y, 'm'))
@@ -155,13 +157,20 @@ def construct_cf (data, x, y, lon=None, lat=None, lon_bounds=None, lat_bounds=No
 # interp: xarray Dataset containing all data variables from source on the nemo grid
 def interp_latlon_cf (source, nemo, pster_src=False, periodic_src=False, periodic_nemo=True, method='conservative'):
 
-    # Helper function to get an xarray DataArray of edges (size N+1 by M+1) into a Numpy array of bounds for CF (size 4 x N x M)
+    # Helper function to get an xarray DataArray of edges (size N+1, or N+1 by M+1) into a Numpy array of bounds for CF (size N x 2, or N x M x 4)
     def edges_to_bounds (edges):
-        bounds = np.empty([edges.shape[0]-1, edges.shape[1]-1, 4])
-        bounds[...,0] = edges.values[:-1,:-1]  # SW corner
-        bounds[...,1] = edges.values[:-1,1:] # SE
-        bounds[...,2] = edges.values[1:,1:] # NE
-        bounds[...,3] = edges.values[1:,:-1] # NW
+        if len(edges.shape)==1:
+            # 1D variable
+            bounds = np.empty([edges.shape[0]-1, 2])
+            bounds[...,0] = edges.values[:-1]
+            bounds[...,1] = edges.values[1:]
+        elif len(edges.shape)==2:
+            # 2D variable
+            bounds = np.empty([edges.shape[0]-1, edges.shape[1]-1, 4])
+            bounds[...,0] = edges.values[:-1,:-1]  # SW corner
+            bounds[...,1] = edges.values[:-1,1:] # SE
+            bounds[...,2] = edges.values[1:,1:] # NE
+            bounds[...,3] = edges.values[1:,:-1] # NW
         return bounds
 
     # Get source grid and data in CF format
@@ -179,7 +188,7 @@ def interp_latlon_cf (source, nemo, pster_src=False, periodic_src=False, periodi
         lon_src = None
         lat_src = None
     if method == 'conservative':
-        if len(source[x_name].shape != 1):
+        if len(source[x_name].shape) != 1:
             raise Exception('Cannot find bounds if source dataset not a regular grid')
         # Get grid cell edges for x and y
         def construct_edges (array, dim):
@@ -244,7 +253,11 @@ def interp_latlon_cf (source, nemo, pster_src=False, periodic_src=False, periodi
     target_cf = construct_cf(dummy_data, nemo[x_name], nemo[y_name], lon=nemo[lon_name], lat=nemo[lat_name], lon_bounds=lon_bounds_nemo, lat_bounds=lat_bounds_nemo)
     
     # Get weights with CF, using the first data field
-    regrid_operator = data_cf[0].regrids(target_cf, src_cyclic=periodic_src, dst_cyclic=periodic_nemo, src_axes={'X':'X', 'Y':'Y'}, dst_axes={'X':'X', 'Y':'Y'}, method=method, return_operator=True)
+    if pster_src:
+        src_axes = {'X':'X', 'Y':'Y'}
+    else:
+        src_axes = None
+    regrid_operator = data_cf[0].regrids(target_cf, src_cyclic=periodic_src, dst_cyclic=periodic_nemo, src_axes=src_axes, dst_axes={'X':'X', 'Y':'Y'}, method=method, return_operator=True)
 
     # Now interpolate each field, re-using the weights each time, and add it to a new Dataset
     interp = xr.Dataset()
