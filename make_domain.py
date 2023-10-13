@@ -104,14 +104,18 @@ def interp_topo (dataset='BedMachine3', topo_file='/gws/nopw/j04/terrafirma/kaig
 
 
 # Fill any missing cells from interp_topo near the northern boundary with another dataset (default GEBCO).
-def fill_missing_topo (dataset='GEBCO', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/GEBCO_2023_sub_ice_topo.nc', coordinates_file='coordinates_AIS.nc', interp_file='eORCA025_BedMachine3_AIS.nc', out_file='eORCA025_BedMachine3_GEBCO_AIS.nc', periodic=True, blocks_x=10, blocks_y=2):
+def fill_missing_topo (dataset='IBCSO', topo_file='/gws/nopw/j04/terrafirma/kaight/input_data/topo/IBCSO_v2_bed_WGS84.nc', coordinates_file='coordinates_AIS.nc', interp_file='eORCA025_BedMachine3_AIS.nc', out_file='eORCA025_BedMachine3_IBCSO_AIS.nc', periodic=True, blocks_x=10, blocks_y=2):
 
     print('Processing input data')
-    if dataset == 'GEBCO':
+    if dataset in ['GEBCO', 'IBCSO']:
+        if dataset == 'GEBCO':
+            z_name = 'elevation'
+        else:
+            z_name = 'z'
         source = xr.open_dataset(topo_file)
-        bathy = source['elevation']
+        bathy = source[z_name]
         omask = xr.where(bathy<0, 1, 0)
-        draft = source['elevation']*0  # No ice shelves in the region to interpolate
+        draft = source[z_name]*0  # No ice shelves in the region to interpolate
         imask = omask*0
         pster_src = False
         periodic_src = True
@@ -135,7 +139,7 @@ def fill_missing_topo (dataset='GEBCO', topo_file='/gws/nopw/j04/terrafirma/kaig
 
     # Merge this new data into the missing regions
     nemo_N_interp = xr.where(nemo_N.interp1.isnull(), nemo_N_interp2, nemo_N_interp1)
-    nemo_interp = xr.concat([nemo.isel(y=slice(0,jmin)), nemo_N_interp], dim='y')
+    nemo_interp = xr.concat([nemo_interp1.isel(y=slice(0,jmin)), nemo_N_interp], dim='y')
 
     # Save to file
     nemo_interp.to_netcdf(out_file)
