@@ -138,7 +138,7 @@ def fill_missing_topo (dataset='IBCSO', topo_file='/gws/nopw/j04/terrafirma/kaig
     nemo_N_interp2 = interp_latlon_cf_blocks(source, nemo_N, pster_src=pster_src, periodic_src=periodic_src, periodic_nemo=periodic, method='conservative', blocks_x=blocks_x, blocks_y=blocks_y)
 
     # Merge this new data into the missing regions
-    nemo_N_interp = xr.where(nemo_N.interp1.isnull(), nemo_N_interp2, nemo_N_interp1)
+    nemo_N_interp = xr.where(nemo_N_interp1.isnull(), nemo_N_interp2, nemo_N_interp1)
     nemo_interp = xr.concat([nemo_interp1.isel(y=slice(0,jmin)), nemo_N_interp], dim='y')
 
     # Save to file
