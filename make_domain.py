@@ -154,7 +154,7 @@ def fill_missing_topo (dataset='IBCSO', topo_file='/gws/nopw/j04/terrafirma/kaig
 # will_splice: will this new topography be spliced into an existing domain (like eORCA1 for UKESM)? If so, turn errors about missing points into warnings.
 # plot: whether to make diagnostic plots
 # pster_src: whether the source dataset (eg BedMachine3) was polar stereographic (and hence the x2d, y2d variables in in_file); only matters if plot=True
-def process_topo (in_file='eORCA025_BedMachine3_GEBCO_AIS.nc', coordinates_file='coordinates_AIS.nc', out_file='bathy_meter_eORCA025_BedMachine3_GEBCO_AIS.nc', will_splice=False, plot=True, pster_src=True):
+def process_topo (in_file='eORCA025_BedMachine3_IBCSO_AIS.nc', coordinates_file='coordinates_AIS.nc', out_file='bathy_meter_eORCA025_BedMachine3_IBCSO_AIS.nc', will_splice=False, plot=True, pster_src=True):
 
     if plot:
         import matplotlib.pyplot as plt
