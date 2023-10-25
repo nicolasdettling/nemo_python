@@ -2,6 +2,7 @@ import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
 import datetime
+from .constants import region_bounds, region_bathy_bounds
 from .interpolation import interp_latlon_cf_blocks
 from .utils import polar_stereo, remove_islands
 from .plots import circumpolar_plot, finished_plot
@@ -154,7 +155,7 @@ def fill_missing_topo (dataset='IBCSO', topo_file='/gws/nopw/j04/terrafirma/kaig
 # will_splice: will this new topography be spliced into an existing domain (like eORCA1 for UKESM)? If so, turn errors about missing points into warnings.
 # plot: whether to make diagnostic plots
 # pster_src: whether the source dataset (eg BedMachine3) was polar stereographic (and hence the x2d, y2d variables in in_file); only matters if plot=True
-def process_topo (in_file='eORCA025_BedMachine3_IBCSO_AIS.nc', coordinates_file='coordinates_AIS.nc', out_file='bathy_meter_eORCA025_BedMachine3_IBCSO_AIS.nc', will_splice=False, plot=True, pster_src=True):
+def process_topo (in_file='eORCA025_BedMachine3_IBCSO_AIS.nc', coordinates_file='coordinates_AIS.nc', out_file='bathy_meter_eORCA025_BedMachine3_IBCSO_AIS.nc', bear_ridge=False, will_splice=False, plot=True, pster_src=True):
 
     if plot:
         import matplotlib.pyplot as plt
@@ -178,6 +179,13 @@ def process_topo (in_file='eORCA025_BedMachine3_IBCSO_AIS.nc', coordinates_file=
     # Turn negative values (above sea level) to 0 - they'll never be ocean cells
     topo['bathy'] = xr.where(topo['bathy']>0, topo['bathy'], 0)
     topo['draft'] = xr.where(topo['draft']>0, topo['draft'], 0)
+
+    if bear_ridge:
+       print('Masking grounded Bear Ridge icebergs as land')
+       topo['bathy'], topo['omask'] = add_bear_ridge_bergs(nemo['nav_lon'], nemo['nav_lat'], topo['bathy'], topo['omask'])
+    else:
+       print('Not including grounded Bear Ridge icebergs')
+    
     # Now get bathymetry outside of cavities, masked with zeros where there's grounded or floating ice
     topo['Bathymetry'] = xr.where(topo['imask']==0, topo['bathy'], 0)
     # Make a new dataset with all the variables we need
@@ -197,6 +205,34 @@ def process_topo (in_file='eORCA025_BedMachine3_IBCSO_AIS.nc', coordinates_file=
         #circumpolar_plot(topo['num_points'].where(topo['omask']==1), nemo, title='num_points', masked=True)
         for var in ['Bathymetry', 'Bathymetry_isf', 'isf_draft']:
             circumpolar_plot(output[var], nemo, title=var, masked=True)
+
+
+# Helper function to add grounded icebergs to Bear Ridge.
+# Inputs: as xarray variables
+# lon: NEMO grid longitudes (from -180 to 180 degrees east)
+# lat: NEMO grid latitudes
+# bathy: sea floor bathymetry
+# omask: ocean mask (contains 1s and 0s)
+def add_bear_ridge_bergs (lon, lat, bathy, omask):
+
+    # Southern part: north-south wall
+    [x_wall, x_wall, ymin, ymax] = region_bounds['bear_ridge_S']
+    # Find longitude indices closest to the target
+    i_wall   = abs(lon-x_wall).argmin(axis=1)
+    wall_pts = (lat >= ymin)*(lat <= ymax)*(lon == lon[:,i_wall])
+    bathy = xr.where(wall_pts, 0, bathy)
+    omask = xr.where(wall_pts, 0, omask)
+
+    # Northern part: select easternmost point in area where bathymetry is shallower than 300m
+    [xmin, xmax, ymin, ymax] = region_bounds['bear_ridge_N']
+    z_deep = region_bathy_bounds['bear_ridge_N'][0]
+    # Find area of Bear Ridge with points shallower than 300 m
+    bear_ridge = (lat <= ymax)*(lat >= ymin)*(lon >= xmin)*(lon <= xmax)*(bathy < z_deep)
+    # Identify maximum longitude grid point for each latitude that meets these conditions:
+    bathy = xr.where((lon == lon.where(bear_ridge).max(axis=1)), 0, bathy)
+    omask = xr.where((lon == lon.where(bear_ridge).max(axis=1)), 0, omask)
+
+    return bathy, omask
 
 
 # Given a global bathy_meter topography file, update the region around Antarctica (south of 57S and the 2500m isobath, seamounts excluded) using the supplied regional file.
