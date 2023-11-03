@@ -16,7 +16,9 @@ region_bounds = {
     'peninsula': [],
     'ross': [],
     'FRIS': [],
-    'EAIS': []
+    'EAIS': [],
+    'bear_ridge_S': [-110.35, -110.35, -74.35, -73.8791],
+    'bear_ridge_N': [-112.05, -109.05, -73.8791, -72.7314],
 }
 # Names corresponding to regions (for plotting)
 region_names = {
@@ -38,5 +40,7 @@ region_point = {
     'FRIS': [-51.5, -74.5],
     'EAIS': [97.5, -65]
 }
-    
-
+# Isobaths restricting some regions
+region_bathy_bounds = {
+    'bear_ridge_N': [350, None],
+}
