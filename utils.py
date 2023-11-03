@@ -1,6 +1,6 @@
 import numpy as np
 import xarray as xr
-from .constants import deg2rad
+from .constants import deg2rad, region_names, region_bounds, shelf_depth, region_point
 
 # Given an array containing longitude, make sure it's in the range (max_lon-360, max_lon). Default is (-180, 180). If max_lon is None, nothing will be done to the array.
 def fix_lon_range (lon, max_lon=180):
@@ -125,7 +125,7 @@ def select_bottom (array, zdim):
     return array.sel({zdim:bottom_depth.fillna(0).astype(int)}).where(bottom_depth.notnull())
 
 
-# Given a mask (numpy array, 1='land', 2='ocean') and point0 (j,i) on the "mainland", remove any disconnected "islands" from the mask and return.
+# Given a mask (numpy array, 1='land', 0='ocean') and point0 (j,i) on the "mainland", remove any disconnected "islands" from the mask and return.
 def remove_islands (mask, point0):
 
     if not mask[point0]:
@@ -156,6 +156,61 @@ def remove_islands (mask, point0):
                 queue.append(point)
 
     return connected
+
+
+# Find the (y,x) coordinates of the closest model point to the given (lon, lat) coordinates. Pass an xarray Dataset containing nav_lon, nav_lat, and a target point (lon0, lat0).
+def closest_point (ds, target):
+
+    lon = ds['nav_lon'].squeeze()
+    lat = ds['nav_lat'].squeeze()
+    [lon0, lat0] = target
+    # Calculate distance of every model point to the target
+    dist = np.sqrt((lon-lon0)**2 + (lat-lat0)**2)
+    # Find the indices of the minimum distance
+    point0 = dist.argmin(dim=('y','x'))
+    return (int(point0['y'].data), int(point0['x'].data))    
+
+
+def region_mask (region, mesh_mask, option='continental_shelf'):        
+
+    title = region_names[region]
+    if option == 'continental_shelf':
+        title += ' continental shelf'
+    elif option == 'cavities':
+        if region in ['ross', 'FRIS']:
+            title += ' Ice Shelf cavity'
+        else:
+            title += ' ice shelf cavities'
+    else:
+        raise Exception('Invalid option for region_mask')
+
+    # Account for multiple sets of region bounds, eg the FRIS region is in two parts
+    [xmin, xmax, ymin, ymax] = region_bounds[region]
+
+    ds = xr.open_dataset(mesh_mask).squeeze()
+    # Apply lat-lon bounds to ocean mask
+    mask = ds['tmaskutil']
+    if xmin is not None:
+        mask *= ds['nav_lon'] >= xmin
+    if xmax is not None:
+        mask *= ds['nav_lon'] <= xmax
+    if ymin is not None:
+        mask *= ds['nav_lat'] >= ymin
+    if ymax is not None:
+        mask *= ds['nav_lat'] <= ymax
+    if option == 'continental_shelf':
+        # Apply bathymetry bound
+        mask *= ds['bathy'] <= shelf_depth
+        # Remove disconnected seamounts
+        point0 = closest_point(ds, region_point[region])
+        mask.data = remove_islands(mask, point0)   
+
+    return mask
+        
+        
+        
+        
+        
         
 
     
