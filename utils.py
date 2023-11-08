@@ -206,9 +206,87 @@ def region_mask (region, mesh_mask, option='continental_shelf'):
         mask.data = remove_islands(mask, point0)   
 
     return mask
+
         
+# Function to convert the units of shortwave and longwave radiation to the units expected by NEMO (W m-2)
+# Reads the specified variable from the NetCDF file and writes the converted variable to a new file in the same folder
+# with the file name starting with "converted_"
+# Input: 
+# file_rad: string name of the atmospheric forcing NetCDF file 
+# variable: string name of the radiation variable within the file specified by file_rad
+# dataset: string specifying type of atmospheric forcing dataset (ERA5, JRA etc.)
+# folder: string of location that contains the atmospheric forcing files
+def convert_radiation(file_rad='era5_strd_1979_daily_averages.nc', variable='strd', 
+                      dataset='ERA5', folder='/gws/nopw/j04/terrafirma/birgal/NEMO_AIS/ERA5-forcing/'):
+    if dataset=='ERA5':
+        # ERA5 is in J m-2, convert to Watt m-2 = J m-2 s-1, so divide by the accumulation period in seconds
+        # In this case, the files are daily averages of the original hourly files. So, the J/m-2 is actually the accumulation over an hour. 
+        ds = xr.open_dataset(f'{folder}{file_rad}') # shortwave or longwave radiation
+        ds[variable] = ds[variable] / 3600
+        ds.to_netcdf(f'{folder}converted_{file_rad}')
         
+        return 
+    else:
+        raise Exception('Only currently set up to convert ERA5 units to nemo units')
+
+# Function to convert the units of precipitation from m of water equivalent to the units expected by NEMO (kg m-2 s-1)
+# Reads the specified variable from the NetCDF file and writes the converted variable to a new file in the same folder
+# with the file name starting with "converted_"
+# Input: 
+# file_precip: string name of the atmospheric forcing NetCDF file 
+# variable: string name of the precipitation variable within the file specified by file_precip
+# dataset: string specifying type of atmospheric forcing dataset (ERA5, JRA etc.)
+# folder: string of location that contains the atmospheric forcing files
+def convert_precip(file_precip='era5_tp_1979_daily_averages.nc', variable='tp', 
+                   dataset='ERA5', folder='/gws/nopw/j04/terrafirma/birgal/NEMO_AIS/ERA5-forcing/'):
+    if dataset=='ERA5':
+        # ERA5 is in m of water equivalent, convert to kg m-2 s-1, so need to divide by the accumulation period, and convert density
+        ds = xr.open_dataset(f'{folder}{file_precip}')
+        # m --> m/s --> kg/m2/s
+        rho_water = 1000 # kg/m3
+        ds[variable] = (ds[variable] / 3600) * rho_water # total precip is in meters of water equivalent
+        ds.to_netcdf(f'{folder}converted_{file_precip}')
+
+        return        
+    else:
+        raise Exception('Only currently set up to convert ERA5 units to nemo units')
+
+# Function to calculate specific humidity from dewpoint temperature and atmospheric pressure
+# Reads the specified variable from the NetCDF file and writes the converted variable to a new file in the same folder
+# with the file name starting with "converted_"
+# Input: 
+# file_dew: string name of the dewpoint temperature NetCDF file 
+# file_slp: string name of the sea level pressure NetCDF file 
+# variable_dew: string name of the dewpoint temperature variable within the file specified by file_dew
+# variable_slp: string name of the sea level pressure variable within the file specified by file_slp
+# dataset: string specifying type of atmospheric forcing dataset (ERA5, JRA etc.)
+# folder: string of location that contains the atmospheric forcing files
+def calculate_specific_humidity(file_dew='era5_d2m_1979_daily_averages.nc', variable_dew='d2m',
+                                file_slp='era5_msl_1979_daily_averages.nc', variable_slp='msl',
+                                dataset='ERA5', folder='/gws/nopw/j04/terrafirma/birgal/NEMO_AIS/ERA5-forcing/'):
+    if dataset=='ERA5':
+        # ERA5 does not provide specific humidity, but gives the 2 m dewpoint temperature in K
+        # Conversion assumes temperature is in K and pressure in Pa.
+        # Based off: https://confluence.ecmwf.int/pages/viewpage.action?pageId=171411214
+
+        ds               = xr.open_dataset(f'{folder}{file_dew}')
+        surface_pressure = xr.open_dataset(f'{folder}{file_slp}')[variable_slp]
+
+        dewpoint = ds[variable_dew]
+        # constants: # note that these constants could be different over ice
+        a1 = 611.21; a3 = 17.502; a4=32.19; T0=273.16;
+        Rdry = 287.0597; Rvap=461.5250; 
+        # calculation:
+        vapor_pressure = a1*np.exp(a3*(dewpoint.values - T0)/(dewpoint.values - a4)) # E saturation water vapour from Teten's formula
+        spec_humidity  = (Rdry / Rvap) * vapor_pressure / (surface_pressure - ((1-Rdry/Rvap)*vapor_pressure)) # saturation specific humidity
+
+        ds[variable_dew] = spec_humidity
+        ds = ds.rename_vars({variable_dew:'specific_humidity'})
+        ds.to_netcdf(f'{folder}converted_{file_dew}')
         
+        return
+    else:
+        raise Exception('Only currently set up to convert ERA5 units to nemo units')     
         
         
         
