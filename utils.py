@@ -1,6 +1,6 @@
 import numpy as np
 import xarray as xr
-from .constants import deg2rad, region_names, region_bounds, shelf_depth, region_point
+from .constants import deg2rad, shelf_lat, shelf_depth, shelf_point0
 
 # Given an array containing longitude, make sure it's in the range (max_lon-360, max_lon). Default is (-180, 180). If max_lon is None, nothing will be done to the array.
 def fix_lon_range (lon, max_lon=180):
@@ -171,39 +171,15 @@ def closest_point (ds, target):
     return (int(point0['y'].data), int(point0['x'].data))    
 
 
-def region_mask (region, mesh_mask, option='continental_shelf'):        
-
-    title = region_names[region]
-    if option == 'continental_shelf':
-        title += ' continental shelf'
-    elif option == 'cavities':
-        if region in ['ross', 'FRIS']:
-            title += ' Ice Shelf cavity'
-        else:
-            title += ' ice shelf cavities'
-    else:
-        raise Exception('Invalid option for region_mask')
-
-    # Account for multiple sets of region bounds, eg the FRIS region is in two parts
-    [xmin, xmax, ymin, ymax] = region_bounds[region]
+# Select the continental shelf and ice shelf cavities. Pass it the path to the mesh_mask.nc file.
+def shelf_mask (mesh_mask):
 
     ds = xr.open_dataset(mesh_mask).squeeze()
-    # Apply lat-lon bounds to ocean mask
-    mask = ds['tmaskutil']
-    if xmin is not None:
-        mask *= ds['nav_lon'] >= xmin
-    if xmax is not None:
-        mask *= ds['nav_lon'] <= xmax
-    if ymin is not None:
-        mask *= ds['nav_lat'] >= ymin
-    if ymax is not None:
-        mask *= ds['nav_lat'] <= ymax
-    if option == 'continental_shelf':
-        # Apply bathymetry bound
-        mask *= ds['bathy'] <= shelf_depth
-        # Remove disconnected seamounts
-        point0 = closest_point(ds, region_point[region])
-        mask.data = remove_islands(mask, point0)   
+    # Apply lat-lon bounds and bathymetry bound to ocean mask
+    mask = ds['tmaskutil']*(ds['nav_lat'] <= shelf_lat)*(ds['bathy'] <= shelf_depth)
+    # Remove disconnected seamounts
+    point0 = closest_point(ds, shelf_point0)
+    mask.data = remove_islands(mask, point0)   
 
     return mask
 
