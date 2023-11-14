@@ -195,7 +195,7 @@ def region_mask (region, mesh_mask, option='all', return_name=False):
                 title += ' Ice Shelf'
             else:
                 title += ' ice shelves'
-            if region == 'all':
+            if option == 'all':
                 title += ' and'
         if option in ['shelf', 'all']:
             title += ' continental shelf'
@@ -205,17 +205,80 @@ def region_mask (region, mesh_mask, option='all', return_name=False):
     # Get mask for entire continental shelf and cavities
     mask = shelf_mask(mesh_mask)
 
-    # Select one point each on western and eastern boundaries
-    [coord_W, coord_E] = region_edges[region]
-    point0_W = closest_point(ds, coord_W)
-    point0_E = closest_point(ds, coord_E)
+    if region ! = 'all':
+        # Restrict to a specific region of the coast
+        # Select one point each on western and eastern boundaries
+        [coord_W, coord_E] = region_edges[region]
+        point0_W = closest_point(ds, coord_W)
+        [j_W, i_W] = point0_W
+        point0_E = closest_point(ds, coord_E)
+        [j_E, i_E] = point0_E
 
-    # Check if it wraps around the periodic boundary
+        # Make two cuts to disconnect the region
+        # Inner function to cut the mask in the given direction: remove the given point and all of its connected neighbours to the N/S or E/W
+        def cut_mask (point0, direction):
+            if direction == 'NS':
+                i = point0[1]
+                # Travel north until disconnected
+                for j in range(point0[0], ds.sizes['y']):
+                    if mask[j,i] == 0:
+                        break
+                    mask[j,i] = 0
+                # Travel south until disconnected
+                for j in range(point0[0]-1, -1, -1):
+                    if mask[j,i] == 0:
+                        break
+                    mask[j,i] = 0
+            elif direction == 'EW':
+                j = point0[0]
+                # Travel east until disconnected
+                for i in range(point0[1], ds.sizes['x']):
+                    if mask[j,i] == 0:
+                        break
+                    mask[j,i] = 0
+                # Travel west until disconnected
+                for j in range(point0[1]-1, -1, -1):
+                    if mask[j,i] == 0:
+                        break
+                    mask[j,i] = 0
+        # Inner function to select one cell "west" of the given point - this might not actually be properly west if the cut is made in the east/west direction, in this case you have to choose one cell north or south depending on the direction of travel.
+        def cell_to_west (point0, direction):
+            [j,i] = point0
+            if direction == 'NS':
+                # Cell to the west
+                return [j, i-1]
+            elif direction == 'EW':
+                if j_E > j_W:
+                    # Travelling north: cell to the south
+                    return [j-1, i]
+                elif j_E < j_W:
+                    # Travelling south: cell to the north
+                    return [j+1, i]
+                else:
+                    raise Exception('Something is wrong with region_edges')
 
-    
-    # Make two cuts to disconnect neighbours: inclusive on western boundary, exclusive on eastern
-    # Run remove_islands on western point to disconnect everything else
-    # Return (two options depending on return_name)
+        [flag_W, flag_E] = region_edges_flag[region]
+        # Western boundary is inclusive: cut at cell to "west"
+        cut_mask(cell_to_west(point0_W, flag_W), flag_W)
+        # Eastern boundary is exclusive: cut at that cell
+        cut_mask(point0_E, flag_E)
+
+        # Run remove_islands on western point to disconnect the rest of the continental shelf
+        mask_region = remove_islands(mask, point0_W)
+        # Check if it wraps around the periodic boundary
+        if i_E < i_W:
+            # Make a second region by running remove_islands on one cell "west" from eastern point
+            mask_region2 = remove_islands(mask, cell_to_west(point0_E, flag_E))
+            mask_region += mask_region2
+        mask.data = mask_region
+
+    # Now select cavities, shelf, or both
+    if option == 'all':
+        return mask
+    elif option == 'cavity':
+        return mask*ds['maskisf']
+    elif option == 'shelf':
+        return mask*(1-ds['maskisf'])
 
         
 # Function to convert the units of shortwave and longwave radiation to the units expected by NEMO (W m-2)
