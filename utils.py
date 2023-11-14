@@ -1,6 +1,6 @@
 import numpy as np
 import xarray as xr
-from .constants import deg2rad, shelf_lat, shelf_depth, shelf_point0
+from .constants import deg2rad, shelf_lat, shelf_depth, shelf_point0, rho_fw, sec_per_hour, temp_C2K, Rdry, Rvap, vap_pres_c1, vap_pres_c3, vap_pres_c4
 
 # Given an array containing longitude, make sure it's in the range (max_lon-360, max_lon). Default is (-180, 180). If max_lon is None, nothing will be done to the array.
 def fix_lon_range (lon, max_lon=180):
@@ -198,7 +198,7 @@ def convert_radiation(file_rad='era5_strd_1979_daily_averages.nc', variable='str
         # ERA5 is in J m-2, convert to Watt m-2 = J m-2 s-1, so divide by the accumulation period in seconds
         # In this case, the files are daily averages of the original hourly files. So, the J/m-2 is actually the accumulation over an hour. 
         ds = xr.open_dataset(f'{folder}{file_rad}') # shortwave or longwave radiation
-        ds[variable] = ds[variable] / 3600
+        ds[variable] = ds[variable] / sec_per_hour
         ds.to_netcdf(f'{folder}converted_{file_rad}')
         
         return 
@@ -219,8 +219,7 @@ def convert_precip(file_precip='era5_tp_1979_daily_averages.nc', variable='tp',
         # ERA5 is in m of water equivalent, convert to kg m-2 s-1, so need to divide by the accumulation period, and convert density
         ds = xr.open_dataset(f'{folder}{file_precip}')
         # m --> m/s --> kg/m2/s
-        rho_water = 1000 # kg/m3
-        ds[variable] = (ds[variable] / 3600) * rho_water # total precip is in meters of water equivalent
+        ds[variable] = (ds[variable] / sec_per_hour) * rho_fw # total precip is in meters of water equivalent
         ds.to_netcdf(f'{folder}converted_{file_precip}')
 
         return        
@@ -249,11 +248,8 @@ def calculate_specific_humidity(file_dew='era5_d2m_1979_daily_averages.nc', vari
         surface_pressure = xr.open_dataset(f'{folder}{file_slp}')[variable_slp]
 
         dewpoint = ds[variable_dew]
-        # constants: # note that these constants could be different over ice
-        a1 = 611.21; a3 = 17.502; a4=32.19; T0=273.16;
-        Rdry = 287.0597; Rvap=461.5250; 
         # calculation:
-        vapor_pressure = a1*np.exp(a3*(dewpoint.values - T0)/(dewpoint.values - a4)) # E saturation water vapour from Teten's formula
+        vapor_pressure = vap_pres_c1*np.exp(vap_pres_c3*(dewpoint.values - temp_C2K)/(dewpoint.values - vap_pres_c4)) # E saturation water vapour from Teten's formula
         spec_humidity  = (Rdry / Rvap) * vapor_pressure / (surface_pressure - ((1-Rdry/Rvap)*vapor_pressure)) # saturation specific humidity
 
         ds[variable_dew] = spec_humidity
