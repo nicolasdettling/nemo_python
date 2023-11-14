@@ -1,6 +1,6 @@
 import numpy as np
 import xarray as xr
-from .constants import deg2rad, shelf_lat, shelf_depth, shelf_point0, rho_fw, sec_per_hour, temp_C2K, Rdry, Rvap, vap_pres_c1, vap_pres_c3, vap_pres_c4
+from .constants import deg2rad, shelf_lat, shelf_depth, shelf_point0, rho_fw, sec_per_hour, temp_C2K, Rdry, Rvap, vap_pres_c1, vap_pres_c3, vap_pres_c4, region_edges, region_edges_flag, region_names
 
 # Given an array containing longitude, make sure it's in the range (max_lon-360, max_lon). Default is (-180, 180). If max_lon is None, nothing will be done to the array.
 def fix_lon_range (lon, max_lon=180):
@@ -182,6 +182,40 @@ def shelf_mask (mesh_mask):
     mask.data = remove_islands(mask, point0)   
 
     return mask
+
+
+# Select a mask for the given region, either continental shelf only ('shelf'), cavities only ('cavity'), or continental shelf with cavities ('all').
+def region_mask (region, mesh_mask, option='all', return_name=False):
+
+    if return_name:
+        # Construct the title
+        title = region_names[region]
+        if option in ['cavity', 'all']:
+            if region in ['filchner_ronne', 'amery', 'ross']:
+                title += ' Ice Shelf'
+            else:
+                title += ' ice shelves'
+            if region == 'all':
+                title += ' and'
+        if option in ['shelf', 'all']:
+            title += ' continental shelf'
+
+    ds = xr.open_dataset(mesh_mask).squeeze()
+
+    # Get mask for entire continental shelf and cavities
+    mask = shelf_mask(mesh_mask)
+
+    # Select one point each on western and eastern boundaries
+    [coord_W, coord_E] = region_edges[region]
+    point0_W = closest_point(ds, coord_W)
+    point0_E = closest_point(ds, coord_E)
+
+    # Check if it wraps around the periodic boundary
+
+    
+    # Make two cuts to disconnect neighbours: inclusive on western boundary, exclusive on eastern
+    # Run remove_islands on western point to disconnect everything else
+    # Return (two options depending on return_name)
 
         
 # Function to convert the units of shortwave and longwave radiation to the units expected by NEMO (W m-2)

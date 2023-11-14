@@ -66,3 +66,15 @@ region_edges_flag = {
     'amery': ['NS', 'NS'],
     'ross': ['NS', 'NS'],
 }
+# Names of each region
+region_names = {
+    'amundsen_sea': 'Amundsen Sea',
+    'bellingshausen_sea': 'Bellingshausen Sea',
+    'west_antarctic_peninsula': 'West Antarctic Peninsula',
+    'larsen': 'Larsen',
+    'antarctic_peninsula': 'Antarctic Peninsula',
+    'filchner_ronne': 'Filchner-Ronne', 
+    'east_antarctica': 'East Antarctica',
+    'amery': 'Amery',
+    'ross': 'Ross',
+}
