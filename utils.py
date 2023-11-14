@@ -205,7 +205,7 @@ def region_mask (region, mesh_mask, option='all', return_name=False):
     # Get mask for entire continental shelf and cavities
     mask = shelf_mask(mesh_mask)
 
-    if region ! = 'all':
+    if region != 'all':
         # Restrict to a specific region of the coast
         # Select one point each on western and eastern boundaries
         [coord_W, coord_E] = region_edges[region]
