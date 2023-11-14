@@ -1,5 +1,24 @@
 import numpy as np
 
+# Acceleration due to gravity (m/s^2)
+gravity = 9.81
+# Density of freshwater (kg/m^3)
+rho_fw = 1e3
+# Seconds per day
+sec_per_day = 24*60*60.
+# Seconds per hour
+sec_per_hour = 60*60.
+# Months per year
+months_per_year = 12
+# Celsius to Kelvins intercept
+temp_C2K = 273.15
+# Constants for vapor pressure calculation over water (Buck, 1981):
+vap_pres_c1 = 611.21; vap_pres_c3 = 17.502; vap_pres_c4=32.19;
+# Gas constant for dry air
+Rdry = 287.0597
+# Gas constant for water vapor
+Rvap = 461.5250
+
 # Degrees to radians conversion factor
 deg2rad = np.pi/180.0
 # Degrees formatted nicely in a string
