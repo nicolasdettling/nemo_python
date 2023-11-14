@@ -237,7 +237,7 @@ def region_mask (region, mesh_mask, option='all', return_name=False):
                         break
                     mask[j,i] = 0
                 # Travel west until disconnected
-                for j in range(point0[1]-1, -1, -1):
+                for i in range(point0[1]-1, -1, -1):
                     if mask[j,i] == 0:
                         break
                     mask[j,i] = 0

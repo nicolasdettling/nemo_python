@@ -46,21 +46,21 @@ shelf_point0 = [-51.5, -74.5]
 # Dictionary of lon-lat points bounding given region. Will be used to "cut" the continental shelf mask (shelf_mask in utils.py) either north-south or east-west depending on the value of region_edges_flag. The first point and its connected N/S (or E/W) neighbours will be included in the mask, but not the second. The direction of travel is west to east around the coastline.
 region_edges = {
     'amundsen_sea': [[-157.5, -76.5], [-102.5, -72.5]],
-    'bellingshausen_sea': [[-102.5, -72.5], [-75.5, -69.5]],  # not including WAP
-    'west_antarctic_peninsula': [[-75.5, -69.5], [-57.5, -62]],
-    'larsen': [[-57.5, -62], [-59.5, -71.5]],
-    'antarctic_peninsula': [[-75.5, -69.5], [-59.5, -71.5]],  # both sides, i.e. WAP plus Larsen
-    'filchner_ronne': [[-59.5, -71.5], [-30, -75.5]],
+    'bellingshausen_sea': [[-102.5, -72.5], [-73, -70]],  # not including WAP
+    'west_antarctic_peninsula': [[-73, -70], [-57.5, -62]],
+    'larsen': [[-57.5, -62], [-57, -73]],
+    'antarctic_peninsula': [[-73, -70], [-57, -73]],  # both sides, i.e. WAP plus Larsen
+    'filchner_ronne': [[-57, -73], [-30, -75.5]],
     'east_antarctica': [[-30, -75.5], [169.5, -71]], # includes Amery
     'amery': [[60.5, -68], [79.5, -68]],
     'ross': [[169.5, -71], [-157.5, -76.5]],
 }
 region_edges_flag = {
     'amundsen_sea': ['NS', 'NS'],
-    'bellingshausen_sea': ['NS', 'EW'],
-    'west_antarctic_peninsula': ['EW', 'NS'],
+    'bellingshausen_sea': ['NS', 'NS'],
+    'west_antarctic_peninsula': ['NS', 'NS'],
     'larsen': ['NS', 'EW'],
-    'antarctic_peninsula': ['EW', 'EW'],
+    'antarctic_peninsula': ['NS', 'EW'],
     'filchner_ronne': ['EW', 'NS'],
     'east_antarctica': ['NS', 'NS'],
     'amery': ['NS', 'NS'],
