@@ -273,12 +273,15 @@ def region_mask (region, mesh_mask, option='all', return_name=False):
         mask.data = mask_region
 
     # Now select cavities, shelf, or both
-    if option == 'all':
-        return mask
-    elif option == 'cavity':
-        return mask*ds['maskisf']
+    if option == 'cavity':
+        mask *= ds['maskisf']
     elif option == 'shelf':
-        return mask*(1-ds['maskisf'])
+        mask *= 1-ds['maskisf']
+
+    if return_name:
+        return mask, title
+    else:
+        return mask
 
         
 # Function to convert the units of shortwave and longwave radiation to the units expected by NEMO (W m-2)
