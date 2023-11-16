@@ -113,6 +113,13 @@ def set_colours (data, ctype='viridis', vmin=None, vmax=None, change_points=None
     elif ctype == 'ismr':
         return ismr_cmap(vmin, vmax, change_points=change_points), vmin, vmax
     else:
-        return plt.get_cmap(ctype), vmin, vmax
+        try:
+            # First assume it's the name of a preset colourmap
+            return plt.get_cmap(ctype), vmin, vmax
+        except(ValueError):
+            # Now assume it's a single colour
+            return special_cmap(np.arange(2), [ctype, ctype], 0, 1, 'constant')
+            
+            
 
     

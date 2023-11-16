@@ -1,5 +1,9 @@
 import xarray as xr
 import numpy as np
+import matplotlib.pyplot as plt
+
+from ..utils import region_mask
+from ..plots import circumpolar_plot, finished_plot
 
 def find_cgrid_issues (grid_file='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA025_v3.nc'):
 
@@ -38,3 +42,19 @@ def find_cgrid_issues (grid_file='/gws/nopw/j04/terrafirma/kaight/input_data/gri
     ax.plot(tlon[land_bad], tlat[land_bad], 'o', markersize=1, color='green')
     ax.set_title('Misaligned cells in ocean (red) and land (green)')
     fig.savefig('misaligned_cells.png')
+
+
+def plot_region_map (mesh_mask='/gws/nopw/j04/terrafirma/kaight/input_data/grids/mesh_mask_UKESM1.1_ice.nc', option='all', fig_name=None):
+
+    regions = ['amundsen_sea', 'bellingshausen_sea', 'west_antarctic_peninsula', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross']
+    colours = ['IndianRed', 'SandyBrown', 'LemonChiffon', 'LightGreen', 'MediumTurquoise', 'SteelBlue', 'Plum', 'Pink']
+    grid = xr.open_dataset(mesh_mask).squeeze()
+
+    for n in range(len(regions)):
+        mask = region_mask(regions[n], mesh_mask, option=option)
+        if n==0:
+            fig, ax = circumpolar_plot(data, grid, make_cbar=False, return_fig=True, ctype=colours[n])
+        else:
+            circumpolar_plot(data, grid, ax=ax, make_cbar=False, ctype=colours[n])
+
+    finished_plot(fig, fig_name=fig_name)
