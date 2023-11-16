@@ -52,7 +52,7 @@ region_edges = {
     'antarctic_peninsula': [[-73, -70], [-57, -73]],  # both sides, i.e. WAP plus Larsen
     'filchner_ronne': [[-57, -73], [-30, -75.5]],
     'east_antarctica': [[-30, -75.5], [169.5, -71]], # includes Amery
-    'amery': [[60.5, -68], [79.5, -68]],
+    'amery': [[66.5, -67.5], [79.5, -68]],
     'ross': [[169.5, -71], [-157.5, -76.5]],
 }
 region_edges_flag = {
