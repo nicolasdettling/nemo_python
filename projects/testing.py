@@ -53,7 +53,7 @@ def plot_region_map (mesh_mask='/gws/nopw/j04/terrafirma/kaight/input_data/grids
     for n in range(len(regions)):
         mask = region_mask(regions[n], mesh_mask, option=option)
         if n==0:
-            fig, ax = circumpolar_plot(data, grid, make_cbar=False, return_fig=True, ctype=colours[n])
+            fig, ax = circumpolar_plot(mask, grid, make_cbar=False, return_fig=True, ctype=colours[n])
         else:
             circumpolar_plot(data, grid, ax=ax, make_cbar=False, ctype=colours[n])
 
