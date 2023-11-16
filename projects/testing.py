@@ -44,17 +44,23 @@ def find_cgrid_issues (grid_file='/gws/nopw/j04/terrafirma/kaight/input_data/gri
     fig.savefig('misaligned_cells.png')
 
 
-def plot_region_map (mesh_mask='/gws/nopw/j04/terrafirma/kaight/input_data/grids/mesh_mask_UKESM1.1_ice.nc', option='all', fig_name=None):
+def plot_region_map (mesh_mask='/gws/nopw/j04/terrafirma/kaight/input_data/grids/mesh_mask_UKESM1.1_ice.nc', option='all', fig_name=None, halo=True):
 
     regions = ['amundsen_sea', 'bellingshausen_sea', 'west_antarctic_peninsula', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross']
-    colours = ['IndianRed', 'SandyBrown', 'LemonChiffon', 'LightGreen', 'MediumTurquoise', 'SteelBlue', 'Plum', 'Pink']
+    colours = ['IndianRed', 'SandyBrown', 'Khaki', 'LightGreen', 'MediumTurquoise', 'SteelBlue', 'Plum', 'Pink']
+    lat_max = -60
     grid = xr.open_dataset(mesh_mask).squeeze()
+    if halo:
+        # Drop halo
+        grid = grid.isel(x=slice(1,-1))
 
     for n in range(len(regions)):
         mask = region_mask(regions[n], mesh_mask, option=option)
+        if halo:
+            mask = mask.isel(x=slice(1,-1))
         if n==0:
-            fig, ax = circumpolar_plot(mask, grid, make_cbar=False, return_fig=True, ctype=colours[n])
+            fig, ax = circumpolar_plot(mask, grid, make_cbar=False, return_fig=True, ctype=colours[n], lat_max=lat_max)
         else:
-            circumpolar_plot(data, grid, ax=ax, make_cbar=False, ctype=colours[n])
+            circumpolar_plot(mask, grid, ax=ax, make_cbar=False, ctype=colours[n], lat_max=lat_max)
 
     finished_plot(fig, fig_name=fig_name)

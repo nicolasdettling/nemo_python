@@ -32,7 +32,7 @@ def finished_plot (fig, fig_name=None, dpi=None):
 # change_points: arguments to ismr colourmap (see above)
 
 # TODO colour maps, contour ice front, shade land in grey
-def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None, periodic=True):
+def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None, periodic=True, lat_max=None):
 
     new_fig = ax is None
     if title is None:
@@ -42,19 +42,27 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
         # Mask where identically zero
         data = data.where(data!=0)
 
-    if 'bounds_nav_lon_grid_T' in grid:
+    if 'nav_lat_grid_T' in grid:
+        lat_name = 'nav_lat_grid_T'
+    elif 'gphit' in grid:
+        lat_name = 'gphit'
+    # Enforce northern boundary
+    if lat_max is None:
+        if grid[lat_name].max() > 0:
+            print('Warning: this grid includes the northern hemisphere. Can cause weirdness in plotting')
+        # Manually find northern boundary - careful with -1 used as missing values
+        lat_max = grid[lat_name].where(grid[lat_name]!=-1).max().item()
+
+    # Get cell edges in polar stereographic coordinates
+    if lat_name == 'nav_lat_grid_T':
         import cf_xarray as cfxr
         lon_edges = cfxr.bounds_to_vertices(grid['bounds_nav_lon_grid_T'], 'nvertex_grid_T')
         lat_edges = cfxr.bounds_to_vertices(grid['bounds_nav_lat_grid_T'], 'nvertex_grid_T')
-        lat_name = 'nav_lat_grid_T'
-    elif 'glamf' in grid:
+    elif lat_name == 'gphit':
         lon_edges = extend_grid_edges(grid['glamf'], 'f', periodic=True)
         lat_edges = extend_grid_edges(grid['gphif'], 'f', periodic=True)
-        lat_name = 'gphit'
     x_edges, y_edges = polar_stereo(lon_edges, lat_edges)
 
-    # Manually find northern boundary - careful with -1 used as missing values
-    lat_max = grid[lat_name].where(grid[lat_name]!=-1).max().item()
     # Get axes bounds
     x_bounds, y_bounds = polar_stereo(np.array([0, 90, 180, -90]), np.array([lat_max]*4))
     xlim = [x_bounds[3], x_bounds[1]]
