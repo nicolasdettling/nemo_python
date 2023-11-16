@@ -243,17 +243,17 @@ def region_mask (region, mesh_mask, option='all', return_name=False):
                     mask[j,i] = 0
         # Inner function to select one cell "west" of the given point - this might not actually be properly west if the cut is made in the east/west direction, in this case you have to choose one cell north or south depending on the direction of travel.
         def cell_to_west (point0, direction):
-            [j,i] = point0
+            (j,i) = point0
             if direction == 'NS':
                 # Cell to the west
-                return [j, i-1]
+                return (j, i-1)
             elif direction == 'EW':
                 if j_E > j_W:
                     # Travelling north: cell to the south
-                    return [j-1, i]
+                    return (j-1, i)
                 elif j_E < j_W:
                     # Travelling south: cell to the north
-                    return [j+1, i]
+                    return (j+1, i)
                 else:
                     raise Exception('Something is wrong with region_edges')
 
