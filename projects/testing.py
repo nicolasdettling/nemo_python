@@ -62,5 +62,6 @@ def plot_region_map (mesh_mask='/gws/nopw/j04/terrafirma/kaight/input_data/grids
             fig, ax = circumpolar_plot(mask, grid, make_cbar=False, return_fig=True, ctype=colours[n], lat_max=lat_max)
         else:
             circumpolar_plot(mask, grid, ax=ax, make_cbar=False, ctype=colours[n], lat_max=lat_max)
+    ax.axis('equal')
 
     finished_plot(fig, fig_name=fig_name)

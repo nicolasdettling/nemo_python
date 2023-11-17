@@ -48,9 +48,9 @@ region_edges = {
     'amundsen_sea': [[-157.5, -76.5], [-102.5, -72.5]],
     'bellingshausen_sea': [[-102.5, -72.5], [-73, -70]],  # not including WAP
     'west_antarctic_peninsula': [[-73, -70], [-57.5, -62]],
-    'larsen': [[-57.5, -62], [-57, -73]],
-    'antarctic_peninsula': [[-73, -70], [-57, -73]],  # both sides, i.e. WAP plus Larsen
-    'filchner_ronne': [[-57, -73], [-30, -75.5]],
+    'larsen': [[-57.5, -62], [-57, -71]],
+    'antarctic_peninsula': [[-73, -70], [-57, -71]],  # both sides, i.e. WAP plus Larsen
+    'filchner_ronne': [[-57, -71], [-30, -75.5]],
     'east_antarctica': [[-30, -75.5], [169.5, -71]], # includes Amery
     'amery': [[66.5, -67.5], [79.5, -68]],
     'ross': [[169.5, -71], [-157.5, -76.5]],
