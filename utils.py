@@ -171,12 +171,21 @@ def closest_point (ds, target):
     return (int(point0['y'].data), int(point0['x'].data))    
 
 
-# Select the continental shelf and ice shelf cavities. Pass it the path to the mesh_mask.nc file.
-def shelf_mask (mesh_mask):
+# Select the continental shelf and ice shelf cavities. Pass it the path to the mesh_mask or domain_cfg file (whichever one has nav_lon, nav_lat, and bathy).
+def shelf_mask (file_path):
 
-    ds = xr.open_dataset(mesh_mask).squeeze()
+    ds = xr.open_dataset(file_path).squeeze()
+    # A few options for how this file could be set up, depending on NEMO version
+    if 'bathy' in ds:
+        bathy_name = 'bathy'
+    elif 'bathy_metry' in ds:
+        bathy_name = 'bathy_metry'
+    if 'tmaskutil' in ds:
+        ocean_mask = ds['tmaskutil']
+    elif 'top_level' in ds and 'bottom_level' in ds:
+        ocean_mask = xr.where((ds['top_level']==0)*(ds['bottom_level']==0), 0, 1)
     # Apply lat-lon bounds and bathymetry bound to ocean mask
-    mask = ds['tmaskutil']*(ds['nav_lat'] <= shelf_lat)*(ds['bathy'] <= shelf_depth)
+    mask = ocean_mask*(ds['nav_lat'] <= shelf_lat)*(ds[bathy_name] <= shelf_depth)
     # Remove disconnected seamounts
     point0 = closest_point(ds, shelf_point0)
     mask.data = remove_islands(mask, point0)   
@@ -184,8 +193,8 @@ def shelf_mask (mesh_mask):
     return mask
 
 
-# Select a mask for the given region, either continental shelf only ('shelf'), cavities only ('cavity'), or continental shelf with cavities ('all').
-def region_mask (region, mesh_mask, option='all', return_name=False):
+# Select a mask for the given region, either continental shelf only ('shelf'), cavities only ('cavity'), or continental shelf with cavities ('all'). Pass it the path to the mesh_mask or domain_cfg file (whichever one has nav_lon, nav_lat, and bathy).
+def region_mask (region, file_path, option='all', return_name=False):
 
     if return_name:
         # Construct the title
@@ -200,10 +209,10 @@ def region_mask (region, mesh_mask, option='all', return_name=False):
         if option in ['shelf', 'all']:
             title += ' continental shelf'
 
-    ds = xr.open_dataset(mesh_mask).squeeze()
+    ds = xr.open_dataset(file_path).squeeze()
 
     # Get mask for entire continental shelf and cavities
-    mask = shelf_mask(mesh_mask)
+    mask = shelf_mask(file_path)
 
     if region != 'all':
         # Restrict to a specific region of the coast

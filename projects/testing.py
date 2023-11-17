@@ -1,9 +1,11 @@
 import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
+import netCDF4 as nc
 
 from ..utils import region_mask
 from ..plots import circumpolar_plot, finished_plot
+
 
 def find_cgrid_issues (grid_file='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA025_v3.nc'):
 
@@ -64,3 +66,9 @@ def plot_region_map (mesh_mask='/gws/nopw/j04/terrafirma/kaight/input_data/grids
             circumpolar_plot(mask, grid, ax=ax, make_cbar=False, ctype=colours[n], lat_max=lat_max)
 
     finished_plot(fig, fig_name=fig_name)
+
+
+
+    
+
+    
