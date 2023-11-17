@@ -182,8 +182,8 @@ def shelf_mask (file_path):
         bathy_name = 'bathy_metry'
     if 'tmaskutil' in ds:
         ocean_mask = ds['tmaskutil']
-    elif 'top_level' in ds and 'bottom_level' in ds:
-        ocean_mask = xr.where((ds['top_level']==0)*(ds['bottom_level']==0), 0, 1)
+    elif 'bottom_level' in ds:
+        ocean_mask = xr.where(ds['bottom_level']>0, 1, 0)
     # Apply lat-lon bounds and bathymetry bound to ocean mask
     mask = ocean_mask*(ds['nav_lat'] <= shelf_lat)*(ds[bathy_name] <= shelf_depth)
     # Remove disconnected seamounts
@@ -282,10 +282,14 @@ def region_mask (region, file_path, option='all', return_name=False):
         mask.data = mask_region
 
     # Now select cavities, shelf, or both
+    if 'maskisf' in ds:
+        ice_mask = ds['maskisf']
+    elif 'top_level' in ds:
+        ice_mask = xr.where(ds['top_level']>1, 1, 0)
     if option == 'cavity':
-        mask *= ds['maskisf']
+        mask *= ice_mask
     elif option == 'shelf':
-        mask *= 1-ds['maskisf']
+        mask *= 1-ice_mask
 
     if return_name:
         return mask, title
