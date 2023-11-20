@@ -387,7 +387,7 @@ def convert_time_units(ds, dataset='ERA5'):
         ds['time'].encoding['calendar'] = 'gregorian'
         return ds
     else:
-        raise Exception('Only currently set up to convert ERA5 units to nemo units')     
+        raise Exception('Only currently set up to convert ERA5 reference period')     
         
         
         
