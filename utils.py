@@ -372,6 +372,22 @@ def calculate_specific_humidity(file_dew='era5_d2m_1979_daily_averages.nc', vari
         return
     else:
         raise Exception('Only currently set up to convert ERA5 units to nemo units')     
+
+# Function to ensure the reference time is consistent between atmospheric data sources
+# JRA uses days since 1900-01-01 00:00:00 on a Gregorian calendar
+# ERA uses days since start of that particular year in proleptic gregorian calendar
+# Input:
+# ds : xarray dataset containing variable 'time'
+# dataset : name of atmospheric forcing dataset
+def convert_time_units(ds, dataset='ERA5'):
+
+    if dataset=='ERA5':
+        ds['time'] = ds.time.values
+        ds['time'].encoding['units'] = "days since 1900-01-01"
+        ds['time'].encoding['calendar'] = 'gregorian'
+        return ds
+    else:
+        raise Exception('Only currently set up to convert ERA5 units to nemo units')     
         
         
         
