@@ -126,7 +126,7 @@ def select_bottom (array, zdim):
 
 
 # Given a mask (numpy array, 1='land', 0='ocean') and point0 (j,i) on the "mainland", remove any disconnected "islands" from the mask and return.
-def remove_islands (mask, point0):
+def remove_disconnected (mask, point0):
 
     if not mask[point0]:
         raise Exception('point0 is not on the mainland')
@@ -188,7 +188,7 @@ def shelf_mask (file_path):
     mask = ocean_mask*(ds['nav_lat'] <= shelf_lat)*(ds[bathy_name] <= shelf_depth)
     # Remove disconnected seamounts
     point0 = closest_point(ds, shelf_point0)
-    mask.data = remove_islands(mask, point0)   
+    mask.data = remove_disconnected(mask, point0)   
 
     return mask
 
@@ -272,12 +272,12 @@ def region_mask (region, file_path, option='all', return_name=False):
         # Eastern boundary is exclusive: cut at that cell
         cut_mask(point0_E, flag_E)
 
-        # Run remove_islands on western point to disconnect the rest of the continental shelf
-        mask_region = remove_islands(mask, point0_W)
+        # Run remove_disconnected on western point to disconnect the rest of the continental shelf
+        mask_region = remove_disconnected(mask, point0_W)
         # Check if it wraps around the periodic boundary
         if i_E < i_W:
-            # Make a second region by running remove_islands on one cell "west" from eastern point
-            mask_region2 = remove_islands(mask, cell_to_west(point0_E, flag_E))
+            # Make a second region by running remove_disconnected on one cell "west" from eastern point
+            mask_region2 = remove_disconnected(mask, cell_to_west(point0_E, flag_E))
             mask_region += mask_region2
         mask.data = mask_region
 
@@ -292,6 +292,30 @@ def region_mask (region, file_path, option='all', return_name=False):
         mask *= 1-ice_mask
 
     if return_name:
+        return mask, title
+    else:
+        return mask
+
+
+# Select a mask for a single cavity. 
+def cavity_mask (cavity, file_path, return_name=False):
+
+    if return_name:
+        title = region_names[region]
+
+    ds = xr.open_dataset(file_path).squeeze()
+    # Get mask for all cavities
+    if 'maskisf' in ds:
+        ice_mask = ds['maskisf']
+    elif 'top_level' in ds:
+        ice_mask = xr.where(ds['top_level']>1, 1, 0)
+
+    # Select one point in this cavity
+    point0 = closest_point(ds, region_points[cavity])
+    # Disconnect the other cavities
+    mask = remove_disconnected(ice_mask, point0)
+
+    if return name:
         return mask, title
     else:
         return mask

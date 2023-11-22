@@ -64,6 +64,11 @@ region_edges_flag = {
     'amery': ['NS', 'NS'],
     'ross': ['NS', 'NS'],
 }
+# Dictionary of lon-lat points which are definitely in the given region. The region is then defined by connectivity to that point (eg selecting specific ice shelf cavities in cavity_mask in utils.py).
+region_points = {
+    'abbot': [-95, -73],
+    'brunt': [-20, -75],
+}
 # Names of each region
 region_names = {
     'amundsen_sea': 'Amundsen Sea',
@@ -75,4 +80,6 @@ region_names = {
     'east_antarctica': 'East Antarctica',
     'amery': 'Amery',
     'ross': 'Ross',
+    'abbot': 'Abbot Ice Shelf',
+    'brunt': 'Brunt Ice Shelf',
 }

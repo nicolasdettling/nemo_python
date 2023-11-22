@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import datetime
 from .constants import region_bounds, region_bathy_bounds
 from .interpolation import interp_latlon_cf_blocks
-from .utils import polar_stereo, remove_islands
+from .utils import polar_stereo, remove_disconnected
 from .plots import circumpolar_plot, finished_plot
 
 # Steps to make new bathymetry on a given cut-out of a global grid (eg eORCA025):
@@ -272,7 +272,7 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
     # Now choose the points we want to update
     mask = (ds_regional['nav_lat']<lat0)*(ds_regional['Bathymetry']<depth0)
     # Remove seamounts
-    connected = remove_islands(mask, (1,1))
+    connected = remove_disconnected(mask, (1,1))
     mask = xr.where(connected, mask, 0)
 
     # Replace the global values with regional ones in this mask
