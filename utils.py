@@ -290,8 +290,18 @@ def region_mask (region, file_path, option='all', return_name=False):
         mask_excl = cavity_mask('brunt', file_path)
     else:
         mask_excl = None
+    if region == 'bellingshausen_sea':
+        # Add back in bits of Abbot
+        mask_incl = cavity_mask('abbot', file_path)
+    elif region == 'east_antarctica':
+        # Add back in bits of Brunt
+        mask_incl = cavity_mask('brunt', file_path)
+    else:
+        mask_incl = None
     if mask_excl is not None:
         mask *= 1-mask_excl
+    if mask_incl is not None:
+        mask = xr.where(mask_incl, 1, mask)
 
     # Now select cavities, shelf, or both
     if 'maskisf' in ds:
