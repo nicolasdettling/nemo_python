@@ -113,7 +113,7 @@ def precompute_timeseries (ds_nemo, timeseries_types, grid_file, timeseries_file
         ds_old = xr.open_dataset(timeseries_file)
         # Concatenate new data
         ds_new.load()
-        ds_new = xr.concat([ds_old, ds_new], dim='time_counter')
+        ds_new = xr.concat([ds_old, ds_new], dim='time_centered')
         ds_old.close()
 
     # Save to file, overwriting if needed
