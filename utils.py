@@ -315,7 +315,7 @@ def cavity_mask (cavity, file_path, return_name=False):
     # Disconnect the other cavities
     mask = remove_disconnected(ice_mask, point0)
 
-    if return name:
+    if return_name:
         return mask, title
     else:
         return mask
