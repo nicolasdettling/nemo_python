@@ -3,10 +3,16 @@ import xarray as xr
 from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year, deg_string, gkg_string
 from .utils import cavity_mask, region_mask
 
+# Calculate a timeseries of the given preset variable from an xarray Dataset of NEMO output. Returns DataArrays of the timeseries data, the associated time values, and the variable title.
+# Also pass the grid file (mesh_mask for NEMO 3.6, domain_cfg for NEMO 4.2) and whether there is a halo in the data (if periodic grid, True for NEMO 3.6, False for NEMO 4.2).
+# Preset variables include:
+# <region>_massloss: basal mass loss from the given ice shelf or region of multiple ice shelves (eg brunt, amundsen_sea)
+# <region>_bwtemp, <region>_bwsalt: area-averaged bottom water temperature or salinity from the given region or cavity (eg ross_cavity, ross_shelf, ross)
 def calc_timeseries (var, ds_nemo, grid_file, halo=True):
     
     # Parse variable name
     factor = 1
+    region_type = None
     if var.endswith('massloss'):
         option = 'area_int'
         region = var[:var.index('_massloss')]
@@ -64,6 +70,6 @@ def calc_timeseries (var, ds_nemo, grid_file, halo=True):
 
     data *= factor
 
-    return ds_nemo['time_centered'], data, title
+    return data, ds_nemo['time_centered'], title
         
         
