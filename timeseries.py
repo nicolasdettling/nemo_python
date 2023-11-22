@@ -2,7 +2,7 @@ import xarray as xr
 import os
 
 from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year, deg_string, gkg_string
-from .utils import cavity_mask, region_mask
+from .utils import cavity_mask, region_mask, add_months
 
 # Calculate a timeseries of the given preset variable from an xarray Dataset of NEMO output. Returns DataArrays of the timeseries data, the associated time values, and the variable title.
 # Also pass the grid file (mesh_mask for NEMO 3.6, domain_cfg for NEMO 4.2) and whether there is a halo in the data (if periodic grid, True for NEMO 3.6, False for NEMO 4.2).
@@ -118,7 +118,56 @@ def precompute_timeseries (ds_nemo, timeseries_types, grid_file, timeseries_file
     ds_new.to_netcdf(timeseries_file, mode='w')
 
 
+# Precompute timeseries from the given simulation, either from the beginning (timeseries_file does not exist) or picking up where it left off (timeseries_file does exist). Considers all NEMO output files stamped with suite_id in the given directory sim_dir, and assumes the timeseries file is in that directory too.
+def update_simulation_timeseries (suite_id, timeseries_types, grid_file, timeseries_file='timeseries.nc', sim_dir='./', halo=True):
 
+    update = os.path.isfile(sim_dir+timeseries_file)
+    if update:
+        # Timeseries file already exists
+        # Get last time index
+        ds_ts = xr.open_dataset(sim_dir+timeseries_file)
+        time_last = ds_ts['time_centered'].data[-1]
+        year_last = time_last.year
+        month_last = time_last.month
+
+    # Identify NEMO output files in the given directory, constructed as wildcard strings for each date code
+    nemo_files = []
+    for f in os.listdir(base_dir):
+        if f.startswith('nemo_'+suite_id+'o'):
+            # UKESM file naming conventions
+            file_head = 'nemo_'+suite_id+'o'
+        elif f.startswith(suite_id):
+            # Standalone NEMO file naming conventions
+            file_head = suite_id
+        else:
+            # Not a NEMO output file; skip it
+            continue
+        if '_1m_' not in f:
+            raise Exception('update_simulation_timeseries can only handle monthly NEMO output files. Need to code other options or move the non-monthly files elsewhere.')
+        file_head += '_1m_'
+        # Extract date code (yyyymmdd_yyyymmdd)
+        date_code = f[len(file_head):len(file_head)+17]
+        if update:
+            # Need to check if date code has already been processed
+            year = date_code[:4]
+            month = date_code[4:6]
+            if year < year_last or (year==year_last and month<=month_last):
+                # Skip it
+                continue
+        # Now construct wildcard string and add to list if it's not already there
+        file_pattern = file_head + date_code + '*'
+        if file_pattern not in nemo_files:
+            nemo_files.append(file_pattern)        
+    # Now sort alphabetically - i.e. by ascending date code
+    nemo_files.sort()
+
+    # Loop through each date code and process
+    for file_pattern in nemo_files:
+        print('Processing '+file_pattern)
+        ds_nemo = xr.open_mfdataset(base_dir+'/'+file_pattern)
+        precompute_timeseries(ds_nemo, timeseries_types, grid_file, base_dir+'/'+timeseries_file, halo=halo)
+                    
+                
         
 
     

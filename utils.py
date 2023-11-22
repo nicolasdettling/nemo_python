@@ -434,7 +434,17 @@ def convert_time_units(ds, dataset='ERA5'):
         ds['time'].encoding['calendar'] = 'gregorian'
         return ds
     else:
-        raise Exception('Only currently set up to convert ERA5 reference period')     
+        raise Exception('Only currently set up to convert ERA5 reference period')
+
+
+# Advance the given date (year and month, both ints) by num_months
+def add_months (year, month, num_months):
+    
+    month += num_months
+    while month > 12:
+        month -= 12
+        year += 1
+    return year, month
         
         
         
