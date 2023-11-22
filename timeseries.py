@@ -63,7 +63,7 @@ def calc_timeseries (var, ds_nemo, grid_file, halo=True):
         mask, region_name = cavity_mask(region, grid_file, return_name=True)
     else:
         mask, region_name = region_mask(region, grid_file, option=region_type, return_name=True)
-    title += ' from '+region_name    
+    title += ' on '+region_name    
 
     # Trim datasets as needed
     if ds_nemo.sizes['y'] < mask.sizes['y']:
@@ -132,7 +132,10 @@ def update_simulation_timeseries (suite_id, timeseries_types, grid_file, timeser
 
     # Identify NEMO output files in the given directory, constructed as wildcard strings for each date code
     nemo_files = []
-    for f in os.listdir(base_dir):
+    for f in os.listdir(sim_dir):
+        if os.path.isdir(sim_dir+'/'+f):
+            # Skip directories
+            continue
         if f.startswith('nemo_'+suite_id+'o'):
             # UKESM file naming conventions
             file_head = 'nemo_'+suite_id+'o'
@@ -164,8 +167,8 @@ def update_simulation_timeseries (suite_id, timeseries_types, grid_file, timeser
     # Loop through each date code and process
     for file_pattern in nemo_files:
         print('Processing '+file_pattern)
-        ds_nemo = xr.open_mfdataset(base_dir+'/'+file_pattern)
-        precompute_timeseries(ds_nemo, timeseries_types, grid_file, base_dir+'/'+timeseries_file, halo=halo)
+        ds_nemo = xr.open_mfdataset(sim_dir+'/'+file_pattern)
+        precompute_timeseries(ds_nemo, timeseries_types, grid_file, sim_dir+'/'+timeseries_file, halo=halo)
                     
                 
         
