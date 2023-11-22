@@ -3,7 +3,7 @@ import xarray as xr
 from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year
 from .utils import cavity_mask, region_mask
 
-def calc_timeseries (var, nemo_ds, grid_file):
+def calc_timeseries (var, ds_nemo, grid_file, halo=True):
     
     # Parse variable name
     # Start with default values
@@ -24,12 +24,21 @@ def calc_timeseries (var, nemo_ds, grid_file):
         units = 'Gt/y'
         title = 'Basal mass loss from '+region_name
 
+    # Trim datasets as needed
+    if ds_nemo.sizes['y'] < mask.sizes['y']:
+        # The NEMO dataset was trimmed (eg by MOOSE for UKESM) to the southernmost latitudes. Do the same for the mask.
+        mask = mask.isel(y=slice(0, ds_nemo.sizes['y']))
+    if halo:
+        # Remove the halo
+        ds_nemo = ds_nemo.isel(x=slice(1,-1))
+        mask = mask.isel(x=slice(1,-1))
+        
     if option == 'area_int':
         # Area integral
         data = (ds_nemo[nemo_var]*ds_nemo['area']*mask).sum(dim=['x','y'])
 
     data *= factor
 
-    return ds['time_centered'], data, title
+    return ds_nemo['time_centered'], data, title
         
         
