@@ -4,10 +4,14 @@ import numpy as np
 gravity = 9.81
 # Density of freshwater (kg/m^3)
 rho_fw = 1e3
-# Seconds per day
-sec_per_day = 24*60*60.
+# Density of ice
+rho_ice = 917.
 # Seconds per hour
 sec_per_hour = 60*60.
+# Seconds per day
+sec_per_day = 24*sec_per_day
+# Seconds per year
+sec_per_year = 365.25*sec_per_day
 # Months per year
 months_per_year = 12
 # Celsius to Kelvins intercept

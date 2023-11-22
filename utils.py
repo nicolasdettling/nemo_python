@@ -193,6 +193,31 @@ def shelf_mask (file_path):
     return mask
 
 
+# Select a mask for a single cavity. Pass it the path to the mesh_mask or domain_cfg file (whichever one has nav_lon, nav_lat).
+def cavity_mask (cavity, file_path, return_name=False):
+
+    if return_name:
+        title = region_names[region]
+
+    ds = xr.open_dataset(file_path).squeeze()
+    # Get mask for all cavities
+    if 'maskisf' in ds:
+        ice_mask = ds['maskisf']
+    elif 'top_level' in ds:
+        ice_mask = xr.where(ds['top_level']>1, 1, 0)
+
+    # Select one point in this cavity
+    point0 = closest_point(ds, region_points[cavity])
+    # Disconnect the other cavities
+    mask = remove_disconnected(ice_mask, point0)
+    ice_mask.data = mask
+
+    if return_name:
+        return ice_mask, title
+    else:
+        return ice_mask
+
+
 # Select a mask for the given region, either continental shelf only ('shelf'), cavities only ('cavity'), or continental shelf with cavities ('all'). Pass it the path to the mesh_mask or domain_cfg file (whichever one has nav_lon, nav_lat, and bathy).
 def region_mask (region, file_path, option='all', return_name=False):
 
@@ -317,31 +342,6 @@ def region_mask (region, file_path, option='all', return_name=False):
         return mask, title
     else:
         return mask
-
-
-# Select a mask for a single cavity. 
-def cavity_mask (cavity, file_path, return_name=False):
-
-    if return_name:
-        title = region_names[region]
-
-    ds = xr.open_dataset(file_path).squeeze()
-    # Get mask for all cavities
-    if 'maskisf' in ds:
-        ice_mask = ds['maskisf']
-    elif 'top_level' in ds:
-        ice_mask = xr.where(ds['top_level']>1, 1, 0)
-
-    # Select one point in this cavity
-    point0 = closest_point(ds, region_points[cavity])
-    # Disconnect the other cavities
-    mask = remove_disconnected(ice_mask, point0)
-    ice_mask.data = mask
-
-    if return_name:
-        return ice_mask, title
-    else:
-        return ice_mask
 
         
 # Function to convert the units of shortwave and longwave radiation to the units expected by NEMO (W m-2)
