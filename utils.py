@@ -1,6 +1,6 @@
 import numpy as np
 import xarray as xr
-from .constants import deg2rad, shelf_lat, shelf_depth, shelf_point0, rho_fw, sec_per_hour, temp_C2K, Rdry, Rvap, vap_pres_c1, vap_pres_c3, vap_pres_c4, region_edges, region_edges_flag, region_names
+from .constants import deg2rad, shelf_lat, shelf_depth, shelf_point0, rho_fw, sec_per_hour, temp_C2K, Rdry, Rvap, vap_pres_c1, vap_pres_c3, vap_pres_c4, region_edges, region_edges_flag, region_names, region_points
 
 # Given an array containing longitude, make sure it's in the range (max_lon-360, max_lon). Default is (-180, 180). If max_lon is None, nothing will be done to the array.
 def fix_lon_range (lon, max_lon=180):
@@ -281,6 +281,18 @@ def region_mask (region, file_path, option='all', return_name=False):
             mask_region += mask_region2
         mask.data = mask_region
 
+    # Special cases (where common boundaries didn't agree for eORCA1 and eORCA025)
+    if region == 'amundsen_sea':
+        # Remove bits of Abbot
+        mask_excl = cavity_mask('abbot', file_path)
+    elif region == 'filchner_ronne':
+        # Remove bits of Brunt
+        mask_excl = cavity_mask('brunt', file_path)
+    else:
+        mask_excl = None
+    if mask_excl is not None:
+        mask *= 1-mask_excl
+
     # Now select cavities, shelf, or both
     if 'maskisf' in ds:
         ice_mask = ds['maskisf']
@@ -314,11 +326,12 @@ def cavity_mask (cavity, file_path, return_name=False):
     point0 = closest_point(ds, region_points[cavity])
     # Disconnect the other cavities
     mask = remove_disconnected(ice_mask, point0)
+    ice_mask.data = mask
 
     if return_name:
-        return mask, title
+        return ice_mask, title
     else:
-        return mask
+        return ice_mask
 
         
 # Function to convert the units of shortwave and longwave radiation to the units expected by NEMO (W m-2)

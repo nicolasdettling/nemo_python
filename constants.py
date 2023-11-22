@@ -81,5 +81,5 @@ region_names = {
     'amery': 'Amery',
     'ross': 'Ross',
     'abbot': 'Abbot Ice Shelf',
-    'brunt': 'Brunt Ice Shelf',
+    'brunt': 'Brunt and Riiser-Larsen Ice Shelves',
 }
