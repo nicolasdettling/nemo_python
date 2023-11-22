@@ -97,6 +97,7 @@ def calc_timeseries (var, ds_nemo, grid_file, halo=True):
 # Precompute the given list of timeseries from the given xarray Dataset of NEMO output. Save in a NetCDF file which concatenates after each call to the function.
 def precompute_timeseries (ds_nemo, timeseries_types, grid_file, timeseries_file, halo=True):
 
+    # Calculate each timeseries and save to a Dataset
     ds_new = None
     for var in timeseries_types:
         data = calc_timeseries(var, ds_nemo, grid_file, halo=halo)
@@ -109,10 +110,16 @@ def precompute_timeseries (ds_nemo, timeseries_types, grid_file, timeseries_file
         # File already exists; read it
         ds_old = xr.open_dataset(timeseries_file)
         # Concatenate new data
+        ds_new.load()
         ds_new = xr.concat([ds_old, ds_new], dim='time_counter')
+        ds_old.close()
 
     # Save to file, overwriting if needed
     ds_new.to_netcdf(timeseries_file, mode='w')
+
+
+
+        
 
     
                                 
