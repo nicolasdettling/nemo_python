@@ -105,6 +105,8 @@ def precompute_timeseries (ds_nemo, timeseries_types, grid_file, timeseries_file
             ds_new = xr.Dataset({var:data})
         else:
             ds_new = ds_new.assign({var:data})
+    # Use time_centered as the dimension as it includes real times - time_counter is reset to 0 every output file
+    ds_new = ds_new.swap_dims({'time_counter':'time_centered'})
 
     if os.path.isfile(timeseries_file):
         # File already exists; read it
@@ -112,8 +114,6 @@ def precompute_timeseries (ds_nemo, timeseries_types, grid_file, timeseries_file
         # Concatenate new data
         ds_new.load()
         ds_new = xr.concat([ds_old, ds_new], dim='time_counter')
-        # Use time_centered as the dimension as it includes real times - time_counter is reset to 0 every output file
-        ds_new = ds_new.swap_dims({'time_counter':'time_centered'})
         ds_old.close()
 
     # Save to file, overwriting if needed
@@ -154,8 +154,8 @@ def update_simulation_timeseries (suite_id, timeseries_types, grid_file, timeser
         date_code = f[len(file_head):len(file_head)+17]
         if update:
             # Need to check if date code has already been processed
-            year = date_code[:4]
-            month = date_code[4:6]
+            year = int(date_code[:4])
+            month = int(date_code[4:6])
             if year < year_last or (year==year_last and month<=month_last):
                 # Skip it
                 continue
