@@ -70,7 +70,7 @@ def calc_timeseries (var, ds_nemo, grid_file, halo=True):
         mask = mask.isel(y=slice(0, ds_nemo.sizes['y']))
     if halo:
         # Remove the halo
-        ds_nemo = ds_nemo.isel(x=slice(1,-1))
+        ds_nemo = ds_nemo.copy().isel(x=slice(1,-1))
         mask = mask.isel(x=slice(1,-1))
         
     if option == 'area_int':
@@ -84,10 +84,9 @@ def calc_timeseries (var, ds_nemo, grid_file, halo=True):
     elif option == 'volume_avg':
         # Volume average
         # First need a 3D mask
-        mask_3d = xr.where(ds_nemo[nemo_var]==0)*mask
+        mask_3d = xr.where(ds_nemo[nemo_var]==0, 0, mask)
         dV = ds_nemo['area']*ds_nemo['thkcello']*mask_3d
         data = (ds_nemo[nemo_var]*dV).sum(dim=['x','y','deptht'])/dV.sum(dim=['x','y','deptht'])
-
     data *= factor
 
     return data, ds_nemo['time_centered'], title
