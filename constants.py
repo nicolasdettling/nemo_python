@@ -9,7 +9,7 @@ rho_ice = 917.
 # Seconds per hour
 sec_per_hour = 60*60.
 # Seconds per day
-sec_per_day = 24*sec_per_day
+sec_per_day = 24*sec_per_hour
 # Seconds per year
 sec_per_year = 365.25*sec_per_day
 # Months per year
