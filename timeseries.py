@@ -112,6 +112,8 @@ def precompute_timeseries (ds_nemo, timeseries_types, grid_file, timeseries_file
         # Concatenate new data
         ds_new.load()
         ds_new = xr.concat([ds_old, ds_new], dim='time_counter')
+        # Use time_centered as the dimension as it includes real times - time_counter is reset to 0 every output file
+        ds_new = ds_new.swap_dims({'time_counter':'time_centered'})
         ds_old.close()
 
     # Save to file, overwriting if needed
