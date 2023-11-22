@@ -1,7 +1,7 @@
 import xarray as xr
 
-from constants import region_points, region_names, rho_fw, rho_ice, sec_per_year
-from utils import cavity_mask, region_mask
+from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year
+from .utils import cavity_mask, region_mask
 
 def calc_timeseries (var, nemo_ds, grid_file):
     
