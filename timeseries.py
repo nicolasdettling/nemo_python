@@ -1,4 +1,5 @@
 import xarray as xr
+import os
 
 from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year, deg_string, gkg_string
 from .utils import cavity_mask, region_mask
@@ -88,7 +89,34 @@ def calc_timeseries (var, ds_nemo, grid_file, halo=True):
         dV = ds_nemo['area']*ds_nemo['thkcello']*mask_3d
         data = (ds_nemo[nemo_var]*dV).sum(dim=['x','y','deptht'])/dV.sum(dim=['x','y','deptht'])
     data *= factor
+    data = data.assign_attrs(long_name=title, units=units)
 
-    return data, ds_nemo['time_centered'], title
+    return data
+
+
+# Precompute the given list of timeseries from the given xarray Dataset of NEMO output. Save in a NetCDF file which concatenates after each call to the function.
+def precompute_timeseries (ds_nemo, timeseries_types, grid_file, timeseries_file, halo=True):
+
+    ds_new = None
+    for var in timeseries_types:
+        data = calc_timeseries(var, ds_nemo, grid_file, halo=halo)
+        if ds_new is None:            
+            ds_new = xr.Dataset({var:data})
+        else:
+            ds_new = ds_new.assign({var:data})
+
+    if os.path.isfile(timeseries_file):
+        # File already exists; read it
+        ds_old = xr.open_dataset(timeseries_file)
+        # Concatenate new data
+        ds_new = xr.concat([ds_old, ds_new], dim='time_counter')
+
+    # Save to file, overwriting if needed
+    ds_new.to_netcdf(timeseries_file, mode='w')
+
+    
+                                
+
+    
         
         
