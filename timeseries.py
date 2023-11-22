@@ -13,7 +13,7 @@ def calc_timeseries (var, ds_nemo, grid_file, halo=True):
     # Parse variable name
     factor = 1
     region_type = None
-    if var.endswith('massloss'):
+    if var.endswith('_massloss'):
         option = 'area_int'
         region = var[:var.index('_massloss')]
         region_type = 'cavity'
@@ -22,18 +22,30 @@ def calc_timeseries (var, ds_nemo, grid_file, halo=True):
         factor = -rho_ice/rho_fw*1e-12*sec_per_year
         units = 'Gt/y'
         title = 'Basal mass loss'
-    elif var.endswith('bwtemp'):
+    elif var.endswith('_bwtemp'):
         option = 'area_avg'
         region = var[:var.index('_bwtemp')]
         nemo_var = 'tob'
         units = deg_string+'C'
         title = 'Bottom temperature'
-    elif var.endswith('bwsalt'):
+    elif var.endswith('_bwsalt'):
         option = 'area_avg'
         region = var[:var.index('_bwsalt')]
         nemo_var = 'sob'
         units = gkg_string
-        title = 'Bottom salinity'        
+        title = 'Bottom salinity'
+    elif var.endswith('_temp'):
+        option = 'volume_avg'
+        region = var[:var.index('_temp')]
+        nemo_var = 'thetao'
+        units = deg_string+'C'
+        title = 'Volume-averaged temperature'
+    elif var.endswith('_salt'):
+        option = 'volume_avg'
+        region = var[:var.index('_salt')]
+        nemo_var = 'so'
+        units = gkg_string
+        title = 'Volume-averaged salinity'
 
     # Select region
     if region_type is None:
@@ -63,10 +75,18 @@ def calc_timeseries (var, ds_nemo, grid_file, halo=True):
         
     if option == 'area_int':
         # Area integral
-        data = (ds_nemo[nemo_var]*ds_nemo['area']*mask).sum(dim=['x','y'])
+        dA = ds_nemo['area']*mask
+        data = (ds_nemo[nemo_var]*dA).sum(dim=['x','y'])
     elif option == 'area_avg':
         # Area average
-        data = (ds_nemo[nemo_var]*ds_nemo['area']*mask).sum(dim=['x','y'])/(ds_nemo['area']*mask).sum(dim=['x','y'])
+        dA = ds_nemo['area']*mask
+        data = (ds_nemo[nemo_var]*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
+    elif option == 'volume_avg':
+        # Volume average
+        # First need a 3D mask
+        mask_3d = xr.where(ds_nemo[nemo_var]==0)*mask
+        dV = ds_nemo['area']*ds_nemo['thkcello']*mask_3d
+        data = (ds_nemo[nemo_var]*dV).sum(dim=['x','y','deptht'])/dV.sum(dim=['x','y','deptht'])
 
     data *= factor
 
