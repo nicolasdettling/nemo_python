@@ -291,9 +291,9 @@ def region_mask (region, ds, option='all', return_name=False):
     if region+'_mask' in ds:
         # Previously computed
         if return_name:
-            return ds[region+'_mask'], ds, title
+            return ds[region+'_'+option+'_mask'], ds, title
         else:
-            return ds[region+'_mask'], ds
+            return ds[region+'_'+option+'_mask'], ds
 
     ds = ds.squeeze()
 
@@ -398,7 +398,7 @@ def region_mask (region, ds, option='all', return_name=False):
         mask *= 1-ice_mask
 
     # Save to the Dataset in case it's useful later
-    ds = ds.assign({region+'_mask':mask})
+    ds = ds.assign({region+'_'+option+'_mask':mask})
 
     if return_name:
         return mask, ds, title
