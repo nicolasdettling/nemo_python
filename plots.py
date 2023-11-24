@@ -158,7 +158,7 @@ def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'be
             datas.append(ds[var_full])
             if title is None:
                 long_name = ds[var_full].long_name
-                title = long_name[:long_name.index(' on ')]
+                title = long_name.replace(region_names[region]+' ','')
                 units = ds[var_full].units
 
     timeseries_plot(datas, labels=labels, colours=colours_plot, title=title, units=units, fig_name=fig_name)
