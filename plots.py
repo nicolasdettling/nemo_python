@@ -131,7 +131,7 @@ def timeseries_plot (datas, labels=None, colours=None, title='', units='', ax=No
 # Plot timeseries of the same variable in different regions. Can either do for a single simulation (sim_dir is a string) or an initial conditions ensemble (sim_dir is a list of strings). 
 def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], colours=None, timeseries_file='timeseries.nc', fig_name=None):
 
-    if not isinstance(sim_dir, list) and len(sim_dir)>1:
+    if isinstance(sim_dir, str):
         sim_dir = [sim_dir]
     if colours is None:
         if len(regions) <= len(line_colours):
@@ -150,7 +150,8 @@ def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'be
     title = None
     units = None
     for region, colour in zip(regions, colours):
-        labels += [region_names[region]]*num_ens
+        labels.append(region_names[region])
+        labels += [None]*(num_ens-1)
         colours_plot += [colour]*num_ens
         var_full = region+'_'+var_name
         for ds in all_ds:
@@ -163,16 +164,75 @@ def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'be
     timeseries_plot(datas, labels=labels, colours=colours_plot, title=title, units=units, fig_name=fig_name)
         
 
-def timeseries_by_expt (var_name, sim_dir, sim_names=None, colours=None, timeseries_file='timeseries.nc', fig_name=None):
+# Plot timeseries of the same variable in different experiments. Each experiment can be a single simulation (sim_dirs=list of strings) or an ensemble (sim_dirs=list of lists of strings).
+# For ensembles, if sim_names is set, it can be the name of every member (list of lists of strings) or one name for every ensemble (list of strings).
+# If sim_names is not set, lines will be labelled with the suite IDs (extracted from sim_dirs)
+# TODO: test this once I have multiple ensembles to try!
+def timeseries_by_expt (var_name, sim_dirs, sim_names=None, colours=None, timeseries_file='timeseries.nc', fig_name=None):
 
-    pass
+    num_expt = len(sim_dir)
+    if colours is None:
+        if num_expt <= len(line_colours):
+            colours = line_colours[:num_expt]
+        else:
+            raise Exception('Too many experiments to use default line_colours: set colours instead')
+
+    # Inner function to extract the name of the current directory (with trailing slashes and parent directories stripped out)
+    def make_sim_name (dir_name):
+        # First strip out trailing slash(es), if it's there
+        while True:
+            if dir_name[-1] != '/':
+                break
+            dir_name = dir_name[:-1]
+        # Now strip out parent directories
+        if '/' in dir_name:
+            dir_name = dir_name[dir_name.rfind('/')+1:]
+        return dir_name
+        
+    if sim_names is None:
+        # Generate simulation names from directory names (hopefully suite IDs), with same structure as sim_dirs
+        sim_names = []
+        for sim_dir in sim_dirs:
+            if isinstance(sim_dir, str):
+                # Single simulation
+                sim_names.append(make_sim_name(sim_dir))
+            elif isinstance(sim_dir, list):
+                # Ensemble
+                ens_names = []
+                for d in sim_dir:
+                    ens_names.append(make_sim_name(d))
+                sim_names.append(ens_names)
+
+    datas = []
+    labels = []
+    colours_plot = []
+    title = None
+    units = None
+    for sim_dir, sim_name, colour in zip(sim_dirs, sim_names, colours):
+        if isinstance(sim_dir, str):
+            # Generalise to ensemble of 1
+            sim_dir = [sim_dir]
+            sim_name = [names]
+        elif isinstance(sim_dir, list) and isinstance(sim_name, str):
+            # Just one name for the whole ensemble; only label the first member
+            sim_name = [sim_name] + [None]*(len(sim_dir)-1)
+        num_ens = len(sim_dir)
+        colours_plot += [colour]*num_ens
+        for d, n in zip(sim_dir, sim_name):
+            ds = xr.open_dataset(d+'/'+timeseries_file)
+            datas.append(ds[var_name])
+            labels.append(n)
+            if title is None:
+                title = ds[var_name].long_name
+                units = ds[var_name].units
+
+    timeseries_plot(datas, labels=labels, colours=colours_plot, title=title, units=units, fig_name=fig_name)
+            
+    
         
 
-    
-    
 
-    # Single simulation, by_region: sim_dir is a string or list of length 1, var_name needs to be preceded by regions, sim_names unused, choose list of colours corresponding to regions
-    # Single ensemble, by_region: now same colour for each ensemble member
+
     # by_expt, multiple simulations: sim_dir is a list of length>1, choose colours up to some max number
     # by_expt, multiple ensembles: sim_dir is a list of lists, same colour for each ensemble member
     
