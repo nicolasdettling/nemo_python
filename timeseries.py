@@ -59,9 +59,9 @@ def calc_timeseries (var, ds_nemo, halo=True):
             region_type = 'all'
     if region in region_points and region_type == 'cavity':
         # Single ice shelf
-        mask, region_name = single_cavity_mask(region, ds_nemo, return_name=True)
+        mask, ds, region_name = single_cavity_mask(region, ds_nemo, return_name=True)
     else:
-        mask, region_name = region_mask(region, ds_nemo, option=region_type, return_name=True)
+        mask, ds, region_name = region_mask(region, ds_nemo, option=region_type, return_name=True)
     title += ' on '+region_name    
 
     # Trim datasets as needed
@@ -99,6 +99,7 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
     # Calculate each timeseries and save to a Dataset
     ds_new = None
     for var in timeseries_types:
+        print('...'+var)
         data = calc_timeseries(var, ds_nemo, halo=halo)
         if ds_new is None:            
             ds_new = xr.Dataset({var:data})

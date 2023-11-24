@@ -58,7 +58,7 @@ def plot_region_map (file_path='/gws/nopw/j04/terrafirma/kaight/input_data/grids
 
     for n in range(len(regions)):
         print('Processing '+regions[n])
-        mask = region_mask(regions[n], file_path, option=option)
+        mask, ds = region_mask(regions[n], grid, option=option)
         if halo:
             mask = mask.isel(x=slice(1,-1))
         if n==0:

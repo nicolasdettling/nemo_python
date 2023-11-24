@@ -176,7 +176,7 @@ def build_ice_mask (ds):
 
     if 'ice_mask' in ds:
         # Previously computed
-        return ds['ice_mask']
+        return ds['ice_mask'], ds
 
     ds = ds.squeeze()
 
@@ -192,7 +192,7 @@ def build_ice_mask (ds):
         ice_mask = xr.where((mask_3d.isel(deptht=0)==0)*mask_3d.sum(dim='deptht'), 1, 0)
     # Save to the Dataset in case it's useful later
     ds = ds.assign({'ice_mask':ice_mask})
-    return ice_mask
+    return ice_mask, ds
 
 
 # Select the continental shelf and ice shelf cavities. Pass it the path to an xarray Dataset which contains one of the following combinations:
@@ -203,7 +203,7 @@ def build_shelf_mask (ds):
 
     if 'shelf_mask' in ds:
         # Previously computed
-        return ds['shelf_mask']
+        return ds['shelf_mask'], ds
 
     ds = ds.squeeze()
     
@@ -219,7 +219,7 @@ def build_shelf_mask (ds):
                 mask_3d = xr.where(ds[var]==0, 0, 1)
                 ocean_mask = mask_3d.sum(dim='deptht')>0
                 break
-        ice_mask = build_ice_mask(ds)
+        ice_mask, ds = build_ice_mask(ds)
         # Here bathy is actually water column thickness
         bathy = (ds['thkcello']*mask_3d).sum(dim='deptht')
         # To make sure cavities are selected, set bathymetry to 0 there
@@ -234,7 +234,7 @@ def build_shelf_mask (ds):
     # Save to the Dataset in case it's useful later
     ds = ds.assign({'shelf_mask':mask})
 
-    return mask
+    return mask, ds
 
 
 # Select a mask for a single cavity. Pass it an xarray Dataset as for build_shelf_mask.
@@ -242,7 +242,7 @@ def single_cavity_mask (cavity, ds, return_name=False):
 
     if cavity+'_cavity_mask' in ds:
         # Previously computed
-        return ds[cavity+'_cavity_mask']
+        return ds[cavity+'_cavity_mask'], ds
 
     ds = ds.squeeze()
     ds = ds.load()
@@ -251,7 +251,7 @@ def single_cavity_mask (cavity, ds, return_name=False):
         title = region_names[region]
 
     # Get mask for all cavities
-    ice_mask = build_ice_mask(ds)
+    ice_mask, ds = build_ice_mask(ds)
 
     # Select one point in this cavity
     point0 = closest_point(ds, region_points[cavity])
@@ -263,9 +263,9 @@ def single_cavity_mask (cavity, ds, return_name=False):
     ds = ds.assign({cavity+'_cavity_mask':ice_mask})
 
     if return_name:
-        return ice_mask, title
+        return ice_mask, ds, title
     else:
-        return ice_mask
+        return ice_mask, ds
 
 
 # Select a mask for the given region, either continental shelf only ('shelf'), cavities only ('cavity'), or continental shelf with cavities ('all'). Pass it an xarray Dataset as for build_shelf_mask.
@@ -273,7 +273,7 @@ def region_mask (region, ds, option='all', return_name=False):
 
     if region+'_mask' in ds:
         # Previously computed
-        return ds[region+'_mask']
+        return ds[region+'_mask'], ds
 
     ds = ds.squeeze()
 
@@ -291,7 +291,7 @@ def region_mask (region, ds, option='all', return_name=False):
             title += ' continental shelf'
 
     # Get mask for entire continental shelf and cavities
-    mask = build_shelf_mask(ds)
+    mask, ds = build_shelf_mask(ds)
 
     if region != 'all':
         # Restrict to a specific region of the coast
@@ -363,18 +363,18 @@ def region_mask (region, ds, option='all', return_name=False):
     # Special cases (where common boundaries didn't agree for eORCA1 and eORCA025)
     if region == 'amundsen_sea':
         # Remove bits of Abbot
-        mask_excl = single_cavity_mask('abbot', ds)
+        mask_excl, ds = single_cavity_mask('abbot', ds)
     elif region == 'filchner_ronne':
         # Remove bits of Brunt
-        mask_excl = single_cavity_mask('brunt', ds)
+        mask_excl, ds = single_cavity_mask('brunt', ds)
     else:
-        mask_excl = None
+        mask_excl, ds = None
     if region == 'bellingshausen_sea':
         # Add back in bits of Abbot
-        mask_incl = single_cavity_mask('abbot', ds)
+        mask_incl, ds = single_cavity_mask('abbot', ds)
     elif region == 'east_antarctica':
         # Add back in bits of Brunt
-        mask_incl = single_cavity_mask('brunt', ds)
+        mask_incl, ds = single_cavity_mask('brunt', ds)
     else:
         mask_incl = None
     if mask_excl is not None:
@@ -383,7 +383,7 @@ def region_mask (region, ds, option='all', return_name=False):
         mask = xr.where(mask_incl, 1, mask)
 
     # Now select cavities, shelf, or both
-    ice_mask = build_ice_mask(ds)
+    ice_mask, ds = build_ice_mask(ds)
     if option == 'cavity':
         mask *= ice_mask
     elif option == 'shelf':
@@ -393,9 +393,9 @@ def region_mask (region, ds, option='all', return_name=False):
     ds = ds.assign({region+'_mask':mask})
 
     if return_name:
-        return mask, title
+        return mask, ds, title
     else:
-        return mask
+        return mask, ds
 
         
 # Function to convert the units of shortwave and longwave radiation to the units expected by NEMO (W m-2)
