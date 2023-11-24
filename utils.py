@@ -240,15 +240,18 @@ def build_shelf_mask (ds):
 # Select a mask for a single cavity. Pass it an xarray Dataset as for build_shelf_mask.
 def single_cavity_mask (cavity, ds, return_name=False):
 
+    if return_name:
+        title = region_names[region]
+
     if cavity+'_cavity_mask' in ds:
         # Previously computed
-        return ds[cavity+'_cavity_mask'], ds
+        if return_name:
+            return ds[cavity+'_cavity_mask'], ds, title
+        else:
+            return ds[cavity+'_cavity_mask'], ds
 
     ds = ds.squeeze()
     ds = ds.load()
-
-    if return_name:
-        title = region_names[region]
 
     # Get mask for all cavities
     ice_mask, ds = build_ice_mask(ds)
@@ -271,12 +274,6 @@ def single_cavity_mask (cavity, ds, return_name=False):
 # Select a mask for the given region, either continental shelf only ('shelf'), cavities only ('cavity'), or continental shelf with cavities ('all'). Pass it an xarray Dataset as for build_shelf_mask.
 def region_mask (region, ds, option='all', return_name=False):
 
-    if region+'_mask' in ds:
-        # Previously computed
-        return ds[region+'_mask'], ds
-
-    ds = ds.squeeze()
-
     if return_name:
         # Construct the title
         title = region_names[region]
@@ -289,6 +286,15 @@ def region_mask (region, ds, option='all', return_name=False):
                 title += ' and'
         if option in ['shelf', 'all']:
             title += ' continental shelf'
+
+    if region+'_mask' in ds:
+        # Previously computed
+        if return_name:
+            return ds[region+'_mask'], ds, title
+        else:
+            return ds[region+'_mask'], ds
+
+    ds = ds.squeeze()
 
     # Get mask for entire continental shelf and cavities
     mask, ds = build_shelf_mask(ds)
