@@ -168,24 +168,51 @@ def closest_point (ds, target):
     dist = np.sqrt((lon-lon0)**2 + (lat-lat0)**2)
     # Find the indices of the minimum distance
     point0 = dist.argmin(dim=('y','x'))
-    return (int(point0['y'].data), int(point0['x'].data))    
+    return (int(point0['y'].data), int(point0['x'].data))
 
 
-# Select the continental shelf and ice shelf cavities. Pass it the path to the mesh_mask or domain_cfg file (whichever one has nav_lon, nav_lat, and bathy).
-def shelf_mask (file_path):
+# Select ice shelf cavities. Pass it the path to an xarray Dataset which contains either 'maskisf' (NEMO3.6 mesh_mask), 'top_level' (NEMO4.2 domain_cfg), or a 3D data variable with a zero-mask applied (current options are thetao or so) (NEMO output file)
+def build_ice_mask (ds):
 
-    ds = xr.open_dataset(file_path).squeeze()
-    # A few options for how this file could be set up, depending on NEMO version
-    if 'bathy' in ds:
-        bathy_name = 'bathy'
-    elif 'bathy_metry' in ds:
-        bathy_name = 'bathy_metry'
-    if 'tmaskutil' in ds:
+    if 'maskisf' in ds:
+        return ds['maskisf']
+    elif 'top_level' in ds:
+        return xr.where(ds['top_level']>1, 1, 0)
+    else:
+        for var in ['thetao', 'so']:
+            if var in ds:
+                mask_3d = xr.where(ds[var]==0, 0, 1)
+                break
+        return xr.where((mask_3d.isel(deptht==0)==0)*mask_3d.sum(dim='deptht'), 1, 0)
+
+
+# Select the continental shelf and ice shelf cavities. Pass it the path to an xarray Dataset which contains one of the following combinations:
+# 1. nav_lon, nav_lat, bathy, tmaskutil (NEMO3.6 mesh_mask)
+# 2. nav_lon, nav_lat, bathy_metry, bottom_level (NEMO4.2 domain_cfg)
+# 3. nav_lon, nav_lat, thkcello, a 3D data variable with a zero-mask applied (current options are thetao or so) (NEMO output file) 
+def build_shelf_mask (ds):
+
+    ds = ds.squeeze()
+    if 'bathy' in ds and 'tmaskutil' in ds:
+        bathy = ds['bathy']
         ocean_mask = ds['tmaskutil']
-    elif 'bottom_level' in ds:
+    elif 'bathy_metry' in ds and 'bottom_level' in ds:
+        bathy = ds['bathy_metry']
         ocean_mask = xr.where(ds['bottom_level']>0, 1, 0)
+    elif 'thkcello' in ds:
+        for var in ['thetao', 'so']:
+            if var in ds:
+                ocean_mask = xr.where((ds[var]==0).sum(dim='deptht')==0, 0, 1)
+                break
+        ice_mask = build_ice_mask(ds)
+        # Here bathy is actually water column thickness
+        bathy = (ds['thkcello']*mask_3d).sum(dim='deptht')
+        # To make sure cavities are selected, set bathymetry to 0 there
+        bathy = xr.where(ice_mask, 0, bathy)
+    else:
+        raise Exception('invalid Dataset for build_shelf_mask')        
     # Apply lat-lon bounds and bathymetry bound to ocean mask
-    mask = ocean_mask*(ds['nav_lat'] <= shelf_lat)*(ds[bathy_name] <= shelf_depth)
+    mask = ocean_mask*(ds['nav_lat'] <= shelf_lat)*(bathy <= shelf_depth)
     # Remove disconnected seamounts
     point0 = closest_point(ds, shelf_point0)
     mask.data = remove_disconnected(mask, point0)   
@@ -193,18 +220,15 @@ def shelf_mask (file_path):
     return mask
 
 
-# Select a mask for a single cavity. Pass it the path to the mesh_mask or domain_cfg file (whichever one has nav_lon, nav_lat).
-def cavity_mask (cavity, file_path, return_name=False):
+# Select a mask for a single cavity. Pass it an xarray Dataset as for build_shelf_mask.
+def single_cavity_mask (cavity, ds, return_name=False):
 
     if return_name:
         title = region_names[region]
 
     ds = xr.open_dataset(file_path).squeeze()
     # Get mask for all cavities
-    if 'maskisf' in ds:
-        ice_mask = ds['maskisf']
-    elif 'top_level' in ds:
-        ice_mask = xr.where(ds['top_level']>1, 1, 0)
+    ice_mask = build_ice_mask(ds)
 
     # Select one point in this cavity
     point0 = closest_point(ds, region_points[cavity])
@@ -218,8 +242,8 @@ def cavity_mask (cavity, file_path, return_name=False):
         return ice_mask
 
 
-# Select a mask for the given region, either continental shelf only ('shelf'), cavities only ('cavity'), or continental shelf with cavities ('all'). Pass it the path to the mesh_mask or domain_cfg file (whichever one has nav_lon, nav_lat, and bathy).
-def region_mask (region, file_path, option='all', return_name=False):
+# Select a mask for the given region, either continental shelf only ('shelf'), cavities only ('cavity'), or continental shelf with cavities ('all'). Pass it an xarray Dataset as for build_shelf_mask.
+def build_region_mask (region, ds, option='all', return_name=False):
 
     if return_name:
         # Construct the title
@@ -234,10 +258,9 @@ def region_mask (region, file_path, option='all', return_name=False):
         if option in ['shelf', 'all']:
             title += ' continental shelf'
 
-    ds = xr.open_dataset(file_path).squeeze()
-
+    ds = ds.squeeze()
     # Get mask for entire continental shelf and cavities
-    mask = shelf_mask(file_path)
+    mask = build_shelf_mask(ds)
 
     if region != 'all':
         # Restrict to a specific region of the coast
@@ -309,18 +332,18 @@ def region_mask (region, file_path, option='all', return_name=False):
     # Special cases (where common boundaries didn't agree for eORCA1 and eORCA025)
     if region == 'amundsen_sea':
         # Remove bits of Abbot
-        mask_excl = cavity_mask('abbot', file_path)
+        mask_excl = single_cavity_mask('abbot', ds)
     elif region == 'filchner_ronne':
         # Remove bits of Brunt
-        mask_excl = cavity_mask('brunt', file_path)
+        mask_excl = single_cavity_mask('brunt', ds)
     else:
         mask_excl = None
     if region == 'bellingshausen_sea':
         # Add back in bits of Abbot
-        mask_incl = cavity_mask('abbot', file_path)
+        mask_incl = single_cavity_mask('abbot', ds)
     elif region == 'east_antarctica':
         # Add back in bits of Brunt
-        mask_incl = cavity_mask('brunt', file_path)
+        mask_incl = single_cavity_mask('brunt', ds)
     else:
         mask_incl = None
     if mask_excl is not None:
@@ -329,10 +352,7 @@ def region_mask (region, file_path, option='all', return_name=False):
         mask = xr.where(mask_incl, 1, mask)
 
     # Now select cavities, shelf, or both
-    if 'maskisf' in ds:
-        ice_mask = ds['maskisf']
-    elif 'top_level' in ds:
-        ice_mask = xr.where(ds['top_level']>1, 1, 0)
+    ice_mask = build_ice_mask(ds)
     if option == 'cavity':
         mask *= ice_mask
     elif option == 'shelf':

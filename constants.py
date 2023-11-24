@@ -47,7 +47,7 @@ shelf_depth = 2000
 # Lon and lat of a point which is definitely on the given continental shelf (so we can isolate seamounts disconnected from this)
 shelf_point0 = [-51.5, -74.5]
 
-# Dictionary of lon-lat points bounding given region. Will be used to "cut" the continental shelf mask (shelf_mask in utils.py) either north-south or east-west depending on the value of region_edges_flag. The first point and its connected N/S (or E/W) neighbours will be included in the mask, but not the second. The direction of travel is west to east around the coastline.
+# Dictionary of lon-lat points bounding given region. Will be used to "cut" the continental shelf mask (build_shelf_mask in utils.py) either north-south or east-west depending on the value of region_edges_flag. The first point and its connected N/S (or E/W) neighbours will be included in the mask, but not the second. The direction of travel is west to east around the coastline.
 region_edges = {
     'amundsen_sea': [[-157.5, -76.5], [-102.75, -72.5]],
     'bellingshausen_sea': [[-102.75, -72.5], [-57.25, -62]],
@@ -68,7 +68,7 @@ region_edges_flag = {
     'amery': ['NS', 'NS'],
     'ross': ['NS', 'NS'],
 }
-# Dictionary of lon-lat points which are definitely in the given region. The region is then defined by connectivity to that point (eg selecting specific ice shelf cavities in cavity_mask in utils.py).
+# Dictionary of lon-lat points which are definitely in the given region. The region is then defined by connectivity to that point (eg selecting specific ice shelf cavities in single_cavity_mask in utils.py).
 region_points = {
     'abbot': [-95, -73],
     'brunt': [-20, -75],

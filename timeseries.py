@@ -2,14 +2,13 @@ import xarray as xr
 import os
 
 from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year, deg_string, gkg_string
-from .utils import cavity_mask, region_mask, add_months
+from .utils import single_cavity_mask, region_mask, add_months
 
-# Calculate a timeseries of the given preset variable from an xarray Dataset of NEMO output. Returns DataArrays of the timeseries data, the associated time values, and the variable title.
-# Also pass the grid file (mesh_mask for NEMO 3.6, domain_cfg for NEMO 4.2) and whether there is a halo in the data (if periodic grid, True for NEMO 3.6, False for NEMO 4.2).
+# Calculate a timeseries of the given preset variable from an xarray Dataset of NEMO output. Returns DataArrays of the timeseries data, the associated time values, and the variable title. Specify whether there is a halo (true for periodic boundaries in NEMO 3.6).
 # Preset variables include:
 # <region>_massloss: basal mass loss from the given ice shelf or region of multiple ice shelves (eg brunt, amundsen_sea)
 # <region>_bwtemp, <region>_bwsalt: area-averaged bottom water temperature or salinity from the given region or cavity (eg ross_cavity, ross_shelf, ross)
-def calc_timeseries (var, ds_nemo, grid_file, halo=True):
+def calc_timeseries (var, ds_nemo, halo=True):
     
     # Parse variable name
     factor = 1
@@ -60,9 +59,9 @@ def calc_timeseries (var, ds_nemo, grid_file, halo=True):
             region_type = 'all'
     if region in region_points and region_type == 'cavity':
         # Single ice shelf
-        mask, region_name = cavity_mask(region, grid_file, return_name=True)
+        mask, region_name = single_cavity_mask(region, ds_nemo, return_name=True)
     else:
-        mask, region_name = region_mask(region, grid_file, option=region_type, return_name=True)
+        mask, region_name = region_mask(region, ds_nemo, option=region_type, return_name=True)
     title += ' on '+region_name    
 
     # Trim datasets as needed
@@ -95,12 +94,12 @@ def calc_timeseries (var, ds_nemo, grid_file, halo=True):
 
 
 # Precompute the given list of timeseries from the given xarray Dataset of NEMO output. Save in a NetCDF file which concatenates after each call to the function.
-def precompute_timeseries (ds_nemo, timeseries_types, grid_file, timeseries_file, halo=True):
+def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True):
 
     # Calculate each timeseries and save to a Dataset
     ds_new = None
     for var in timeseries_types:
-        data = calc_timeseries(var, ds_nemo, grid_file, halo=halo)
+        data = calc_timeseries(var, ds_nemo, halo=halo)
         if ds_new is None:            
             ds_new = xr.Dataset({var:data})
         else:
@@ -121,7 +120,7 @@ def precompute_timeseries (ds_nemo, timeseries_types, grid_file, timeseries_file
 
 
 # Precompute timeseries from the given simulation, either from the beginning (timeseries_file does not exist) or picking up where it left off (timeseries_file does exist). Considers all NEMO output files stamped with suite_id in the given directory sim_dir, and assumes the timeseries file is in that directory too.
-def update_simulation_timeseries (suite_id, timeseries_types, grid_file, timeseries_file='timeseries.nc', sim_dir='./', halo=True):
+def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='timeseries.nc', sim_dir='./', halo=True):
 
     update = os.path.isfile(sim_dir+timeseries_file)
     if update:
@@ -170,7 +169,7 @@ def update_simulation_timeseries (suite_id, timeseries_types, grid_file, timeser
     for file_pattern in nemo_files:
         print('Processing '+file_pattern)
         ds_nemo = xr.open_mfdataset(sim_dir+'/'+file_pattern)
-        precompute_timeseries(ds_nemo, timeseries_types, grid_file, sim_dir+'/'+timeseries_file, halo=halo)
+        precompute_timeseries(ds_nemo, timeseries_types, ds_nemo, sim_dir+'/'+timeseries_file, halo=halo)
                     
                 
         
