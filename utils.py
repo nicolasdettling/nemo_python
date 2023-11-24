@@ -128,6 +128,17 @@ def select_bottom (array, zdim):
 # Given a mask (numpy array, 1='land', 0='ocean') and point0 (j,i) on the "mainland", remove any disconnected "islands" from the mask and return.
 def remove_disconnected (mask, point0):
 
+    if isinstance(mask, xr.DataArray):
+        mask = mask.data
+    if len(mask.shape) > 3:
+        raise Exception('too many dimensions for remove_disconnected')
+    elif len(mask.shape) == 3:
+        # Assume time dimension; call recursively for each time index
+        connected = np.zeros(mask.shape)
+        for t in range(connected.shape[0]):
+            connected[t,:] = remove_disconnected(mask[t,:])
+        return connected
+
     if not mask[point0]:
         raise Exception('point0 is not on the mainland')
 
