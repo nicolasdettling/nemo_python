@@ -243,12 +243,12 @@ def single_cavity_mask (cavity, ds, return_name=False):
     if return_name:
         title = region_names[region]
 
-    if cavity+'_cavity_mask' in ds:
+    if cavity+'_single_cavity_mask' in ds:
         # Previously computed
         if return_name:
-            return ds[cavity+'_cavity_mask'], ds, title
+            return ds[cavity+'_single_cavity_mask'], ds, title
         else:
-            return ds[cavity+'_cavity_mask'], ds
+            return ds[cavity+'_single_cavity_mask'], ds
 
     ds = ds.squeeze()
     ds = ds.load()
@@ -264,7 +264,7 @@ def single_cavity_mask (cavity, ds, return_name=False):
     ice_mask.data = mask
 
     # Save to the Dataset in case it's useful later
-    ds = ds.assign({cavity+'_cavity_mask':ice_mask})
+    ds = ds.assign({cavity+'_single_cavity_mask':ice_mask})
 
     if return_name:
         return ice_mask, ds, title
@@ -288,7 +288,7 @@ def region_mask (region, ds, option='all', return_name=False):
         if option in ['shelf', 'all']:
             title += ' continental shelf'
 
-    if region+'_mask' in ds:
+    if region+'_'+option+'_mask' in ds:
         # Previously computed
         if return_name:
             return ds[region+'_'+option+'_mask'], ds, title
