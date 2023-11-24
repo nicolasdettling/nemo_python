@@ -4,7 +4,7 @@ import os
 from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year, deg_string, gkg_string
 from .utils import single_cavity_mask, region_mask, add_months
 
-# Calculate a timeseries of the given preset variable from an xarray Dataset of NEMO output. Returns DataArrays of the timeseries data, the associated time values, and the variable title. Specify whether there is a halo (true for periodic boundaries in NEMO 3.6).
+# Calculate a timeseries of the given preset variable from an xarray Dataset of NEMO output (must have halo removed). Returns DataArrays of the timeseries data, the associated time values, and the variable title. Specify whether there is a halo (true for periodic boundaries in NEMO 3.6).
 # Preset variables include:
 # <region>_massloss: basal mass loss from the given ice shelf or region of multiple ice shelves (eg brunt, amundsen_sea)
 # <region>_bwtemp, <region>_bwsalt: area-averaged bottom water temperature or salinity from the given region or cavity (eg ross_cavity, ross_shelf, ross)
@@ -100,7 +100,7 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
     ds_new = None
     for var in timeseries_types:
         print('...'+var)
-        data, ds_nemo = calc_timeseries(var, ds_nemo, halo=halo)
+        data, ds_nemo = calc_timeseries(var, ds_nemo)
         if ds_new is None:            
             ds_new = xr.Dataset({var:data})
         else:

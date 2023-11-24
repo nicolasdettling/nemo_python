@@ -178,8 +178,6 @@ def build_ice_mask (ds):
         # Previously computed
         return ds['ice_mask'], ds
 
-    ds = ds.squeeze()
-
     if 'maskisf' in ds:
         ice_mask = ds['maskisf']
     elif 'top_level' in ds:
@@ -204,8 +202,6 @@ def build_shelf_mask (ds):
     if 'shelf_mask' in ds:
         # Previously computed
         return ds['shelf_mask'], ds
-
-    ds = ds.squeeze()
     
     if 'bathy' in ds and 'tmaskutil' in ds:
         bathy = ds['bathy']
@@ -250,7 +246,6 @@ def single_cavity_mask (cavity, ds, return_name=False):
         else:
             return ds[cavity+'_single_cavity_mask'], ds
 
-    ds = ds.squeeze()
     ds = ds.load()
 
     # Get mask for all cavities
@@ -294,8 +289,6 @@ def region_mask (region, ds, option='all', return_name=False):
             return ds[region+'_'+option+'_mask'], ds, title
         else:
             return ds[region+'_'+option+'_mask'], ds
-
-    ds = ds.squeeze()
 
     # Get mask for entire continental shelf and cavities
     mask, ds = build_shelf_mask(ds)
