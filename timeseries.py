@@ -8,7 +8,7 @@ from .utils import single_cavity_mask, region_mask, add_months
 # Preset variables include:
 # <region>_massloss: basal mass loss from the given ice shelf or region of multiple ice shelves (eg brunt, amundsen_sea)
 # <region>_bwtemp, <region>_bwsalt: area-averaged bottom water temperature or salinity from the given region or cavity (eg ross_cavity, ross_shelf, ross)
-def calc_timeseries (var, ds_nemo, halo=True):
+def calc_timeseries (var, ds_nemo):
     
     # Parse variable name
     factor = 1
@@ -68,10 +68,6 @@ def calc_timeseries (var, ds_nemo, halo=True):
     if ds_nemo.sizes['y'] < mask.sizes['y']:
         # The NEMO dataset was trimmed (eg by MOOSE for UKESM) to the southernmost latitudes. Do the same for the mask.
         mask = mask.isel(y=slice(0, ds_nemo.sizes['y']))
-    if halo:
-        # Remove the halo
-        ds_nemo = ds_nemo.copy().isel(x=slice(1,-1))
-        mask = mask.isel(x=slice(1,-1))
         
     if option == 'area_int':
         # Area integral
@@ -95,6 +91,10 @@ def calc_timeseries (var, ds_nemo, halo=True):
 
 # Precompute the given list of timeseries from the given xarray Dataset of NEMO output. Save in a NetCDF file which concatenates after each call to the function.
 def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True):
+
+    if halo:
+        # Remove the halo
+        ds_nemo = ds_nemo.isel(x=slice(1,-1))
 
     # Calculate each timeseries and save to a Dataset
     ds_new = None
