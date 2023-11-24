@@ -58,9 +58,7 @@ def plot_region_map (file_path='/gws/nopw/j04/terrafirma/kaight/input_data/grids
 
     for n in range(len(regions)):
         print('Processing '+regions[n])
-        mask, ds = region_mask(regions[n], grid, option=option)
-        if halo:
-            mask = mask.isel(x=slice(1,-1))
+        mask, grid = region_mask(regions[n], grid, option=option)
         if n==0:
             fig, ax = circumpolar_plot(mask, grid, make_cbar=False, return_fig=True, ctype=colours[n], lat_max=lat_max)
         else:
