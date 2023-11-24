@@ -59,9 +59,9 @@ def calc_timeseries (var, ds_nemo, halo=True):
             region_type = 'all'
     if region in region_points and region_type == 'cavity':
         # Single ice shelf
-        mask, ds, region_name = single_cavity_mask(region, ds_nemo, return_name=True)
+        mask, ds_nemo, region_name = single_cavity_mask(region, ds_nemo, return_name=True)
     else:
-        mask, ds, region_name = region_mask(region, ds_nemo, option=region_type, return_name=True)
+        mask, ds_nemo, region_name = region_mask(region, ds_nemo, option=region_type, return_name=True)
     title += ' on '+region_name    
 
     # Trim datasets as needed
@@ -90,7 +90,7 @@ def calc_timeseries (var, ds_nemo, halo=True):
     data *= factor
     data = data.assign_attrs(long_name=title, units=units)
 
-    return data
+    return data, ds_nemo
 
 
 # Precompute the given list of timeseries from the given xarray Dataset of NEMO output. Save in a NetCDF file which concatenates after each call to the function.
@@ -99,7 +99,7 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
     # Calculate each timeseries and save to a Dataset
     ds_new = None
     for var in timeseries_types:
-        data = calc_timeseries(var, ds_nemo, halo=halo)
+        data, ds_nemo = calc_timeseries(var, ds_nemo, halo=halo)
         if ds_new is None:            
             ds_new = xr.Dataset({var:data})
         else:
