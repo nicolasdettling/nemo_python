@@ -136,7 +136,7 @@ def remove_disconnected (mask, point0):
         # Assume time dimension; call recursively for each time index
         connected = np.zeros(mask.shape)
         for t in range(connected.shape[0]):
-            connected[t,:] = remove_disconnected(mask[t,:])
+            connected[t,:] = remove_disconnected(mask[t,:], point0)
         return connected
 
     if not mask[point0]:
