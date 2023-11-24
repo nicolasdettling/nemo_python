@@ -243,7 +243,7 @@ def single_cavity_mask (cavity, ds, return_name=False):
 
 
 # Select a mask for the given region, either continental shelf only ('shelf'), cavities only ('cavity'), or continental shelf with cavities ('all'). Pass it an xarray Dataset as for build_shelf_mask.
-def build_region_mask (region, ds, option='all', return_name=False):
+def region_mask (region, ds, option='all', return_name=False):
 
     if return_name:
         # Construct the title
