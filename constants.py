@@ -60,7 +60,6 @@ region_edges = {
 region_edges_flag = {
     'amundsen_sea': ['NS', 'NS'],
     'bellingshausen_sea': ['NS', 'NS'],
-    'west_antarctic_peninsula': ['NS', 'NS'],
     'larsen': ['NS', 'EW'],
     'antarctic_peninsula': ['NS', 'EW'],
     'filchner_ronne': ['EW', 'NS'],
@@ -77,7 +76,6 @@ region_points = {
 region_names = {
     'amundsen_sea': 'Amundsen Sea',
     'bellingshausen_sea': 'Bellingshausen Sea',
-    'west_antarctic_peninsula': 'West Antarctic Peninsula',
     'larsen': 'Larsen',
     'antarctic_peninsula': 'Antarctic Peninsula',
     'filchner_ronne': 'Filchner-Ronne', 
@@ -88,3 +86,6 @@ region_names = {
     'brunt': 'Brunt and Riiser-Larsen Ice Shelves',
     'all': 'Antarctic',
 }
+
+# Default colours to use for plotting lines
+line_colours = ['black', 'Crimson', 'blue', 'DarkMagenta', 'DimGrey', 'DarkGreen', 'Amery', 'DeepSkyBlue']

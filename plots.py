@@ -4,6 +4,7 @@ import socket
 import numpy as np
 from .utils import polar_stereo, extend_grid_edges
 from .plot_utils import set_colours
+from .constants import line_colours, region_names
 
 # If a figure name is defined, save the figure to that file. Otherwise, display the figure on screen.
 def finished_plot (fig, fig_name=None, dpi=None):
@@ -88,6 +89,98 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
         fig.show()
     else:
         return img
+
+
+# Plot one or more timeseries on the same axis, with different colours and a legend if needed.
+def timeseries_plot (datas, labels=None, colours=None, title='', units='', ax=None, fig_name=None):
+
+    new_ax = ax is None
+    
+    # Check if multiple lines to plot
+    multi_data = isinstance(datas, list)
+    if multi_data:
+        if labels is None or colours is None:
+            raise Exception('Need to set labels and colours')
+        if len(labels) != len(datas) or len(colours) != len(datas):
+            raise Exception('Wrong length of labels or colours')
+    else:
+        datas = [datas]
+        labels = [None]
+        colours = [None]
+
+    if new_ax:
+        if multi_data:
+            figsize = (11,6)
+        else:
+            figsize = (6,4)
+        fig, ax = plt.subplots(figsize=figsize)
+    for data, label, colour in zip(datas, labels, colours):
+        ax.plot_date(data.time_centered, data, '-', color=colour, label=label)
+    ax.grid(linestyle='dotted')
+    ax.set_title(title, fontsize=16)
+    ax.set_ylabel(units, fontsize=16)
+    if multi_data and new_ax:
+        # Make legend
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0, box.width*0.8, box.height])
+        ax.legend(loc='center left', bbox_to_anchor=(1,0.5))
+    if new_ax:
+        finished_plot(fig, fig_name=fig_name)
+
+
+# Plot timeseries of the same variable in different regions. Can either do for a single simulation (sim_dir is a string) or an initial conditions ensemble (sim_dir is a list of strings). 
+def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], colours=None, timeseries_file='timeseries.nc', fig_name=None):
+
+    ensemble = isinstance(sim_dir, list) and len(sim_dir)>1
+    if not ensemble:
+        sim_dir = [sim_dir]
+    if colours is None:
+        if len(regions) <= len(line_colours):
+            colours = line_colours[:len(regions)]
+        else:
+            raise Exception('Too many regions to use default line_colours: set colours instead')
+
+    if ensemble:
+        all_ds = []
+        for d in sim_dir:
+            all_ds.append(xr.open_dataset(d+'/'+timeseries_file))
+    else:
+        all_ds = [xr.open_dataset(sim_dir+'/'+timeseries_file)]
+    num_ens = len(all_ds)
+
+    datas = []
+    labels = []
+    colours_plot = []
+    title = None
+    units = None
+    for region, colour in zip(regions, colours):
+        labels += [region_names[region]]*num_ens
+        colours_plot += [colour]*num_ens
+        var_full = region+'_'+var_name
+        for ds in all_ds:
+            datas.append(ds[var_full])
+            if title is None:
+                long_name = ds[var_full].long_name
+                title = long_name[:long_name.index(' on ')]
+                units = ds[var_full].units
+
+    timeseries_plot(datas, labels=labels, colours=colours_plot, title=title, units=units, fig_name=fig_name)
+        
+
+def timeseries_by_expt (var_name, sim_dir, sim_names=None, colours=None, timeseries_file='timeseries.nc', fig_name=None):
+
+    pass
+        
+
+    
+    
+
+    # Single simulation, by_region: sim_dir is a string or list of length 1, var_name needs to be preceded by regions, sim_names unused, choose list of colours corresponding to regions
+    # Single ensemble, by_region: now same colour for each ensemble member
+    # by_expt, multiple simulations: sim_dir is a list of length>1, choose colours up to some max number
+    # by_expt, multiple ensembles: sim_dir is a list of lists, same colour for each ensemble member
+    
+            
 
     
 
