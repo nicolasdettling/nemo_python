@@ -128,6 +128,8 @@ def select_bottom (array, zdim):
 # Given a mask (numpy array, 1='land', 0='ocean') and point0 (j,i) on the "mainland", remove any disconnected "islands" from the mask and return.
 def remove_disconnected (mask, point0):
 
+    mask = mask.squeeze()
+
     if not mask[point0]:
         raise Exception('point0 is not on the mainland')
 
