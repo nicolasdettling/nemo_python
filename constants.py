@@ -88,4 +88,4 @@ region_names = {
 }
 
 # Default colours to use for plotting lines
-line_colours = ['black', 'Crimson', 'blue', 'DarkMagenta', 'DimGrey', 'DarkGreen', 'Amery', 'DeepSkyBlue']
+line_colours = ['black', 'Crimson', 'blue', 'DarkMagenta', 'DimGrey', 'DarkGreen', 'DeepPink', 'DeepSkyBlue']

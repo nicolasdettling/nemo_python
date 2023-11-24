@@ -131,8 +131,7 @@ def timeseries_plot (datas, labels=None, colours=None, title='', units='', ax=No
 # Plot timeseries of the same variable in different regions. Can either do for a single simulation (sim_dir is a string) or an initial conditions ensemble (sim_dir is a list of strings). 
 def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], colours=None, timeseries_file='timeseries.nc', fig_name=None):
 
-    ensemble = isinstance(sim_dir, list) and len(sim_dir)>1
-    if not ensemble:
+    if not isinstance(sim_dir, list) and len(sim_dir)>1:
         sim_dir = [sim_dir]
     if colours is None:
         if len(regions) <= len(line_colours):
@@ -140,12 +139,9 @@ def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'be
         else:
             raise Exception('Too many regions to use default line_colours: set colours instead')
 
-    if ensemble:
-        all_ds = []
-        for d in sim_dir:
-            all_ds.append(xr.open_dataset(d+'/'+timeseries_file))
-    else:
-        all_ds = [xr.open_dataset(sim_dir+'/'+timeseries_file)]
+    all_ds = []
+    for d in sim_dir:
+        all_ds.append(xr.open_dataset(d+'/'+timeseries_file))
     num_ens = len(all_ds)
 
     datas = []
