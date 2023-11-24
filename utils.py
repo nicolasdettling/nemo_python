@@ -227,7 +227,7 @@ def single_cavity_mask (cavity, ds, return_name=False):
     if return_name:
         title = region_names[region]
 
-    ds = xr.open_dataset(file_path).squeeze()
+    ds = ds.squeeze()
     # Get mask for all cavities
     ice_mask = build_ice_mask(ds)
 
