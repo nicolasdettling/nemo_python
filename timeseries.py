@@ -62,7 +62,7 @@ def calc_timeseries (var, ds_nemo):
         mask, ds_nemo, region_name = single_cavity_mask(region, ds_nemo, return_name=True)
     else:
         mask, ds_nemo, region_name = region_mask(region, ds_nemo, option=region_type, return_name=True)
-    title += ' on '+region_name    
+    title += ' for '+region_name    
 
     # Trim datasets as needed
     if ds_nemo.sizes['y'] < mask.sizes['y']:

@@ -273,15 +273,15 @@ def region_mask (region, ds, option='all', return_name=False):
     if return_name:
         # Construct the title
         title = region_names[region]
-        if option in ['cavity', 'all']:
-            if region in ['filchner_ronne', 'amery', 'ross']:
-                title += ' Ice Shelf'
-            else:
-                title += ' ice shelves'
-            if option == 'all':
-                title += ' and'
         if option in ['shelf', 'all']:
             title += ' continental shelf'
+            if option == 'all':
+                title += ' and'
+        if option in ['cavity', 'all']:
+            if region in ['filchner_ronne', 'amery', 'ross']:
+                title += ' Ice Shelf cavity'
+            else:
+                title += ' cavities'
 
     if region+'_'+option+'_mask' in ds:
         # Previously computed
