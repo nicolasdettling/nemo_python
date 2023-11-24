@@ -374,7 +374,7 @@ def region_mask (region, ds, option='all', return_name=False):
         # Remove bits of Brunt
         mask_excl, ds = single_cavity_mask('brunt', ds)
     else:
-        mask_excl, ds = None
+        mask_excl = None
     if region == 'bellingshausen_sea':
         # Add back in bits of Abbot
         mask_incl, ds = single_cavity_mask('abbot', ds)
