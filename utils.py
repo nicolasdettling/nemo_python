@@ -183,7 +183,7 @@ def build_ice_mask (ds):
             if var in ds:
                 mask_3d = xr.where(ds[var]==0, 0, 1)
                 break
-        return xr.where((mask_3d.isel(deptht==0)==0)*mask_3d.sum(dim='deptht'), 1, 0)
+        return xr.where((mask_3d.isel(deptht=0)==0)*mask_3d.sum(dim='deptht'), 1, 0)
 
 
 # Select the continental shelf and ice shelf cavities. Pass it the path to an xarray Dataset which contains one of the following combinations:
