@@ -202,7 +202,8 @@ def build_shelf_mask (ds):
     elif 'thkcello' in ds:
         for var in ['thetao', 'so']:
             if var in ds:
-                ocean_mask = xr.where((ds[var]==0).sum(dim='deptht')==0, 0, 1)
+                mask_3d = xr.where(ds[var]==0, 0, 1)
+                ocean_mask = mask_3d.sum(dim='deptht')>0
                 break
         ice_mask = build_ice_mask(ds)
         # Here bathy is actually water column thickness
