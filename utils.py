@@ -128,17 +128,6 @@ def select_bottom (array, zdim):
 # Given a mask (numpy array, 1='land', 0='ocean') and point0 (j,i) on the "mainland", remove any disconnected "islands" from the mask and return.
 def remove_disconnected (mask, point0):
 
-    if isinstance(mask, xr.DataArray):
-        mask = mask.data
-    if len(mask.shape) > 3:
-        raise Exception('too many dimensions for remove_disconnected')
-    elif len(mask.shape) == 3:
-        # Assume time dimension; call recursively for each time index
-        connected = np.zeros(mask.shape)
-        for t in range(connected.shape[0]):
-            connected[t,:] = remove_disconnected(mask[t,:], point0)
-        return connected
-
     if not mask[point0]:
         raise Exception('point0 is not on the mainland')
 
@@ -190,13 +179,13 @@ def build_ice_mask (ds):
         return ds['ice_mask'], ds
 
     if 'maskisf' in ds:
-        ice_mask = ds['maskisf']
+        ice_mask = ds['maskisf'].squeeze()
     elif 'top_level' in ds:
-        ice_mask = xr.where(ds['top_level']>1, 1, 0)
+        ice_mask = xr.where(ds['top_level']>1, 1, 0).squeeze()
     else:
         for var in ['thetao', 'so']:
             if var in ds:
-                mask_3d = xr.where(ds[var]==0, 0, 1)
+                mask_3d = xr.where(ds[var]==0, 0, 1).squeeze()
                 break
         ice_mask = xr.where((mask_3d.isel(deptht=0)==0)*mask_3d.sum(dim='deptht'), 1, 0)
     # Save to the Dataset in case it's useful later
@@ -215,20 +204,20 @@ def build_shelf_mask (ds):
         return ds['shelf_mask'], ds
     
     if 'bathy' in ds and 'tmaskutil' in ds:
-        bathy = ds['bathy']
-        ocean_mask = ds['tmaskutil']
+        bathy = ds['bathy'].squeeze()
+        ocean_mask = ds['tmaskutil'].squeeze()
     elif 'bathy_metry' in ds and 'bottom_level' in ds:
-        bathy = ds['bathy_metry']
-        ocean_mask = xr.where(ds['bottom_level']>0, 1, 0)
+        bathy = ds['bathy_metry'].squeeze()
+        ocean_mask = xr.where(ds['bottom_level']>0, 1, 0).squeeze()
     elif 'thkcello' in ds:
         for var in ['thetao', 'so']:
             if var in ds:
-                mask_3d = xr.where(ds[var]==0, 0, 1)
+                mask_3d = xr.where(ds[var]==0, 0, 1).squeeze()
                 ocean_mask = mask_3d.sum(dim='deptht')>0
                 break
         ice_mask, ds = build_ice_mask(ds)
         # Here bathy is actually water column thickness
-        bathy = (ds['thkcello']*mask_3d).sum(dim='deptht')
+        bathy = (ds['thkcello']*mask_3d).sum(dim='deptht').squeeze()
         # To make sure cavities are selected, set bathymetry to 0 there
         bathy = xr.where(ice_mask, 0, bathy)
     else:
