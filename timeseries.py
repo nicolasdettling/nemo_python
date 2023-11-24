@@ -99,7 +99,6 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
     # Calculate each timeseries and save to a Dataset
     ds_new = None
     for var in timeseries_types:
-        print('...'+var)
         data = calc_timeseries(var, ds_nemo, halo=halo)
         if ds_new is None:            
             ds_new = xr.Dataset({var:data})

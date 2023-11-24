@@ -174,16 +174,25 @@ def closest_point (ds, target):
 # Select ice shelf cavities. Pass it the path to an xarray Dataset which contains either 'maskisf' (NEMO3.6 mesh_mask), 'top_level' (NEMO4.2 domain_cfg), or a 3D data variable with a zero-mask applied (current options are thetao or so) (NEMO output file)
 def build_ice_mask (ds):
 
+    if 'ice_mask' in ds:
+        # Previously computed
+        return ds['ice_mask']
+
+    ds = ds.squeeze()
+
     if 'maskisf' in ds:
-        return ds['maskisf']
+        ice_mask = ds['maskisf']
     elif 'top_level' in ds:
-        return xr.where(ds['top_level']>1, 1, 0)
+        ice_mask = xr.where(ds['top_level']>1, 1, 0)
     else:
         for var in ['thetao', 'so']:
             if var in ds:
                 mask_3d = xr.where(ds[var]==0, 0, 1)
                 break
-        return xr.where((mask_3d.isel(deptht=0)==0)*mask_3d.sum(dim='deptht'), 1, 0)
+        ice_mask = xr.where((mask_3d.isel(deptht=0)==0)*mask_3d.sum(dim='deptht'), 1, 0)
+    # Save to the Dataset in case it's useful later
+    ds = ds.assign({'ice_mask':ice_mask})
+    return ice_mask
 
 
 # Select the continental shelf and ice shelf cavities. Pass it the path to an xarray Dataset which contains one of the following combinations:
@@ -192,7 +201,12 @@ def build_ice_mask (ds):
 # 3. nav_lon, nav_lat, thkcello, a 3D data variable with a zero-mask applied (current options are thetao or so) (NEMO output file) 
 def build_shelf_mask (ds):
 
+    if 'shelf_mask' in ds:
+        # Previously computed
+        return ds['shelf_mask']
+
     ds = ds.squeeze()
+    
     if 'bathy' in ds and 'tmaskutil' in ds:
         bathy = ds['bathy']
         ocean_mask = ds['tmaskutil']
@@ -216,7 +230,9 @@ def build_shelf_mask (ds):
     mask = ocean_mask*(ds['nav_lat'] <= shelf_lat)*(bathy <= shelf_depth)
     # Remove disconnected seamounts
     point0 = closest_point(ds, shelf_point0)
-    mask.data = remove_disconnected(mask, point0)   
+    mask.data = remove_disconnected(mask, point0)
+    # Save to the Dataset in case it's useful later
+    ds = ds.assign({'shelf_mask':mask})
 
     return mask
 
@@ -224,10 +240,16 @@ def build_shelf_mask (ds):
 # Select a mask for a single cavity. Pass it an xarray Dataset as for build_shelf_mask.
 def single_cavity_mask (cavity, ds, return_name=False):
 
+    if cavity+'_cavity_mask' in ds:
+        # Previously computed
+        return ds[cavity+'_cavity_mask']
+
+    ds = ds.squeeze()
+    ds = ds.load()
+
     if return_name:
         title = region_names[region]
 
-    ds = ds.squeeze()
     # Get mask for all cavities
     ice_mask = build_ice_mask(ds)
 
@@ -237,6 +259,9 @@ def single_cavity_mask (cavity, ds, return_name=False):
     mask = remove_disconnected(ice_mask, point0)
     ice_mask.data = mask
 
+    # Save to the Dataset in case it's useful later
+    ds = ds.assign({cavity+'_cavity_mask':ice_mask})
+
     if return_name:
         return ice_mask, title
     else:
@@ -245,6 +270,12 @@ def single_cavity_mask (cavity, ds, return_name=False):
 
 # Select a mask for the given region, either continental shelf only ('shelf'), cavities only ('cavity'), or continental shelf with cavities ('all'). Pass it an xarray Dataset as for build_shelf_mask.
 def region_mask (region, ds, option='all', return_name=False):
+
+    if region+'_mask' in ds:
+        # Previously computed
+        return ds[region+'_mask']
+
+    ds = ds.squeeze()
 
     if return_name:
         # Construct the title
@@ -259,7 +290,6 @@ def region_mask (region, ds, option='all', return_name=False):
         if option in ['shelf', 'all']:
             title += ' continental shelf'
 
-    ds = ds.squeeze()
     # Get mask for entire continental shelf and cavities
     mask = build_shelf_mask(ds)
 
@@ -358,6 +388,9 @@ def region_mask (region, ds, option='all', return_name=False):
         mask *= ice_mask
     elif option == 'shelf':
         mask *= 1-ice_mask
+
+    # Save to the Dataset in case it's useful later
+    ds = ds.assign({region+'_mask':mask})
 
     if return_name:
         return mask, title
