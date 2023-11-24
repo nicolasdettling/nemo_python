@@ -255,6 +255,7 @@ def single_cavity_mask (cavity, ds, return_name=False):
 
     # Get mask for all cavities
     ice_mask, ds = build_ice_mask(ds)
+    ice_mask = ice_mask.copy()
 
     # Select one point in this cavity
     point0 = closest_point(ds, region_points[cavity])
@@ -298,6 +299,7 @@ def region_mask (region, ds, option='all', return_name=False):
 
     # Get mask for entire continental shelf and cavities
     mask, ds = build_shelf_mask(ds)
+    mask = mask.copy()
 
     if region != 'all':
         # Restrict to a specific region of the coast
