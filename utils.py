@@ -500,6 +500,41 @@ def add_months (year, month, num_months):
         month -= 12
         year += 1
     return year, month
+
+
+# Smooth the given DataArray with a moving average of the given window, over the given dimension (default time_centered).
+def moving_average (data, window, dim='time_centered'):
+
+    if window == 0:
+        return data
+
+    # TODO: define dim_axis: axis number of dim. Usually 0.
+
+    centered = window%2==1
+    if centered:
+        radius = (window-1)//2
+    else:
+        radius = window//2
+    t_first = radius
+    t_last = data.shape[0] - radius  # First one not selected, as per python convention
+    # Array of zeros of the same shape as a single time index of data
+    zero_base = (data.isel({dim:0})*0).data
+    # Do the smoothing in two steps, in numpy world
+    data_cumsum = np.ma.concatenate((zero_base, np.ma.cumsum(data.data, axis=dim_axis)), axis=dim_axis)
+    if centered:
+        data_smoothed = (data_cumsum[t_first+radius+1:t_last+radius+1,...] - data_cumsum[t_first-radius:t_last-radius,...])/(2*radius+1)
+    else:
+        data_smoothed = (data_cumsum[t_first+radius:t_last+radius,...] - data_cumsum[t_first-radius:t_last-radius,...])/(2*radius)
+    # Now trim the original array
+    data_trimmed = data.isel({dim:slice(radius, -radius)})
+    if not centered:
+        # Shift time dimension half an index forward
+        time1 = data[dim].isel({dim:slice(radius-1, -radius-1)})
+        time2 = data[dim].isel({dim:slice(radius, -radius)})
+        time_trimmed = time1 + (time2-time1)//2
+        data_trimmed[dim] = time_trimmed
+    data_trimmed.data = data_smoothed
+    return data_smoothed
         
         
         
