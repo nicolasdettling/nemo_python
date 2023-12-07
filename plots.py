@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import xarray as xr
 import socket
 import numpy as np
-from .utils import polar_stereo, extend_grid_edges
+from .utils import polar_stereo, extend_grid_edges, moving_average
 from .plot_utils import set_colours
 from .constants import line_colours, region_names
 
@@ -129,7 +129,7 @@ def timeseries_plot (datas, labels=None, colours=None, title='', units='', ax=No
 
 
 # Plot timeseries of the same variable in different regions. Can either do for a single simulation (sim_dir is a string) or an initial conditions ensemble (sim_dir is a list of strings). 
-def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], colours=None, timeseries_file='timeseries.nc', fig_name=None):
+def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], colours=None, timeseries_file='timeseries.nc', smooth=0, fig_name=None):
 
     if isinstance(sim_dir, str):
         sim_dir = [sim_dir]
@@ -155,7 +155,7 @@ def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'be
         colours_plot += [colour]*num_ens
         var_full = region+'_'+var_name
         for ds in all_ds:
-            datas.append(ds[var_full])
+            datas.append(moving_average(ds[var_full], smooth))
             if title is None:
                 long_name = ds[var_full].long_name
                 title = long_name.replace(region_names[region]+' ','')
@@ -168,7 +168,7 @@ def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'be
 # For ensembles, if sim_names is set, it can be the name of every member (list of lists of strings) or one name for every ensemble (list of strings).
 # If sim_names is not set, lines will be labelled with the suite IDs (extracted from sim_dirs)
 # TODO: test this once I have multiple ensembles to try!
-def timeseries_by_expt (var_name, sim_dirs, sim_names=None, colours=None, timeseries_file='timeseries.nc', fig_name=None):
+def timeseries_by_expt (var_name, sim_dirs, sim_names=None, colours=None, timeseries_file='timeseries.nc', smooth=0, fig_name=None):
 
     num_expt = len(sim_dir)
     if colours is None:
@@ -220,7 +220,7 @@ def timeseries_by_expt (var_name, sim_dirs, sim_names=None, colours=None, timese
         colours_plot += [colour]*num_ens
         for d, n in zip(sim_dir, sim_name):
             ds = xr.open_dataset(d+'/'+timeseries_file)
-            datas.append(ds[var_name])
+            datas.append(moving_average(ds[var_name],smooth))
             labels.append(n)
             if title is None:
                 title = ds[var_name].long_name

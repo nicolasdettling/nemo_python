@@ -508,7 +508,12 @@ def moving_average (data, window, dim='time_centered'):
     if window == 0:
         return data
 
-    # TODO: define dim_axis: axis number of dim. Usually 0.
+    # Find axis number of dimension
+    dim_axis = 0
+    for var in data.sizes:
+        if var == dim:
+            break
+        dim_axis += 1
 
     centered = window%2==1
     if centered:
@@ -516,11 +521,11 @@ def moving_average (data, window, dim='time_centered'):
     else:
         radius = window//2
     t_first = radius
-    t_last = data.shape[0] - radius  # First one not selected, as per python convention
+    t_last = data.sizes[dim] - radius  # First one not selected, as per python convention
     # Array of zeros of the same shape as a single time index of data
-    zero_base = (data.isel({dim:0})*0).data
+    zero_base = (data.isel({dim:slice(0,1)})*0).data
     # Do the smoothing in two steps, in numpy world
-    data_cumsum = np.ma.concatenate((zero_base, np.ma.cumsum(data.data, axis=dim_axis)), axis=dim_axis)
+    data_cumsum = np.ma.concatenate((zero_base.data, np.ma.cumsum(data.data, axis=dim_axis)), axis=dim_axis)
     if centered:
         data_smoothed = (data_cumsum[t_first+radius+1:t_last+radius+1,...] - data_cumsum[t_first-radius:t_last-radius,...])/(2*radius+1)
     else:
@@ -531,10 +536,10 @@ def moving_average (data, window, dim='time_centered'):
         # Shift time dimension half an index forward
         time1 = data[dim].isel({dim:slice(radius-1, -radius-1)})
         time2 = data[dim].isel({dim:slice(radius, -radius)})
-        time_trimmed = time1 + (time2-time1)//2
+        time_trimmed = time1.data + (time2.data-time1.data)/2
         data_trimmed[dim] = time_trimmed
     data_trimmed.data = data_smoothed
-    return data_smoothed
+    return data_trimmed
         
         
         
