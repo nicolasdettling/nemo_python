@@ -120,7 +120,7 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
 
 
 # Precompute timeseries from the given simulation, either from the beginning (timeseries_file does not exist) or picking up where it left off (timeseries_file does exist). Considers all NEMO output files stamped with suite_id in the given directory sim_dir, and assumes the timeseries file is in that directory too.
-def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='timeseries.nc', sim_dir='./', halo=True):
+def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='timeseries.nc', sim_dir='./', freq='y', halo=True):
 
     update = os.path.isfile(sim_dir+timeseries_file)
     if update:
@@ -146,9 +146,9 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
         else:
             # Not a NEMO output file; skip it
             continue
-        if '_1m_' not in f:
-            raise Exception('update_simulation_timeseries can only handle monthly NEMO output files. Need to code other options or move the non-monthly files elsewhere.')
-        file_head += '_1m_'
+        if '_1'+freq+'_' not in f:
+            raise Exception('update_simulation_timeseries can only handle one frequency of NEMO output files. Need to code other options or move the other frequency files elsewhere.')
+        file_head += '_1'+freq+'_'
         # Extract date code (yyyymmdd_yyyymmdd)
         date_code = f[len(file_head):len(file_head)+17]
         if update:

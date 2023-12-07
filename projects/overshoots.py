@@ -16,7 +16,7 @@ def update_overshoot_timeseries (suite_id, timeseries_file='timeseries.nc', base
         for var in var_names:
             timeseries_types.append(region+'_'+var)
 
-    update_simulation_timeseries(suite_id, timeseries_types, timeseries_file=timeseries_file, sim_dir=base_dir+'/'+suite_id+'/', halo=True)
+    update_simulation_timeseries(suite_id, timeseries_types, timeseries_file=timeseries_file, sim_dir=base_dir+'/'+suite_id+'/', freq='y', halo=True)
 
 
 # Plot timeseries by region for all variables in the given suite ID, and show interactively.
