@@ -46,6 +46,9 @@ shelf_lat = -58
 shelf_depth = 2000
 # Lon and lat of a point which is definitely on the given continental shelf (so we can isolate seamounts disconnected from this)
 shelf_point0 = [-51.5, -74.5]
+# Drake Passage transect
+drake_passage_lon0 = -68.5  # Corresponds to i=219 in eORCA1
+drake_passage_lat_bounds = [-67.3, -52.6]  # Corresponds to j=79:109 in eORCA1
 
 # Dictionary of lon-lat points bounding given region. Will be used to "cut" the continental shelf mask (build_shelf_mask in utils.py) either north-south or east-west depending on the value of region_edges_flag. The first point and its connected N/S (or E/W) neighbours will be included in the mask, but not the second. The direction of travel is west to east around the coastline.
 region_edges = {

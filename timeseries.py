@@ -1,18 +1,56 @@
 import xarray as xr
 import os
 
-from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year, deg_string, gkg_string
-from .utils import single_cavity_mask, region_mask, add_months
+from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year, deg_string, gkg_string, drake_passage_lon0, drake_passage_lat_bounds
+from .utils import single_cavity_mask, region_mask, add_months, closest_point
+
+
+# Calculate zonal or meridional transport across the given section. The code will choose a constant slice in x or y corresponding to a constant value of latitude or longitude - so maybe not appropriate in highly rotated regions.
+# For zonal transport, set lon0 and lat_bounds, and make sure the dataset includes uo, thkcello, and e2u (can get from domain_cfg).
+# For meridional transport, set lat0 and lon_bounds, and make sure the dataset includes vo, thkcello, and e1v.
+# Returns value in Sv.
+def transport (ds, lon0=None, lat0=None, lon_bounds=None, lat_bounds=None):
+
+    if lon0 is not None and lat_bounds is not None and lat0 is None and lon_bounds is None:
+        # Zonal transport across line of constant longitude
+        [j_start, i_start] = closest_point(ds, [lon0, lat_bounds[0]])
+        [j_end, i_end] = closest_point(ds, [lon0, lat_bounds[1]])
+        # Want a single value for i
+        if i_start == i_end:
+            # Perfect
+            i0 = i_start
+        else:
+            # Choose the midpoint
+            print('Warning (transport): grid is rotated; compromising on constant x-coordinate')
+            i0 = int(round(0.5*(i_start+i_end)))
+        # Assume velocity is already masked to 0 in land mask
+        integrand = (ds['uo']*ds['thkcello']*ds['e2u']).isel(x=i0, y=slice(j_start, j_end+1))
+        return integrand.sum(dim={'depthu', 'y'})*1e-6
+    elif lat0 is not None and lon_bounds is not None and lon0 is None and lat_bounds is None:
+        # Meridional transport across line of constant latitude
+        [j_start, i_start] = closest_point(ds, [lon_bounds[0], lat0])
+        [j_end, i_end] = closest_point(ds, [lon_bounds[1], lat0])
+        if j_start == j_end:
+            j0 = j_start
+        else:
+            print('Warning (transport): grid is rotated; compromising on constant y-coordinate')
+            j0 = int(round(0.5*(j_start+j_end)))
+        integrand = (ds['vo']*ds['thkcello']*ds['e1v']).isel(x=slice(i_start, i_end+1), y=j0)
+        return integrand.sum(dim={'depthv', 'x'})*1e-6
+
 
 # Calculate a timeseries of the given preset variable from an xarray Dataset of NEMO output (must have halo removed). Returns DataArrays of the timeseries data, the associated time values, and the variable title. Specify whether there is a halo (true for periodic boundaries in NEMO 3.6).
 # Preset variables include:
 # <region>_massloss: basal mass loss from the given ice shelf or region of multiple ice shelves (eg brunt, amundsen_sea)
 # <region>_bwtemp, <region>_bwsalt: area-averaged bottom water temperature or salinity from the given region or cavity (eg ross_cavity, ross_shelf, ross)
-def calc_timeseries (var, ds_nemo):
+# <region>_temp, <region>_salt: volume-averaged temperature or salinity from the given region or cavity
+# drake_passage_transport: zonal transport across Drake Passage (need to pass path to domain_cfg)
+def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
     
     # Parse variable name
     factor = 1
     region_type = None
+    region = None
     if var.endswith('_massloss'):
         option = 'area_int'
         region = var[:var.index('_massloss')]
@@ -46,28 +84,38 @@ def calc_timeseries (var, ds_nemo):
         nemo_var = 'so'
         units = gkg_string
         title = 'Volume-averaged salinity'
+    elif var == 'drake_passage_transport':
+        lon0 = drake_passage_lon0
+        lat_bounds = drake_passage_lat_bounds
+        lat0 = None
+        lon_bounds = None
+        option = 'transport'
+        units = 'Sv'
+        title = 'Drake Passage Transport'
+        # Need to add e2u from domain_cfg
+        ds_domcfg = xr.open_dataset(domain_cfg).squeeze()
+        if ds_nemo.sizes['y'] < ds_domcfg.sizes['y']:
+            # The NEMO dataset was trimmed (eg by MOOSE for UKESM) to the southernmost latitudes. Do the same for domain_cfg.
+            ds_domcfg = ds_domcfg.isel(y=slice(0, ds_nemo.sizes['y']))
+        ds_nemo = ds_nemo.assign({'e2u':ds_domcfg['e2u']})
 
     # Select region
-    if region_type is None:
-        if region.endswith('cavity'):
-            region = region[:region.index('_cavity')]
-            region_type = 'cavity'
-        elif region.endswith('shelf'):
-            region = region[:region.index('_shelf')]
-            region_type = 'shelf'
+    if region is not None:
+        if region_type is None:
+            if region.endswith('cavity'):
+                region = region[:region.index('_cavity')]
+                region_type = 'cavity'
+            elif region.endswith('shelf'):
+                region = region[:region.index('_shelf')]
+                region_type = 'shelf'
+            else:
+                region_type = 'all'
+        if region in region_points and region_type == 'cavity':
+            # Single ice shelf
+            mask, ds_nemo, region_name = single_cavity_mask(region, ds_nemo, return_name=True)
         else:
-            region_type = 'all'
-    if region in region_points and region_type == 'cavity':
-        # Single ice shelf
-        mask, ds_nemo, region_name = single_cavity_mask(region, ds_nemo, return_name=True)
-    else:
-        mask, ds_nemo, region_name = region_mask(region, ds_nemo, option=region_type, return_name=True)
-    title += ' for '+region_name    
-
-    # Trim datasets as needed
-    if ds_nemo.sizes['y'] < mask.sizes['y']:
-        # The NEMO dataset was trimmed (eg by MOOSE for UKESM) to the southernmost latitudes. Do the same for the mask.
-        mask = mask.isel(y=slice(0, ds_nemo.sizes['y']))
+            mask, ds_nemo, region_name = region_mask(region, ds_nemo, option=region_type, return_name=True)
+        title += ' for '+region_name    
         
     if option == 'area_int':
         # Area integral
@@ -83,6 +131,10 @@ def calc_timeseries (var, ds_nemo):
         mask_3d = xr.where(ds_nemo[nemo_var]==0, 0, mask)
         dV = ds_nemo['area']*ds_nemo['thkcello']*mask_3d
         data = (ds_nemo[nemo_var]*dV).sum(dim=['x','y','deptht'])/dV.sum(dim=['x','y','deptht'])
+    elif option == 'transport':
+        # Calculate zonal or meridional transport
+        data = transport(ds_nemo, lon0=lon0, lat0=lat0, lon_bounds=lon_bounds, lat_bounds=lat_bounds)
+        
     data *= factor
     data = data.assign_attrs(long_name=title, units=units)
 
