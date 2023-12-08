@@ -144,23 +144,64 @@ def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/i
     return data, ds_nemo
 
 
-# Precompute the given list of timeseries from the given xarray Dataset of NEMO output. Save in a NetCDF file which concatenates after each call to the function.
-def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True, domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
+# As above, but for PP output files from the UM atmosphere. 
+def calc_timeseries_um (var, file_path):
 
-    if halo:
+    import iris
+
+    # Parse variable name
+    if var == 'global_mean_sat':
+        option = 'area_avg'
+        um_var = 'air_temperature'
+        units = 'K'
+        title = 'Global mean near-surface air temperature'
+
+    # Read the file
+    cubes = iris.load(file_path)
+    # Select the correct variable within the file
+    for cube in cubes:
+        if cube.name() == um_var:
+            break
+
+    if option == 'area_avg':
+        # Following code by Jane Mulcahy and Catherine Hardacre
+        if cube.coord('latitude').bounds is None:
+            cube.coord('latitude').guess_bounds()
+        if cube.coord('longitude').bounds is None:
+            cube.coord('longitude').guess_bounds()
+        grid_areas = iris.analysis.cartography.area_weights(cube)
+        data_iris = cube.collapsed(['longitude', 'latitude'], iris.analysis.MEAN, weights=grid_areas)
+
+    # Now convert to a DataArray and get the time dimension to match NEMO conventions
+    data = xr.DataArray.from_iris(data_iris)
+    data = data.expand_dims(dim='time')
+    data = data.rename({'time':'time_centered'})
+    data.load()
+
+    return data
+
+
+# Precompute the given list of timeseries from the given xarray Dataset of NEMO output (or PP file if pp=True). Save in a NetCDF file which concatenates after each call to the function.
+def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True, domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc', pp=True):
+
+    if halo and not pp:
         # Remove the halo
         ds_nemo = ds_nemo.isel(x=slice(1,-1))
 
     # Calculate each timeseries and save to a Dataset
     ds_new = None
     for var in timeseries_types:
-        data, ds_nemo = calc_timeseries(var, ds_nemo, domain_cfg=domain_cfg, halo=halo)
+        if pp:
+            data = calc_timeseries_um(var, ds_nemo)
+        else:
+            data, ds_nemo = calc_timeseries(var, ds_nemo, domain_cfg=domain_cfg, halo=halo)
         if ds_new is None:            
             ds_new = xr.Dataset({var:data})
         else:
             ds_new = ds_new.assign({var:data})
-    # Use time_centered as the dimension as it includes real times - time_counter is reset to 0 every output file
-    ds_new = ds_new.swap_dims({'time_counter':'time_centered'})
+    if not pp:
+        # Use time_centered as the dimension as it includes real times - time_counter is reset to 0 every output file
+        ds_new = ds_new.swap_dims({'time_counter':'time_centered'})
 
     if os.path.isfile(timeseries_file):
         # File already exists; read it
@@ -230,8 +271,27 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
         ds_nemo = xr.open_mfdataset(sim_dir+'/'+file_pattern)
         ds_nemo.load()
         precompute_timeseries(ds_nemo, timeseries_types, sim_dir+'/'+timeseries_file, halo=halo, domain_cfg=domain_cfg)
-                    
-                
+
+
+# As above, but for PP output files from the UM atmosphere. 
+def update_simulation_timeseries_um (suite_id, timeseries_types, timeseries_file='timeseries_um.nc', sim_dir='./', stream='p5'):
+
+    update = os.path.isfile(sim_dir+timeseries_file)
+    if update:
+        # Timeseries file already exists
+        # Get last time index
+        ds_ts = xr.open_dataset(sim_dir+timeseries_file)
+        time_last = ds_ts['time_centered'].data[-1]
+        year_last = time_last.year
+        month_last = time_last.month
+
+    # Identify all the PP files for the given stream
+    # Sort - have to deal with month representation as strings
+    # Write function for this
+
+    for fname in um_files:
+        print('Processing '+fname)
+        # Pass to precompute_timeseries_um
         
 
     
