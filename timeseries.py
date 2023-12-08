@@ -2,7 +2,7 @@ import xarray as xr
 import os
 
 from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year, deg_string, gkg_string, drake_passage_lon0, drake_passage_lat_bounds
-from .utils import single_cavity_mask, region_mask, add_months, closest_point
+from .utils import single_cavity_mask, region_mask, add_months, closest_point, month_convert
 
 
 # Calculate zonal or meridional transport across the given section. The code will choose a constant slice in x or y corresponding to a constant value of latitude or longitude - so maybe not appropriate in highly rotated regions.
@@ -182,7 +182,7 @@ def calc_timeseries_um (var, file_path):
 
 
 # Precompute the given list of timeseries from the given xarray Dataset of NEMO output (or PP file if pp=True). Save in a NetCDF file which concatenates after each call to the function.
-def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True, domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc', pp=True):
+def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True, domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc', pp=False):
 
     if halo and not pp:
         # Remove the halo
@@ -237,18 +237,15 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
         if not f.endswith(file_tail):
             # Not a NEMO output file on this grid; skip it
             continue
-        if f.startswith('nemo_'+suite_id+'o'):
+        if f.startswith('nemo_'+suite_id+'o_1'+freq+'_'):
             # UKESM file naming conventions
-            file_head = 'nemo_'+suite_id+'o'
-        elif f.startswith(suite_id):
+            file_head = 'nemo_'+suite_id+'o_1'+freq+'_'
+        elif f.startswith(suite_id+'_1'+freq+'_'):
             # Standalone NEMO file naming conventions
-            file_head = suite_id
+            file_head = suite_id+'_1'+freq+'_'
         else:
             # Something else; skip it
             continue
-        if '_1'+freq+'_' not in f:
-            raise Exception('update_simulation_timeseries can only handle one frequency of NEMO output files. Need to code other options or move the other frequency files elsewhere.')
-        file_head += '_1'+freq+'_'
         # Extract date code (yyyymmdd_yyyymmdd)
         date_code = f[len(file_head):len(file_head)+17]
         if update:
@@ -286,12 +283,36 @@ def update_simulation_timeseries_um (suite_id, timeseries_types, timeseries_file
         month_last = time_last.month
 
     # Identify all the PP files for the given stream
-    # Sort - have to deal with month representation as strings
-    # Write function for this
-
-    for fname in um_files:
+    date_codes = []
+    file_head = suite_id+'a.'+stream
+    file_tail = '.pp'
+    for f in os.listdir(sim_dir):
+        if os.path.isdir(sim_dir+'/'+f):
+            # Skip directories
+            continue
+        if not (f.startswith(file_head)) or not (f.endswith(file_tail)):
+            # Not a UM output file for this stream
+            continue
+        # Extract date code (yyyymmm)
+        date_code = f[len(file_head):len(file_head)+7]
+        # Replace mmm abbreviation (eg jan) with numbers (eg 01) so we can sort and compare
+        date_code = date_code[:4] + month_convert(date_code[4:])
+        if update:
+            # Need to check if date code has already been processed
+            year = int(date_code[:4])
+            month = int(date_code[4:6])
+            if year < year_last or (year==year_last and month<=month_last):
+                # Skip it
+                continue
+        date_codes.append(date_code)
+    # Now sort alphabetically - i.e. by ascending date code
+    date_codes.sort()
+    
+    # Loop through each date code, reconstruct the filename, and process
+    for date_code in date_codes:
+        fname = file_head + date_code[:4] + month_convert(date_code[4:]) + file_tail
         print('Processing '+fname)
-        # Pass to precompute_timeseries_um
+        precompute_timeseries(fname, timeseries_types, timeseries_file, pp=True)
         
 
     

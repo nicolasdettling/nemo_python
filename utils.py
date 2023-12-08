@@ -1,6 +1,6 @@
 import numpy as np
 import xarray as xr
-from .constants import deg2rad, shelf_lat, shelf_depth, shelf_point0, rho_fw, sec_per_hour, temp_C2K, Rdry, Rvap, vap_pres_c1, vap_pres_c3, vap_pres_c4, region_edges, region_edges_flag, region_names, region_points
+from .constants import deg2rad, shelf_lat, shelf_depth, shelf_point0, rho_fw, sec_per_hour, temp_C2K, Rdry, Rvap, vap_pres_c1, vap_pres_c3, vap_pres_c4, region_edges, region_edges_flag, region_names, region_points, months_per_year
 
 # Given an array containing longitude, make sure it's in the range (max_lon-360, max_lon). Default is (-180, 180). If max_lon is None, nothing will be done to the array.
 def fix_lon_range (lon, max_lon=180):
@@ -496,8 +496,8 @@ def convert_time_units(ds, dataset='ERA5'):
 def add_months (year, month, num_months):
     
     month += num_months
-    while month > 12:
-        month -= 12
+    while month > months_per_year:
+        month -= months_per_year
         year += 1
     return year, month
 
@@ -540,6 +540,26 @@ def moving_average (data, window, dim='time_centered'):
         data_trimmed[dim] = time_trimmed
     data_trimmed.data = data_smoothed
     return data_trimmed
+
+
+# Given a string representing a month, convert between string representations (3-letter lowercase, eg jan) and int representations (2-digit string, eg 01).
+def month_convert (date_code):
+
+    month_str = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+    month_int = [str(n+1).zfill(2) for n in range(months_per_year)]
+
+    if isinstance(date_code, int):
+        date_code = str(date_code).zfill(2)
+        
+    if date_code in month_str:
+        n = month_str.index(date_code)
+        return month_int[n]
+    elif date_code in month_int:
+        n = month_int.index(date_code)
+        return month_str[n]
+    else:
+        raise Exception('Invalid month')
+            
         
         
         
