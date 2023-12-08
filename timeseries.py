@@ -185,11 +185,12 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
 
     # Identify NEMO output files in the given directory, constructed as wildcard strings for each date code
     nemo_files = []
+    file_tail = '-'+gtype+'.nc'
     for f in os.listdir(sim_dir):
         if os.path.isdir(sim_dir+'/'+f):
             # Skip directories
             continue
-        if not f.endswith('-'+gtype+'.nc'):
+        if not f.endswith(file_tail):
             # Not a NEMO output file on this grid; skip it
             continue
         if f.startswith('nemo_'+suite_id+'o'):
@@ -214,7 +215,7 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
                 # Skip it
                 continue
         # Now construct wildcard string and add to list if it's not already there
-        file_pattern = file_head + date_code + '*'
+        file_pattern = file_head + date_code + '*' + file_tail
         if file_pattern not in nemo_files:
             nemo_files.append(file_pattern)        
     # Now sort alphabetically - i.e. by ascending date code
