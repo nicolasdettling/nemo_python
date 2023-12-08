@@ -91,6 +91,7 @@ def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/i
         z_vals = var[len(region+'_temp_btw_'):-1]
         z_shallow = int(z_vals[:z_vals.index('_')])
         z_deep = int(z_vals[z_vals.index('_')+1:])
+        nemo_var = 'thetao'
         title = 'Average temperature between '+str(z_shallow)+'-'+str(z_deep)+'m'
         units = deg_string+'C'
     elif '_salt_btw_' in var:
@@ -99,6 +100,7 @@ def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/i
         z_vals = var[len(region+'_salt_btw_'):-1]
         z_shallow = int(z_vals[:z_vals.index('_')])
         z_deep = int(z_vals[z_vals.index('_')+1:])
+        nemo_var = 'so'
         title = 'Average salnity between '+str(z_shallow)+'-'+str(z_deep)+'m'
         units = gkg_string
     elif var == 'drake_passage_transport':
