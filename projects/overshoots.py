@@ -1,11 +1,11 @@
 # Analysing TerraFIRMA overshoot simulations with UKESM1.1-ice (NEMO 3.6)
 
-from ..timeseries import update_simulation_timeseries
+from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
 from ..plots import timeseries_by_region
 
 
 # Call update_simulation_timeseries for the given suite ID
-def update_overshoot_timeseries (suite_id, timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', base_dir='./', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
+def update_overshoot_timeseries (suite_id, base_dir='./', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
 
     # Construct list of timeseries types for T-grid
     regions = ['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross']
@@ -16,11 +16,13 @@ def update_overshoot_timeseries (suite_id, timeseries_file='timeseries.nc', time
         for var in var_names:
             timeseries_types.append(region+'_'+var)
 
-    update_simulation_timeseries(suite_id, timeseries_types, timeseries_file=timeseries_file, sim_dir=base_dir+'/'+suite_id+'/', freq='m', halo=True, gtype='T')
+    update_simulation_timeseries(suite_id, timeseries_types, timeseries_file='timeseries.nc', sim_dir=base_dir+'/'+suite_id+'/', freq='m', halo=True, gtype='T')
 
     # Now for u-grid
-    timeseries_types = ['drake_passage_transport']
-    update_simulation_timeseries(suite_id, timeseries_types, timeseries_file=timeseries_file_u, sim_dir=base_dir+'/'+suite_id+'/', freq='m', halo=True, gtype='U', domain_cfg=domain_cfg)
+    update_simulation_timeseries(suite_id, ['drake_passage_transport'], timeseries_file='timeseries_u.nc', sim_dir=base_dir+'/'+suite_id+'/', freq='m', halo=True, gtype='U', domain_cfg=domain_cfg)
+
+    # Now for UM
+    update_simulation_timeseries_um(suite_id, ['global_mean_sat'], timeseries_file='timeseries_um.nc', sim_dir=base_dir+'/'+suite_id+'/', stream='p5')
 
 
 # Plot timeseries by region for all variables in the given suite ID, and show interactively.

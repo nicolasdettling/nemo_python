@@ -312,7 +312,7 @@ def update_simulation_timeseries_um (suite_id, timeseries_types, timeseries_file
     for date_code in date_codes:
         fname = sim_dir + '/' + file_head + date_code[:4] + month_convert(date_code[4:]) + file_tail
         print('Processing '+fname)
-        precompute_timeseries(fname, timeseries_types, timeseries_file, pp=True)
+        precompute_timeseries(fname, timeseries_types, sim_dir+'/'+timeseries_file, pp=True)
         
 
     
