@@ -189,6 +189,9 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
         if os.path.isdir(sim_dir+'/'+f):
             # Skip directories
             continue
+        if f.endswith('.pp'):
+            # Atmosphere file; skip it
+            continue
         if f.startswith('nemo_'+suite_id+'o'):
             # UKESM file naming conventions
             file_head = 'nemo_'+suite_id+'o'
