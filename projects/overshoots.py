@@ -5,9 +5,9 @@ from ..plots import timeseries_by_region
 
 
 # Call update_simulation_timeseries for the given suite ID
-def update_overshoot_timeseries (suite_id, timeseries_file='timeseries.nc', base_dir='./'):
+def update_overshoot_timeseries (suite_id, timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', base_dir='./'):
 
-    # Construct list of timeseries types
+    # Construct list of timeseries types for T-grid
     regions = ['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross']
     var_names = ['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt']
     timeseries_types = []
@@ -16,7 +16,11 @@ def update_overshoot_timeseries (suite_id, timeseries_file='timeseries.nc', base
         for var in var_names:
             timeseries_types.append(region+'_'+var)
 
-    update_simulation_timeseries(suite_id, timeseries_types, timeseries_file=timeseries_file, sim_dir=base_dir+'/'+suite_id+'/', freq='m', halo=True)
+    update_simulation_timeseries(suite_id, timeseries_types, timeseries_file=timeseries_file, sim_dir=base_dir+'/'+suite_id+'/', freq='m', halo=True, gtype='T')
+
+    # Now for u-grid
+    timeseries_types = ['drake_passage_transport']
+    update_simulation_timeseries(suite_id, timeseries_types, timeseries_file=timeseries_file_u, sim_dir=base_dir+'/'+suite_id+'/', freq='m', halo=True, gtype='U')
 
 
 # Plot timeseries by region for all variables in the given suite ID, and show interactively.
