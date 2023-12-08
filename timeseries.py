@@ -154,7 +154,7 @@ def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/i
     elif option == 'avg_btw_depths':
         # Volume average between two depths
         # Create an extra mask to multiply dV with, which is 1 between the two depths and 0 otherwise
-        depth_below = ds['thkcello'].cumsum(dim='deptht')
+        depth_below = ds_nemo['thkcello'].cumsum(dim='deptht')
         depth_above = depth_below.shift(deptht=1, fill_value=0)
         depth_centres = 0.5*(depth_above + depth_below)
         mask_depth = xr.where((depth_centres >= z_shallow)*(depth_centres <= z_deep), 1, 0)
