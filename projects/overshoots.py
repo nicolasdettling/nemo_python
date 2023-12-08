@@ -5,7 +5,7 @@ from ..plots import timeseries_by_region
 
 
 # Call update_simulation_timeseries for the given suite ID
-def update_overshoot_timeseries (suite_id, timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', base_dir='./'):
+def update_overshoot_timeseries (suite_id, timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', base_dir='./', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
 
     # Construct list of timeseries types for T-grid
     regions = ['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross']
@@ -20,7 +20,7 @@ def update_overshoot_timeseries (suite_id, timeseries_file='timeseries.nc', time
 
     # Now for u-grid
     timeseries_types = ['drake_passage_transport']
-    update_simulation_timeseries(suite_id, timeseries_types, timeseries_file=timeseries_file_u, sim_dir=base_dir+'/'+suite_id+'/', freq='m', halo=True, gtype='U')
+    update_simulation_timeseries(suite_id, timeseries_types, timeseries_file=timeseries_file_u, sim_dir=base_dir+'/'+suite_id+'/', freq='m', halo=True, gtype='U', domain_cfg=domain_cfg)
 
 
 # Plot timeseries by region for all variables in the given suite ID, and show interactively.

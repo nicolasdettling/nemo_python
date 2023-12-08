@@ -45,7 +45,7 @@ def transport (ds, lon0=None, lat0=None, lon_bounds=None, lat_bounds=None):
 # <region>_bwtemp, <region>_bwsalt: area-averaged bottom water temperature or salinity from the given region or cavity (eg ross_cavity, ross_shelf, ross)
 # <region>_temp, <region>_salt: volume-averaged temperature or salinity from the given region or cavity
 # drake_passage_transport: zonal transport across Drake Passage (need to pass path to domain_cfg)
-def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
+def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc', halo=True):
     
     # Parse variable name
     factor = 1
@@ -92,12 +92,15 @@ def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/i
         option = 'transport'
         units = 'Sv'
         title = 'Drake Passage Transport'
-        # Need to add e2u from domain_cfg
-        ds_domcfg = xr.open_dataset(domain_cfg).squeeze()
-        if ds_nemo.sizes['y'] < ds_domcfg.sizes['y']:
-            # The NEMO dataset was trimmed (eg by MOOSE for UKESM) to the southernmost latitudes. Do the same for domain_cfg.
-            ds_domcfg = ds_domcfg.isel(y=slice(0, ds_nemo.sizes['y']))
-        ds_nemo = ds_nemo.assign({'e2u':ds_domcfg['e2u']})
+        if 'e2u' not in ds_nemo:
+            # Need to add e2u from domain_cfg
+            ds_domcfg = xr.open_dataset(domain_cfg).squeeze()
+            if ds_nemo.sizes['y'] < ds_domcfg.sizes['y']:
+                # The NEMO dataset was trimmed (eg by MOOSE for UKESM) to the southernmost latitudes. Do the same for domain_cfg.
+                ds_domcfg = ds_domcfg.isel(y=slice(0, ds_nemo.sizes['y']))
+            if halo:
+                ds_domcfg = ds_domcfg.isel(x=slice(1,-1))
+            ds_nemo = ds_nemo.assign({'e2u':ds_domcfg['e2u']})
 
     # Select region
     if region is not None:
@@ -142,7 +145,7 @@ def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/i
 
 
 # Precompute the given list of timeseries from the given xarray Dataset of NEMO output. Save in a NetCDF file which concatenates after each call to the function.
-def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True):
+def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True, domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
 
     if halo:
         # Remove the halo
@@ -151,7 +154,7 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
     # Calculate each timeseries and save to a Dataset
     ds_new = None
     for var in timeseries_types:
-        data, ds_nemo = calc_timeseries(var, ds_nemo)
+        data, ds_nemo = calc_timeseries(var, ds_nemo, domain_cfg=domain_cfg, halo=halo)
         if ds_new is None:            
             ds_new = xr.Dataset({var:data})
         else:
@@ -172,7 +175,7 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
 
 
 # Precompute timeseries from the given simulation, either from the beginning (timeseries_file does not exist) or picking up where it left off (timeseries_file does exist). Considers all NEMO output files stamped with suite_id in the given directory sim_dir on the given grid (gtype='T', 'U', etc), and assumes the timeseries file is in that directory too.
-def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='timeseries.nc', sim_dir='./', freq='m', halo=True, gtype='T'):
+def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='timeseries.nc', sim_dir='./', freq='m', halo=True, gtype='T', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
 
     update = os.path.isfile(sim_dir+timeseries_file)
     if update:
@@ -226,7 +229,7 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
         print('Processing '+file_pattern)
         ds_nemo = xr.open_mfdataset(sim_dir+'/'+file_pattern)
         ds_nemo.load()
-        precompute_timeseries(ds_nemo, timeseries_types, sim_dir+'/'+timeseries_file, halo=halo)
+        precompute_timeseries(ds_nemo, timeseries_types, sim_dir+'/'+timeseries_file, halo=halo, domain_cfg=domain_cfg)
                     
                 
         
