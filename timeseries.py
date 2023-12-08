@@ -171,8 +171,8 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
     ds_new.to_netcdf(timeseries_file, mode='w')
 
 
-# Precompute timeseries from the given simulation, either from the beginning (timeseries_file does not exist) or picking up where it left off (timeseries_file does exist). Considers all NEMO output files stamped with suite_id in the given directory sim_dir, and assumes the timeseries file is in that directory too.
-def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='timeseries.nc', sim_dir='./', freq='y', halo=True):
+# Precompute timeseries from the given simulation, either from the beginning (timeseries_file does not exist) or picking up where it left off (timeseries_file does exist). Considers all NEMO output files stamped with suite_id in the given directory sim_dir on the given grid (gtype='T', 'U', etc), and assumes the timeseries file is in that directory too.
+def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='timeseries.nc', sim_dir='./', freq='m', halo=True, gtype='T'):
 
     update = os.path.isfile(sim_dir+timeseries_file)
     if update:
@@ -189,8 +189,8 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
         if os.path.isdir(sim_dir+'/'+f):
             # Skip directories
             continue
-        if f.endswith('.pp'):
-            # Atmosphere file; skip it
+        if not f.endswith('-'+gtype+'.nc'):
+            # Not a NEMO output file on this grid; skip it
             continue
         if f.startswith('nemo_'+suite_id+'o'):
             # UKESM file naming conventions
@@ -199,7 +199,7 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
             # Standalone NEMO file naming conventions
             file_head = suite_id
         else:
-            # Not a NEMO output file; skip it
+            # Something else; skip it
             continue
         if '_1'+freq+'_' not in f:
             raise Exception('update_simulation_timeseries can only handle one frequency of NEMO output files. Need to code other options or move the other frequency files elsewhere.')
