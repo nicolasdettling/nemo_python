@@ -148,6 +148,7 @@ def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/i
 def calc_timeseries_um (var, file_path):
 
     import iris
+    import warnings
 
     # Parse variable name
     if var == 'global_mean_sat':
@@ -156,12 +157,11 @@ def calc_timeseries_um (var, file_path):
         units = 'K'
         title = 'Global mean near-surface air temperature'
 
-    # Read the file
-    cubes = iris.load(file_path)
-    # Select the correct variable within the file
-    for cube in cubes:
-        if cube.name() == um_var:
-            break
+    # Read the correct variable from the file
+    # Suppress warnings (year_zero kwarg ignored for idealised calendars)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        cube = iris.load_cube(file_path, um_var)
 
     if option == 'area_avg':
         # Following code by Jane Mulcahy and Catherine Hardacre
@@ -310,7 +310,7 @@ def update_simulation_timeseries_um (suite_id, timeseries_types, timeseries_file
     
     # Loop through each date code, reconstruct the filename, and process
     for date_code in date_codes:
-        fname = file_head + date_code[:4] + month_convert(date_code[4:]) + file_tail
+        fname = sim_dir + '/' + file_head + date_code[:4] + month_convert(date_code[4:]) + file_tail
         print('Processing '+fname)
         precompute_timeseries(fname, timeseries_types, timeseries_file, pp=True)
         
