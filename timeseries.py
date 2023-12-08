@@ -44,6 +44,7 @@ def transport (ds, lon0=None, lat0=None, lon_bounds=None, lat_bounds=None):
 # <region>_massloss: basal mass loss from the given ice shelf or region of multiple ice shelves (eg brunt, amundsen_sea)
 # <region>_bwtemp, <region>_bwsalt: area-averaged bottom water temperature or salinity from the given region or cavity (eg ross_cavity, ross_shelf, ross)
 # <region>_temp, <region>_salt: volume-averaged temperature or salinity from the given region or cavity
+# <region>_temp_btw_xxx_yyy_m, <region>_salt_btw_xxx_yyy_m: volume-averaged temperature or salinity from the given region or cavity, between xxx and yyy metres (positive integers, shallowest first)
 # drake_passage_transport: zonal transport across Drake Passage (need to pass path to domain_cfg)
 def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc', halo=True):
     
@@ -84,6 +85,22 @@ def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/i
         nemo_var = 'so'
         units = gkg_string
         title = 'Volume-averaged salinity'
+    elif '_temp_btw_' in var:
+        option = 'avg_btw_depths'
+        region = var[:var.index('_temp_btw_')]
+        z_vals = var[len(region+'_temp_btw_'):-1]
+        z_shallow = int(z_vals[:z_vals.index('_')])
+        z_deep = int(z_vals[z_vals.index('_')+1:])
+        title = 'Average temperature between '+str(z_shallow)+'-'+str(z_deep)+'m'
+        units = deg_string+'C'
+    elif '_salt_btw_' in var:
+        option = 'avg_btw_depths'
+        region = var[:var.index('_salt_btw_')]
+        z_vals = var[len(region+'_salt_btw_'):-1]
+        z_shallow = int(z_vals[:z_vals.index('_')])
+        z_deep = int(z_vals[z_vals.index('_')+1:])
+        title = 'Average salnity between '+str(z_shallow)+'-'+str(z_deep)+'m'
+        units = gkg_string
     elif var == 'drake_passage_transport':
         lon0 = drake_passage_lon0
         lat_bounds = drake_passage_lat_bounds
@@ -134,6 +151,16 @@ def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/i
         mask_3d = xr.where(ds_nemo[nemo_var]==0, 0, mask)
         dV = ds_nemo['area']*ds_nemo['thkcello']*mask_3d
         data = (ds_nemo[nemo_var]*dV).sum(dim=['x','y','deptht'])/dV.sum(dim=['x','y','deptht'])
+    elif option == 'avg_btw_depths':
+        # Volume average between two depths
+        # Create an extra mask to multiply dV with, which is 1 between the two depths and 0 otherwise
+        depth_below = ds['thkcello'].cumsum(dim='deptht')
+        depth_above = depth_below.shift(deptht=1, fill_value=0)
+        depth_centres = 0.5*(depth_above + depth_below)
+        mask_depth = xr.where((depth_centres >= z_shallow)*(depth_centres <= z_deep), 1, 0)
+        mask_3d = xr.where(ds_nemo[nemo_var]==0, 0, mask)
+        dV = ds_nemo['area']*ds_nemo['thkcello']*mask_3d*mask_depth
+        data = (ds_nemo[nemo_var]*dV).sum(dim=['x','y','deptht'])/dV.sum(dim=['x','y','deptht'])        
     elif option == 'transport':
         # Calculate zonal or meridional transport
         data = transport(ds_nemo, lon0=lon0, lat0=lat0, lon_bounds=lon_bounds, lat_bounds=lat_bounds)
