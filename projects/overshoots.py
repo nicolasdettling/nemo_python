@@ -1,7 +1,7 @@
 # Analysing TerraFIRMA overshoot simulations with UKESM1.1-ice (NEMO 3.6)
 
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
-from ..plots import timeseries_by_region
+from ..plots import timeseries_by_region, timeseries_by_expt
 
 
 # Call update_simulation_timeseries for the given suite ID
