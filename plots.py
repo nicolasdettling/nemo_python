@@ -92,7 +92,7 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
 
 
 # Plot one or more timeseries on the same axis, with different colours and a legend if needed.
-def timeseries_plot (datas, labels=None, colours=None, title='', units='', ax=None, fig_name=None):
+def timeseries_plot (datas, labels=None, colours=None, title='', units='', ax=None, fig_name=None, linewidth=None):
 
     new_ax = ax is None
     
@@ -115,7 +115,7 @@ def timeseries_plot (datas, labels=None, colours=None, title='', units='', ax=No
             figsize = (6,4)
         fig, ax = plt.subplots(figsize=figsize)
     for data, label, colour in zip(datas, labels, colours):
-        ax.plot_date(data.time_centered, data, '-', color=colour, label=label)
+        ax.plot_date(data.time_centered, data, '-', color=colour, label=label, linewidth=linewidth)
     ax.grid(linestyle='dotted')
     ax.set_title(title, fontsize=16)
     ax.set_ylabel(units, fontsize=16)
@@ -129,7 +129,7 @@ def timeseries_plot (datas, labels=None, colours=None, title='', units='', ax=No
 
 
 # Plot timeseries of the same variable in different regions. Can either do for a single simulation (sim_dir is a string) or an initial conditions ensemble (sim_dir is a list of strings). 
-def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], colours=None, timeseries_file='timeseries.nc', smooth=0, fig_name=None):
+def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], colours=None, timeseries_file='timeseries.nc', smooth=0, fig_name=None, linewidth=None):
 
     if isinstance(sim_dir, str):
         sim_dir = [sim_dir]
@@ -161,14 +161,14 @@ def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'be
                 title = long_name.replace(region_names[region]+' ','')
                 units = ds[var_full].units
 
-    timeseries_plot(datas, labels=labels, colours=colours_plot, title=title, units=units, fig_name=fig_name)
+    timeseries_plot(datas, labels=labels, colours=colours_plot, title=title, units=units, fig_name=fig_name, linewidth=linewidth)
         
 
 # Plot timeseries of the same variable in different experiments. Each experiment can be a single simulation (sim_dirs=list of strings) or an ensemble (sim_dirs=list of lists of strings).
 # For ensembles, if sim_names is set, it can be the name of every member (list of lists of strings) or one name for every ensemble (list of strings).
 # If sim_names is not set, lines will be labelled with the suite IDs (extracted from sim_dirs)
 # TODO: test this once I have multiple ensembles to try!
-def timeseries_by_expt (var_name, sim_dirs, sim_names=None, colours=None, timeseries_file='timeseries.nc', smooth=0, fig_name=None):
+def timeseries_by_expt (var_name, sim_dirs, sim_names=None, colours=None, timeseries_file='timeseries.nc', smooth=0, fig_name=None, linewidth=None):
 
     num_expt = len(sim_dir)
     if colours is None:
@@ -226,18 +226,7 @@ def timeseries_by_expt (var_name, sim_dirs, sim_names=None, colours=None, timese
                 title = ds[var_name].long_name
                 units = ds[var_name].units
 
-    timeseries_plot(datas, labels=labels, colours=colours_plot, title=title, units=units, fig_name=fig_name)
-            
-    
+    timeseries_plot(datas, labels=labels, colours=colours_plot, title=title, units=units, fig_name=fig_name, linewidth=linewidth)
         
-
-
-
-    # by_expt, multiple simulations: sim_dir is a list of length>1, choose colours up to some max number
-    # by_expt, multiple ensembles: sim_dir is a list of lists, same colour for each ensemble member
-    
-            
-
-    
 
     
