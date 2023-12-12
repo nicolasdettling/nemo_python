@@ -40,13 +40,23 @@ def update_overshoot_timeseries_all (base_dir='./', domain_cfg='/gws/nopw/j04/te
         update_overshoot_timeseries(suite_id, base_dir=base_dir, domain_cfg=domain_cfg)
 
 
-# Plot timeseries by region for all variables in the given suite ID, and show interactively.
-def plot_all_timeseries_by_region (suite_id, regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt'], colours=None, timeseries_file='timeseries.nc', base_dir='./', smooth=0, fig_dir=None):
+# Plot timeseries by region for all variables in the given suite ID.
+def plot_all_timeseries_by_region (suite_id, regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m'], colours=None, timeseries_file='timeseries.nc', base_dir='./', smooth=24, fig_dir=None):
 
     while suite_id.endswith('/'):
         suite_id = suite_id[:-1]
 
     for var in var_names:
-        timeseries_by_region(var, base_dir+'/'+suite_id+'/', colours=colours, timeseries_file=timeseries_file, smooth=smooth, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_'+suite_id+'.png'))
+        # Special treatment of 200-700m variables as these are only valid for certain regions
+        if var.endswith('200_700m'):
+            regions_use = []
+            for region in ['amundsen_sea', 'bellingshausen_sea']:
+                if region in regions:
+                    regions_use.append(region)
+        else:
+            regions_use = regions
+        if len(regions) == 0:
+            continue                    
+        timeseries_by_region(var, base_dir+'/'+suite_id+'/', regions=regions_use, colours=colours, timeseries_file=timeseries_file, smooth=smooth, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_'+suite_id+'.png'))
 
     
