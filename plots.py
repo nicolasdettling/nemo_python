@@ -212,7 +212,7 @@ def timeseries_by_expt (var_name, sim_dirs, sim_names=None, colours=None, timese
         if isinstance(sim_dir, str):
             # Generalise to ensemble of 1
             sim_dir = [sim_dir]
-            sim_name = [names]
+            sim_name = [sim_name]
         elif isinstance(sim_dir, list) and isinstance(sim_name, str):
             # Just one name for the whole ensemble; only label the first member
             sim_name = [sim_name] + [None]*(len(sim_dir)-1)
