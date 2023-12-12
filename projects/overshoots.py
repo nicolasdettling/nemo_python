@@ -36,7 +36,7 @@ def update_overshoot_timeseries (suite_id, base_dir='./', domain_cfg='/gws/nopw/
 def update_overshoot_timeseries_all (base_dir='./', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
 
     # To add when ERROR_SINGLE_COPY_UNAVAILABLE is resolved (and these suites are re-pulled from MASS): cs495, cz855
-    for suite_id in ['cs568', 'cx209', 'cw988', 'cw989', 'cw990', 'cz826', 'cy837', 'cz834', 'da087', 'cy838', 'cz855', 'cz374', 'cz859', 'cz375', 'cz376', 'cz377', 'cz378', 'da697', 'cz944', 'da800']:
+    for suite_id in ['cs568', 'cx209', 'cw988', 'cw989', 'cw990', 'cz826', 'cy837', 'cz834', 'da087', 'cy838', 'cz374', 'cz859', 'cz375', 'cz376', 'cz377', 'cz378', 'da697', 'cz944', 'da800']:
         update_overshoot_timeseries(suite_id, base_dir=base_dir, domain_cfg=domain_cfg)
 
 
@@ -63,19 +63,19 @@ def plot_all_timeseries_by_region (suite_id, regions=['all', 'amundsen_sea', 'be
 # Plot timeseries by experiment for all variables and regions, in all experiments.
 def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport', 'global_mean_sat'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None):
 
-    sim_names = ['ramp up', 'ramp up static ice', 'stabilise 1.5 K', 'stabilise 2K', 'stabilise 2.5K', 'stabilise 3K', 'stabilise 4K', 'stabilise 5K', 'stabilise 6K', 'ramp down 1.5K', 'ramp down 2K']
-    colours = ['Black', 'DarkGrey', 'DarkMagenta', 'Indigo', 'Blue', 'DarkCyan', 'DarkGreen', 'DarkGoldenRod', 'DarkRed', 'MediumOrchid', 'MediumSlateBlue']
+    sim_names = ['ramp up', 'ramp up static ice', 'stabilise 1.5 K', 'stabilise 2K', 'stabilise 2.5K', 'stabilise 3K', 'stabilise 4K'] #, 'stabilise 5K', 'stabilise 6K', 'ramp down 1.5K', 'ramp down 2K']
+    colours = ['Black', 'DarkGrey', 'DarkMagenta', 'Indigo', 'Blue', 'DarkCyan', 'DarkGreen'] #, 'DarkGoldenRod', 'DarkRed', 'MediumOrchid', 'MediumSlateBlue']
     sim_dirs = [['cx209', 'cw988', 'cw989', 'cw990'],  # ramp up
                 'cz826', # ramp up static ice
                 ['cy837', 'cz834', 'da087'], # stabilise 1.5K
-                ['cy838', 'cz855'], # stabilise 2K
+                'cy838', # stabilise 2K - todo add back in cz855
                 ['cz374', 'cz859'], # stabilise 2.5K
                 'cz375', # stabilise 3K
                 'cz376', # stabilise 4K
-                'cz377', # stabilise 5K
-                'cz378', # stabilise 6K
-                'da697', # ramp down 1.5 K
-                ['cz944', 'da800']] # ramp down 2K
+                ]#'cz377', # stabilise 5K
+                #'cz378', # stabilise 6K
+                #'da697', # ramp down 1.5 K
+                #['cz944', 'da800']] # ramp down 2K
 
     # Now construct master list of variables
     var_names_all = []
