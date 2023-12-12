@@ -43,8 +43,9 @@ def update_overshoot_timeseries_all (base_dir='./', domain_cfg='/gws/nopw/j04/te
 # Plot timeseries by region for all variables in the given suite ID.
 def plot_all_timeseries_by_region (suite_id, regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m'], colours=None, timeseries_file='timeseries.nc', base_dir='./', smooth=24, fig_dir=None):
 
-    while suite_id.endswith('/'):
-        suite_id = suite_id[:-1]
+    if isinstance(suite_id, str):
+        while suite_id.endswith('/'):
+            suite_id = suite_id[:-1]
 
     for var in var_names:
         # Special treatment of 200-700m variables as these are only valid for certain regions

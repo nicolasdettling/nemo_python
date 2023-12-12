@@ -101,7 +101,7 @@ def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/i
         z_shallow = int(z_vals[:z_vals.index('_')])
         z_deep = int(z_vals[z_vals.index('_')+1:])
         nemo_var = 'so'
-        title = 'Average salnity between '+str(z_shallow)+'-'+str(z_deep)+'m'
+        title = 'Average salinity between '+str(z_shallow)+'-'+str(z_deep)+'m'
         units = gkg_string
     elif var == 'drake_passage_transport':
         lon0 = drake_passage_lon0
