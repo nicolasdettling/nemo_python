@@ -88,10 +88,10 @@ def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 
             elif var.endswith('200_700m'):
                 # Special cases where only some regions defined
                 if region in ['amundsen_sea', 'bellingshausen_sea']:
-                    var_names_all.append(region+'_'+var_name)
+                    var_names_all.append(region+'_'+var)
             else:
                 # Every combination of region and variable
-                var_names_all.append(region+'_'+var_name)
+                var_names_all.append(region+'_'+var)
 
     for var in var_names_all:
         if var == 'drake_passage_transport':
