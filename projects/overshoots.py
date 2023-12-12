@@ -40,7 +40,7 @@ def update_overshoot_timeseries_all (base_dir='./', domain_cfg='/gws/nopw/j04/te
         update_overshoot_timeseries(suite_id, base_dir=base_dir, domain_cfg=domain_cfg)
 
 
-# Plot timeseries by region for all variables in the given suite ID.
+# Plot timeseries by region for all variables in one simulation.
 def plot_all_timeseries_by_region (suite_id, regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m'], colours=None, timeseries_file='timeseries.nc', base_dir='./', smooth=24, fig_dir=None):
 
     while suite_id.endswith('/'):
@@ -58,5 +58,49 @@ def plot_all_timeseries_by_region (suite_id, regions=['all', 'amundsen_sea', 'be
         if len(regions) == 0:
             continue                    
         timeseries_by_region(var, base_dir+'/'+suite_id+'/', regions=regions_use, colours=colours, timeseries_file=timeseries_file, smooth=smooth, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_'+suite_id+'.png'))
+
+
+# Plot timeseries by experiment for all variables and regions, in all experiments.
+def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport', 'global_mean_sat'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None):
+
+    sim_names = ['ramp up', 'ramp up static ice', 'stabilise 1.5 K', 'stabilise 2K', 'stabilise 2.5K', 'stabilise 3K', 'stabilise 4K', 'stabilise 5K', 'stabilise 6K', 'ramp down 1.5K', 'ramp down 2K']
+    colours = ['Black', 'DarkGrey', 'DarkMagenta', 'Indigo', 'Blue', 'DarkCyan', 'DarkGreen', 'DarkGoldenRod', 'DarkRed', 'MediumOrchid', 'MediumSlateBlue']
+    sim_dirs = [['cx209', 'cw988', 'cw989', 'cw990'],  # ramp up
+                'cz826', # ramp up static ice
+                ['cy837', 'cz834', 'da087'], # stabilise 1.5K
+                ['cy838', 'cz855'], # stabilise 2K
+                ['cz374', 'cz859'], # stabilise 2.5K
+                'cz375', # stabilise 3K
+                'cz376', # stabilise 4K
+                'cz377', # stabilise 5K
+                'cz378', # stabilise 6K
+                'da697', # ramp down 1.5 K
+                ['cz944', 'da800']] # ramp down 2K
+
+    # Now construct master list of variables
+    var_names_all = []
+    for region in regions:
+        for var in var_names:
+            if var in ['drake_passage_transport', 'global_mean_sat']:
+                # Special cases with no region
+                if var not in var_names_all:
+                    var_names_all.append(var)
+            elif var.endswith('200_700m'):
+                # Special cases where only some regions defined
+                if region in ['amundsen_sea', 'bellingshausen_sea']:
+                    var_names_all.append(region+'_'+var_name)
+            else:
+                # Every combination of region and variable
+                var_names_all.append(region+'_'+var_name)
+
+    for var in var_names_all:
+        if var == 'drake_passage_transport':
+            fname = timeseries_file_u
+        elif var == 'global_mean_sat':
+            fname = timeseries_file_um
+        else:
+            fname = timeseries_file
+        timeseries_by_experiment(var, sim_dirs, sim_names=sim_names, colours=colours, timeseries_file=fname, smooth=smooth, linewidth=1, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_master.png'))
+                    
 
     

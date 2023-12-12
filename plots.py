@@ -167,7 +167,6 @@ def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'be
 # Plot timeseries of the same variable in different experiments. Each experiment can be a single simulation (sim_dirs=list of strings) or an ensemble (sim_dirs=list of lists of strings).
 # For ensembles, if sim_names is set, it can be the name of every member (list of lists of strings) or one name for every ensemble (list of strings).
 # If sim_names is not set, lines will be labelled with the suite IDs (extracted from sim_dirs)
-# TODO: test this once I have multiple ensembles to try!
 def timeseries_by_expt (var_name, sim_dirs, sim_names=None, colours=None, timeseries_file='timeseries.nc', smooth=0, fig_name=None, linewidth=None):
 
     num_expt = len(sim_dirs)
