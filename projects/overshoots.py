@@ -100,7 +100,7 @@ def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 
             fname = timeseries_file_um
         else:
             fname = timeseries_file
-        timeseries_by_experiment(var, sim_dirs, sim_names=sim_names, colours=colours, timeseries_file=fname, smooth=smooth, linewidth=1, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_master.png'))
+        timeseries_by_expt(var, sim_dirs, sim_names=sim_names, colours=colours, timeseries_file=fname, smooth=smooth, linewidth=1, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_master.png'))
                     
 
     
