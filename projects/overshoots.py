@@ -33,7 +33,7 @@ def update_overshoot_timeseries (suite_id, base_dir='./', domain_cfg='/gws/nopw/
 
 
 # Call for all simulations (add to the list of suite IDs as needed)
-def update_overshoot_timeseries_all (suite_id, base_dir='./', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
+def update_overshoot_timeseries_all (base_dir='./', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
 
     # To add when ERROR_SINGLE_COPY_UNAVAILABLE is resolved (and these suites are re-pulled from MASS): cs495, cz855
     for suite_id in ['cs568', 'cx209', 'cw988', 'cw989', 'cw990', 'cz826', 'cy837', 'cz834', 'da087', 'cy838', 'cz855', 'cz374', 'cz859', 'cz375', 'cz376', 'cz377', 'cz378', 'da697', 'cz944', 'da800']:
