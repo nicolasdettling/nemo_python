@@ -64,7 +64,7 @@ def plot_all_timeseries_by_region (suite_id, regions=['all', 'amundsen_sea', 'be
 def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport', 'global_mean_sat'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None):
 
     sim_names = ['ramp up', 'ramp up static ice', 'stabilise 1.5 K', 'stabilise 2K', 'stabilise 2.5K', 'stabilise 3K', 'stabilise 4K', 'stabilise 5K', 'stabilise 6K', 'ramp down 1.5K', 'ramp down 2K']
-    colours = ['Black', 'DarkGrey', 'DarkMagenta', 'Blue', 'DarkCyan', 'DarkGreen', 'DarkGoldenRod', 'DarkOrange', 'DarkRed', 'MediumOrchid', 'CornflowerBlue']
+    colours = ['Black', 'DarkGrey', 'DarkMagenta', 'Blue', 'DarkCyan', 'DarkGreen', 'GoldenRod', 'Coral', 'Crimson', 'MediumOrchid', 'CornflowerBlue']
     sim_dirs = [['cx209', 'cw988', 'cw989', 'cw990'],  # ramp up
                 'cz826', # ramp up static ice
                 ['cy837', 'cz834', 'da087'], # stabilise 1.5K
