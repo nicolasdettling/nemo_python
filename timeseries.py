@@ -205,6 +205,7 @@ def calc_timeseries_um (var, file_path):
     data = xr.DataArray.from_iris(data_iris)
     data = data.expand_dims(dim='time')
     data = data.rename({'time':'time_centered'})
+    data = data.assign_attrs(long_name=title, units=units)
     data.load()
 
     return data
