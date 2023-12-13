@@ -294,6 +294,9 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
     # Loop through each date code and process
     for file_pattern in nemo_files:
         print('Processing '+file_pattern)
+        if os.path.isfile(file_pattern.replace('*','_isf')) and not os.path.isfile(file_pattern.replace('*','_grid')):
+            print('Warning: isf-T file exists with no matching grid-T file. Probably reached the end of complete months pulled from MASS. Stopping')
+            break
         ds_nemo = xr.open_mfdataset(sim_dir+'/'+file_pattern)
         ds_nemo.load()
         precompute_timeseries(ds_nemo, timeseries_types, sim_dir+'/'+timeseries_file, halo=halo, domain_cfg=domain_cfg)
