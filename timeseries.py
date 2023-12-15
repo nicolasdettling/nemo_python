@@ -243,6 +243,7 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
 
     # Save to file, overwriting if needed
     ds_new.to_netcdf(timeseries_file, mode='w')
+    ds_new.close()
 
 
 # Precompute timeseries from the given simulation, either from the beginning (timeseries_file does not exist) or picking up where it left off (timeseries_file does exist). Considers all NEMO output files stamped with suite_id in the given directory sim_dir on the given grid (gtype='T', 'U', etc), and assumes the timeseries file is in that directory too.
@@ -256,6 +257,7 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
         time_last = ds_ts['time_centered'].data[-1]
         year_last = time_last.year
         month_last = time_last.month
+        ds_ts.close()
 
     # Identify NEMO output files in the given directory, constructed as wildcard strings for each date code
     nemo_files = []
@@ -301,6 +303,7 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
         ds_nemo = xr.open_mfdataset(sim_dir+'/'+file_pattern)
         ds_nemo.load()
         precompute_timeseries(ds_nemo, timeseries_types, sim_dir+'/'+timeseries_file, halo=halo, domain_cfg=domain_cfg)
+        ds_nemo.close()
 
 
 # As above, but for PP output files from the UM atmosphere. 
@@ -314,6 +317,7 @@ def update_simulation_timeseries_um (suite_id, timeseries_types, timeseries_file
         time_last = ds_ts['time_centered'].data[-1]
         year_last = time_last.year
         month_last = time_last.month
+        ds_ts.close()
 
     # Identify all the PP files for the given stream
     date_codes = []
