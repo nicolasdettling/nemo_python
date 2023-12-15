@@ -164,7 +164,7 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
         # Need a bigger plot to make room for a legend
         figsize = (8,5)
     fig, ax = plt.subplots(figsize=figsize)
-    for gw_level, data, colour, label in zip(gw_levels, datas, colours, labels):
+    for gw_level, data, colour, label in zip(gw_levels, datas, colours_plot, labels_plot):
         ax.plot(gw_level, data, '-', color=colour, label=label, linewidth=linewidth)
     ax.grid(linestyle='dotted')
     ax.set_title(datas[0].long_name, fontsize=16)
