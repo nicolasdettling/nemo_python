@@ -54,6 +54,7 @@ drake_passage_lat_bounds = [-67.3, -52.6]  # Corresponds to j=79:109 in eORCA1
 region_edges = {
     'amundsen_sea': [[-157.5, -76.5], [-102.75, -72.5]],
     'bellingshausen_sea': [[-102.75, -72.5], [-57.25, -62]],
+    'west_antarctica': [[-157.5, -76.5], [-57.25, -62]], # Amundsen and Bellingshausen
     'larsen': [[-57.25, -62], [-57, -71.5]],
     'filchner_ronne': [[-57, -71.5], [-26, -75.5]],
     'east_antarctica': [[-26, -75.5], [169.5, -71]], # includes Amery
@@ -63,6 +64,7 @@ region_edges = {
 region_edges_flag = {
     'amundsen_sea': ['NS', 'NS'],
     'bellingshausen_sea': ['NS', 'NS'],
+    'west_antarctica', ['NS', 'NS'],
     'larsen': ['NS', 'EW'],
     'antarctic_peninsula': ['NS', 'EW'],
     'filchner_ronne': ['EW', 'NS'],
@@ -79,6 +81,7 @@ region_points = {
 region_names = {
     'amundsen_sea': 'Amundsen Sea',
     'bellingshausen_sea': 'Bellingshausen Sea',
+    'west_antarctica': 'West Antarctica',
     'larsen': 'Larsen',
     'antarctic_peninsula': 'Antarctic Peninsula',
     'filchner_ronne': 'Filchner-Ronne', 
