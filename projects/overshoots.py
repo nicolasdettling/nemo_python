@@ -176,7 +176,50 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
         ax.set_position([box.x0, box.y0, box.width*0.8, box.height])
         ax.legend(loc='center left', bbox_to_anchor=(1,0.5))
     finished_plot(fig, fig_name=fig_name)
-    
+
+
+# Plot timeseries by global warming level for all variables in all experiments.
+def plot_all_by_gw_level (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None, pi_suite='cs568'):
+
+    # A bit different to normal timeseries above - plot ramp downs in same colour as stabilised, as they'll be clearly differentiable on the plot.
+    sim_names = ['ramp up', 'ramp up static ice', '1.5 K stabilise & ramp down', '2K stabilise & ramp down', '2.5K stabilise', '3K stabilise', '4K stabilise', '5K stabilise', '6K stabilise']
+    colours = ['Black', 'DarkGrey', 'DarkMagenta', 'Blue', 'DarkCyan', 'DarkGreen', 'GoldenRod', 'Coral', 'Crimson']
+    sim_dirs = [['cx209', 'cw988', 'cw989', 'cw990'],  # ramp up
+                'cz826', # ramp up static ice
+                ['cy837', 'cz834', 'da087', 'da697'], # stabilise 1.5K & ramp down
+                ['cy838', 'cz944', 'da800'], # stabilise 2K & ramp down - todo add back in cz855 stabilise
+                ['cz374', 'cz859'], # stabilise 2.5K
+                'cz375', # stabilise 3K
+                'cz376', # stabilise 4K
+                'cz377', # stabilise 5K
+                'cz378'] # stabilise 6K
+
+    # Now construct master list of variables as above - modularise this if I do it a third time!
+    var_names_all = []
+    for region in regions:
+        for var in var_names:
+            if var == 'drake_passage_transport':
+                # Special case with no region
+                if var not in var_names_all:
+                    var_names_all.append(var)
+            elif var.endswith('200_700m'):
+                # Special cases where only some regions defined
+                if region in ['amundsen_sea', 'bellingshausen_sea']:
+                    var_names_all.append(region+'_'+var)
+            else:
+                # Every combination of region and variable
+                var_names_all.append(region+'_'+var)
+
+    for var in var_names_all:
+        if var == 'drake_passage_transport':
+            fname = timeseries_file_u
+        else:
+            fname = timeseries_file
+        plot_by_gw_level(sim_dirs, var, pi_suite=pi_suite, base_dir=base_dir, timeseries_file=fname, timeseries_file_um=timeseries_file_um, smooth=smooth, labels=sim_names, colours=colours, linewidth=1, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_gw.png'))
+        
+
+
+
                     
 
     
