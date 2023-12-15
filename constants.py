@@ -64,7 +64,7 @@ region_edges = {
 region_edges_flag = {
     'amundsen_sea': ['NS', 'NS'],
     'bellingshausen_sea': ['NS', 'NS'],
-    'west_antarctica', ['NS', 'NS'],
+    'west_antarctica': ['NS', 'NS'],
     'larsen': ['NS', 'EW'],
     'antarctic_peninsula': ['NS', 'EW'],
     'filchner_ronne': ['EW', 'NS'],
