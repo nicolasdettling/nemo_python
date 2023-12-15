@@ -1,7 +1,10 @@
 # Analysing TerraFIRMA overshoot simulations with UKESM1.1-ice (NEMO 3.6)
 
+import xarray as xr
+
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
 from ..plots import timeseries_by_region, timeseries_by_expt
+from ..utils import moving_average
 
 
 # Call update_simulation_timeseries for the given suite ID
@@ -35,8 +38,8 @@ def update_overshoot_timeseries (suite_id, base_dir='./', domain_cfg='/gws/nopw/
 # Call for all simulations (add to the list of suite IDs as needed)
 def update_overshoot_timeseries_all (base_dir='./', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
 
-    # To add when ERROR_SINGLE_COPY_UNAVAILABLE is resolved (and these suites are re-pulled from MASS): cs495, cz855
-    for suite_id in ['cs568', 'cx209', 'cw988', 'cw989', 'cw990', 'cz826', 'cy837', 'cz834', 'da087', 'cy838', 'cz374', 'cz859', 'cz375', 'cz376', 'cz377', 'cz378', 'da697', 'cz944', 'da800']:
+    # To add when ERROR_SINGLE_COPY_UNAVAILABLE is resolved (and these suites are re-pulled from MASS): cz855
+    for suite_id in ['cs495', 'cs568', 'cx209', 'cw988', 'cw989', 'cw990', 'cz826', 'cy837', 'cz834', 'da087', 'cy838', 'cz374', 'cz859', 'cz375', 'cz376', 'cz377', 'cz378', 'da697', 'cz944', 'da800']:
         update_overshoot_timeseries(suite_id, base_dir=base_dir, domain_cfg=domain_cfg)
 
 
@@ -101,6 +104,56 @@ def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 
         else:
             fname = timeseries_file
         timeseries_by_expt(var, sim_dirs, sim_names=sim_names, colours=colours, timeseries_file=fname, smooth=smooth, linewidth=1, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_master.png'))
+
+
+# Plot the timeseries of one or more experiments and one variable against global warming level (relative to preindustrial mean in the given PI suite).
+def plot_by_gw_level (suites, var_name, pi_suite='cs568', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1):
+
+    # Get baseline global mean SAT
+    ds_pi = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
+    baseline_temp = ds_pi['global_mean_sat'].mean()
+    ds_pi.close()
+    gw_levels = []
+    datas = []
+    for suite in suites:
+        # Read global mean SAT in this suite and convert to GW level
+        ds_um = xr.open_dataset(base_dir+'/'+suite_id+'/'+timeseries_file_um)
+        gw_level = ds_um['global_mean_sat'] - baseline_temp
+        ds_um.close()
+        # Smooth it in time
+        gw_level = moving_average(gw_level, smooth)
+        # Finally read and smooth the variable
+        ds = xr.open_dataset(base_dir+'/'+suite_id+'/'+timeseries_file)
+        data = moving_average(ds[var_name], smooth)
+        ds.close()
+        # Trim the two timeseries to be the same length, if needed
+        new_size = min(gw_level.size, data.size)
+        if gw_level.size > new_size:
+            gw_level = gw_level.isel(time_centered=slice(0,new_size))
+        if data.size > new_size:
+            data = data.isel(time_centered=slice(0,new_size))
+        gw_levels.append(gw_level)
+        datas.append(data)
+
+    # Plot
+    if labels is None:
+        figsize = (6,4)
+    else:
+        # Need a bigger plot to make room for a legend
+        figsize = (11,6)
+    fig, ax = plt.subplots(figsize=figsize)
+    for n in range(len(datas)):
+        ax.plot(gw_levels[n], datas[n], '-', color=colours[n] if colours is not None else 'blue', label=labels[n] if labels is not None else None, linewidth=linewidth)
+    ax.grid(linestyle='dotted')
+    ax.set_title(datas[0].long_name, fontsize=16)
+    ax.set_ylabel(datas[0].units, fontsize=14)
+    ax.set_xlabel('Global warming relative to preindustrial (K)', fontsize=14)
+    if labels is not None:
+        # Make legend
+        box = ax.get_position([box.x0, box.y0, box.width*0.8, box.height])
+        ax.legend(loc='center left', bbox_to_anchor=(1,0.5))
+    finished_plot(fig, fig_name=fig_name)
+    
                     
 
     
