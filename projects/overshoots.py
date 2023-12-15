@@ -253,7 +253,7 @@ def gw_level_panel_plots (base_dir='./', pi_suite='cs568', fig_dir=None):
         gs.update(left=0.09, right=0.98, bottom=0.07, top=0.9, hspace=0.3, wspace=0.15)
         for n in range(len(regions)):
             ax = plt.subplot(gs[n//2,n%2])
-            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=1, ax=ax)
+            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=0.5, ax=ax)
             if n == len(regions)-1:
                 title = 'Antarctica mean'
             else:
