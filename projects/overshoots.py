@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
 from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot
 from ..utils import moving_average
-from ..constants import line_colours
+from ..constants import line_colours, region_names, deg_string, gkg_string
 
 
 # Call update_simulation_timeseries for the given suite ID
@@ -232,6 +232,7 @@ def gw_level_panel_plots (base_dir='./', pi_suite='cs568', fig_dir=None):
     regions = ['ross', 'filchner_ronne', 'amundsen_sea', 'east_antarctica', 'all']   # To do: swap amundsen_sea for west_antarctica when new timeseries are done
     var_names = ['bwtemp', 'bwsalt', 'massloss']
     var_titles = ['Bottom temperature on continental shelf and cavities', 'Bottom salinity on continental shelf and cavities', 'Basal mass loss']
+    units = [deg_string+'C', gkg_string, 'Gt/y']
     sim_names = ['ramp up', 'ramp up static ice', '1.5 K stabilise & ramp down', '2K stabilise & ramp down', '2.5K stabilise', '3K stabilise', '4K stabilise', '5K stabilise', '6K stabilise']
     colours = ['Black', 'DarkGrey', 'DarkMagenta', 'Blue', 'DarkCyan', 'DarkGreen', 'GoldenRod', 'Coral', 'Crimson']
     sim_dirs = [['cx209', 'cw988', 'cw989', 'cw990'],  # ramp up
@@ -246,17 +247,30 @@ def gw_level_panel_plots (base_dir='./', pi_suite='cs568', fig_dir=None):
     timeseries_file = 'timeseries.nc'
     smooth = 24
 
-    for var in var_names:
-        fig = plt.figure(figsize=(8,10))
+    for v in range(len(var_names)):
+        fig = plt.figure(figsize=(9,10))
         gs = plt.GridSpec(3,2)
-        gs.update(left=0.05, right=0.95, bottom=0.05, top=0.85)
+        gs.update(left=0.09, right=0.98, bottom=0.07, top=0.9, hspace=0.3, wspace=0.15)
         for n in range(len(regions)):
             ax = plt.subplot(gs[n//2,n%2])
-            plot_by_gw_level(sim_dirs, var, pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=1, ax=ax)
-            ax.set_title(region_names[regions[n]], fontsize=14)
+            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=1, ax=ax)
+            if n == len(regions)-1:
+                title = 'Antarctica mean'
+            else:
+                title = region_names[regions[n]]
+            ax.set_title(title, fontsize=14)
+            if n%2 == 0:
+                ax.set_ylabel(units[v], fontsize=12)
+            else:
+                ax.set_ylabel('')
+            if n//2 == 2:
+                ax.set_xlabel('Global warming relative to preindustrial (K)', fontsize=12)
+            else:
+                ax.set_xlabel('')
+        plt.suptitle(var_titles[v], fontsize=16)
         # Make legend in the last box
-        ax.legend(loc='center left', bbox_to_anchor=(1,1))
-        finished_plot(fig, fig_name=None if fig_dir is None else fig_dir+'/'+var+'_gw_panels.png')
+        ax.legend(loc='center left', bbox_to_anchor=(1.2,0.5), fontsize=11)
+        finished_plot(fig, fig_name=None if fig_dir is None else fig_dir+'/'+var_names[v]+'_gw_panels.png')
 
     
         
