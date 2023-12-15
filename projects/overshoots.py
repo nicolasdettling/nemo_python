@@ -109,7 +109,9 @@ def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 
 
 
 # Plot the timeseries of one or more experiments/ensembles (expts can be a string, a list of strings, or a list of lists of string) and one variable against global warming level (relative to preindustrial mean in the given PI suite). 
-def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1):
+def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None):
+
+    new_ax = ax is None
 
     if isinstance(expts, str):
         # Just one suite - generalise
@@ -158,24 +160,30 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
             datas.append(data)
 
     # Plot
-    if labels is None:
-        figsize = (6,4)
-    else:
-        # Need a bigger plot to make room for a legend
-        figsize = (8,5)
-    fig, ax = plt.subplots(figsize=figsize)
+    if new_ax:
+        if labels is None:
+            figsize = (6,4)
+        else:
+            # Need a bigger plot to make room for a legend
+            figsize = (8,5)
+        fig, ax = plt.subplots(figsize=figsize)
     for gw_level, data, colour, label in zip(gw_levels, datas, colours_plot, labels_plot):
         ax.plot(gw_level, data, '-', color=colour, label=label, linewidth=linewidth)
     ax.grid(linestyle='dotted')
-    ax.set_title(datas[0].long_name, fontsize=16)
-    ax.set_ylabel(datas[0].units, fontsize=14)
+    if title is None:
+        title = datas[0].long_name
+    if units is None:
+        units = datas[0].units
+    ax.set_title(title, fontsize=16)
+    ax.set_ylabel(units, fontsize=14)
     ax.set_xlabel('Global warming relative to preindustrial (K)', fontsize=14)
-    if labels is not None:
+    if labels is not None and new_ax:
         # Make legend
         box = ax.get_position()
         ax.set_position([box.x0, box.y0, box.width*0.8, box.height])
         ax.legend(loc='center left', bbox_to_anchor=(1,0.5))
-    finished_plot(fig, fig_name=fig_name)
+    if new_ax:
+        finished_plot(fig, fig_name=fig_name)
 
 
 # Plot timeseries by global warming level for all variables in all experiments.
@@ -216,6 +224,41 @@ def plot_all_by_gw_level (base_dir='./', regions=['all', 'amundsen_sea', 'bellin
         else:
             fname = timeseries_file
         plot_by_gw_level(sim_dirs, var, pi_suite=pi_suite, base_dir=base_dir, timeseries_file=fname, timeseries_file_um=timeseries_file_um, smooth=smooth, labels=sim_names, colours=colours, linewidth=1, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_gw.png'))
+
+
+# Synthesise all this into a set of 5-panel plots for 3 different variables showing timeseries by GW level.
+def gw_level_panel_plots (base_dir='./', pi_suite='cs568', fig_dir=None):
+
+    regions = ['ross', 'filchner_ronne', 'amundsen_sea', 'east_antarctica', 'all']   # To do: swap amundsen_sea for west_antarctica when new timeseries are done
+    var_names = ['bwtemp', 'bwsalt', 'massloss']
+    var_titles = ['Bottom temperature on continental shelf and cavities', 'Bottom salinity on continental shelf and cavities', 'Basal mass loss']
+    sim_names = ['ramp up', 'ramp up static ice', '1.5 K stabilise & ramp down', '2K stabilise & ramp down', '2.5K stabilise', '3K stabilise', '4K stabilise', '5K stabilise', '6K stabilise']
+    colours = ['Black', 'DarkGrey', 'DarkMagenta', 'Blue', 'DarkCyan', 'DarkGreen', 'GoldenRod', 'Coral', 'Crimson']
+    sim_dirs = [['cx209', 'cw988', 'cw989', 'cw990'],  # ramp up
+                'cz826', # ramp up static ice
+                ['cy837', 'cz834', 'da087', 'da697'], # stabilise 1.5K & ramp down
+                ['cy838', 'cz944', 'da800'], # stabilise 2K & ramp down - todo add back in cz855 stabilise
+                ['cz374', 'cz859'], # stabilise 2.5K
+                'cz375', # stabilise 3K
+                'cz376', # stabilise 4K
+                'cz377', # stabilise 5K
+                'cz378'] # stabilise 6K
+    timeseries_file = 'timeseries.nc'
+    smooth = 24
+
+    for var in var_names:
+        fig = plt.figure(figsize=(8,10))
+        gs = plt.GridSpec(3,2)
+        gs.update(left=0.05, right=0.95, bottom=0.05, top=0.85)
+        for n in range(len(regions)):
+            ax = plt.subplot(gs[n//2,n%2])
+            plot_by_gw_level(sim_dirs, var, pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=1, ax=ax)
+            ax.set_title(region_names[regions[n]], fontsize=14)
+        # Make legend in the last box
+        ax.legend(loc='center left', bbox_to_anchor=(1,1))
+        finished_plot(fig, fig_name=None if fig_dir is None else fig_dir+'/'+var+'_gw_panels.png')
+
+    
         
 
 
