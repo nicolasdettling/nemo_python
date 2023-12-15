@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
 from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot
 from ..utils import moving_average
+from ..constants import line_colours
 
 
 # Call update_simulation_timeseries for the given suite ID
@@ -107,55 +108,72 @@ def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 
         timeseries_by_expt(var, sim_dirs, sim_names=sim_names, colours=colours, timeseries_file=fname, smooth=smooth, linewidth=1, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_master.png'))
 
 
-# Plot the timeseries of one or more experiments and one variable against global warming level (relative to preindustrial mean in the given PI suite).
-def plot_by_gw_level (suites, var_name, pi_suite='cs568', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1):
+# Plot the timeseries of one or more experiments/ensembles (expts can be a string, a list of strings, or a list of lists of string) and one variable against global warming level (relative to preindustrial mean in the given PI suite). 
+def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1):
 
-    if isinstance(suites, str):
+    if isinstance(expts, str):
         # Just one suite - generalise
-        suites = [suites]
+        expts = [expts]
+    num_expt = len(expts)
+    if colours is None:
+        if num_expt <= len(line_colours):
+            colours = line_colours[:num_expt]
+    if labels is None:
+        labels = [None]*num_expt            
 
     # Get baseline global mean SAT
     ds_pi = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
     baseline_temp = ds_pi['global_mean_sat'].mean()
     ds_pi.close()
+    
     gw_levels = []
     datas = []
-    for suite in suites:
-        # Read global mean SAT in this suite and convert to GW level
-        ds_um = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
-        gw_level = ds_um['global_mean_sat'] - baseline_temp
-        ds_um.close()
-        # Smooth it in time
-        gw_level = moving_average(gw_level, smooth)
-        # Finally read and smooth the variable
-        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
-        data = moving_average(ds[var_name], smooth)
-        ds.close()
-        # Trim the two timeseries to be the same length, if needed
-        new_size = min(gw_level.size, data.size)
-        if gw_level.size > new_size:
-            gw_level = gw_level.isel(time_centered=slice(0,new_size))
-        if data.size > new_size:
-            data = data.isel(time_centered=slice(0,new_size))
-        gw_levels.append(gw_level)
-        datas.append(data)
+    labels_plot = []
+    colours_plot = []
+    for expt, label, colour in zip(expts, labels, colours):
+        if isinstance(expt, str):
+            # Generalise to ensemble of 1
+            expt = [expt]
+        num_ens = len(expt)
+        labels_plot += [label] + [None]*(num_ens-1)
+        colours_plot += [colour]*num_ens
+        for suite in expt:
+            # Read global mean SAT in this suite and convert to GW level
+            ds_um = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
+            gw_level = ds_um['global_mean_sat'] - baseline_temp
+            ds_um.close()
+            # Smooth it in time
+            gw_level = moving_average(gw_level, smooth)
+            # Finally read and smooth the variable
+            ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+            data = moving_average(ds[var_name], smooth)
+            ds.close()
+            # Trim the two timeseries to be the same length, if needed
+            new_size = min(gw_level.size, data.size)
+            if gw_level.size > new_size:
+                gw_level = gw_level.isel(time_centered=slice(0,new_size))
+            if data.size > new_size:
+                data = data.isel(time_centered=slice(0,new_size))
+            gw_levels.append(gw_level)
+            datas.append(data)
 
     # Plot
     if labels is None:
         figsize = (6,4)
     else:
         # Need a bigger plot to make room for a legend
-        figsize = (11,6)
+        figsize = (8,5)
     fig, ax = plt.subplots(figsize=figsize)
-    for n in range(len(datas)):
-        ax.plot(gw_levels[n], datas[n], '-', color=colours[n] if colours is not None else 'blue', label=labels[n] if labels is not None else None, linewidth=linewidth)
+    for gw_level, data, colour, label in zip(gw_levels, datas, colours, labels):
+        ax.plot(gw_level, data, '-', color=colour, label=label, linewidth=linewidth)
     ax.grid(linestyle='dotted')
     ax.set_title(datas[0].long_name, fontsize=16)
     ax.set_ylabel(datas[0].units, fontsize=14)
     ax.set_xlabel('Global warming relative to preindustrial (K)', fontsize=14)
     if labels is not None:
         # Make legend
-        box = ax.get_position([box.x0, box.y0, box.width*0.8, box.height])
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0, box.width*0.8, box.height])
         ax.legend(loc='center left', bbox_to_anchor=(1,0.5))
     finished_plot(fig, fig_name=fig_name)
     
