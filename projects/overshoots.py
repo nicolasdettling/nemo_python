@@ -1,9 +1,10 @@
 # Analysing TerraFIRMA overshoot simulations with UKESM1.1-ice (NEMO 3.6)
 
 import xarray as xr
+import matplotlib.pyplot as plt
 
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
-from ..plots import timeseries_by_region, timeseries_by_expt
+from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot
 from ..utils import moving_average
 
 
@@ -109,6 +110,10 @@ def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 
 # Plot the timeseries of one or more experiments and one variable against global warming level (relative to preindustrial mean in the given PI suite).
 def plot_by_gw_level (suites, var_name, pi_suite='cs568', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1):
 
+    if isinstance(suites, str):
+        # Just one suite - generalise
+        suites = [suites]
+
     # Get baseline global mean SAT
     ds_pi = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
     baseline_temp = ds_pi['global_mean_sat'].mean()
@@ -117,13 +122,13 @@ def plot_by_gw_level (suites, var_name, pi_suite='cs568', base_dir='./', fig_nam
     datas = []
     for suite in suites:
         # Read global mean SAT in this suite and convert to GW level
-        ds_um = xr.open_dataset(base_dir+'/'+suite_id+'/'+timeseries_file_um)
+        ds_um = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
         gw_level = ds_um['global_mean_sat'] - baseline_temp
         ds_um.close()
         # Smooth it in time
         gw_level = moving_average(gw_level, smooth)
         # Finally read and smooth the variable
-        ds = xr.open_dataset(base_dir+'/'+suite_id+'/'+timeseries_file)
+        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
         data = moving_average(ds[var_name], smooth)
         ds.close()
         # Trim the two timeseries to be the same length, if needed
