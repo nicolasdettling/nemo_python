@@ -27,6 +27,7 @@ def update_overshoot_timeseries (suite_id, base_dir='./', domain_cfg='/gws/nopw/
         if region in regions_btw:
             for var in var_names_btw:
                 timeseries_types.append(region+'_'+var+depth_btw)
+    timeseries_types += ['west_antarctica_bwtemp', 'west_antarctica_bwsalt', 'west_antarctica_massloss']
 
     update_simulation_timeseries(suite_id, timeseries_types, timeseries_file='timeseries.nc', sim_dir=base_dir+'/'+suite_id+'/', freq='m', halo=True, gtype='T')
 
