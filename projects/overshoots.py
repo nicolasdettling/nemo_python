@@ -65,27 +65,65 @@ def plot_all_timeseries_by_region (suite_id, regions=['all', 'amundsen_sea', 'be
         timeseries_by_region(var, base_dir+'/'+suite_id+'/', regions=regions_use, colours=colours, timeseries_file=timeseries_file, smooth=smooth, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_'+suite_id+'.png'))
 
 
+# Set the list of experiments, names for the legend, and colours to use for timeseries etc. If separate_stages=True, the ramp down and re-stabilise stages will be separated out from the initial stabilisations.
+def set_expt_list (separate_stages=False):
+
+    sim_names = []
+    colours = []
+    sim_dirs = []
+
+    sim_names.append('preindustrial')
+    colours.append('Sienna')
+    sim_dirs.append('cs495')
+
+    sim_names.append('ramp up')
+    colours.append('Black')
+    sim_dirs.append(['cx209', 'cw988', 'cw989', 'cw990'])
+
+    sim_names.append('ramp up static ice')
+    colours.append('DarkGrey')
+    sim_dirs.append('cz826')
+
+    # Inner function to process stabilisation targets. 7 arguments:
+    # gw: string with the global warming level (eg '2K')
+    # stabilise, ramp_down, restabilise: strings or lists of strings containing suite(s) corresponding to stabilisation, ramp-down, and restabilisation (at 0K) respectively. They can be None if no such suites exist.
+    # colour1, colour2, colour3: colour names corresponding to stabilise, ramp_down, and restabilise. Can be None if the corresponding suite lists are None.
+    def add_gw_level (gw, stabilise, ramp_down, restabilise, colour1, colour2, colour3):
+        colours.append(colour1)
+        if separate_stages or ramp_down is None:
+            sim_names.append(gw+' stabilise')
+            sim_dirs.append(stabilise)
+        elif separate_stages:
+            sim_names.append(gw+' ramp down')
+            colours.append(colour2)
+            sim_dirs.append(ramp_down)
+            if restabilise is not None:
+                sim_names.append(gw+' restabilise at 0K')
+                colours.append(colour3)
+                sim_dirs.append(restabilise)
+        else:
+            if restabilise is not None:
+                sim_names.append(gw+' stabilise & ramp down & restabilise')
+                sim_dirs.append(stabilise + ramp_down + restabilise)
+            else:
+                sim_names.append(gw+' stabilise & ramp down')
+                sim_dirs.append(stabilise + ramp_down)
+
+    add_gw_level('1.5K', ['cy837', 'cz834', 'da087'], ['da697', 'dc052', 'dc248', 'db956'], None, 'DarkMagenta', 'MediumOrchid', None)
+    add_gw_level('2K', ['cy838', 'cz855', 'da266'], ['cz944', 'dc051', 'da800'], 'dc163', 'Blue', 'CornflowerBlue', 'LightBlue')
+    add_gw_level('2.5K', ['cz374', 'cz859'], None, None, 'DarkCyan', None, None)
+    add_gw_level('3K', ['cz375', 'db587', 'db597'], ['db223', 'dc032', 'dc249'], None, 'DarkGreen', 'DarkSeaGreen', None)
+    add_gw_level('4K', ['cz376', 'db723', 'db733'], ['da892', 'dc123'], None, 'GoldenRod', 'Gold', None)
+    add_gw_level('5K', ['cz377', 'db731', 'dc324'], ['dc251', 'dc130'], None, 'Coral', 'LightSalmon', None)
+    add_gw_level('6K', 'cz378', None, None, 'Crimson', None, None)
+
+    return sim_names, colours, sim_dirs
+
+
 # Plot timeseries by experiment for all variables and regions, in all experiments.
 def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport', 'global_mean_sat'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None):
 
-    sim_names = ['preindustrial', 'ramp up', 'ramp up static ice', 'stabilise 1.5 K', 'stabilise 2K', 'stabilise 2.5K', 'stabilise 3K', 'stabilise 4K', 'stabilise 5K', 'stabilise 6K', 'ramp down 1.5K', 'ramp down 2K', 'ramp down 3K', 'ramp down 4K', 'ramp down 5K', 're-stabilise preindustrial']
-    colours = ['Sienna', 'Black', 'DarkGrey', 'DarkMagenta', 'Blue', 'DarkCyan', 'DarkGreen', 'GoldenRod', 'Coral', 'Crimson', 'MediumOrchid', 'CornflowerBlue', 'DarkSeaGreen', 'Gold', 'LightSalmon', 'Pink', 'Peru']
-    sim_dirs = ['cs495', # preindustrial
-                ['cx209', 'cw988', 'cw989', 'cw990'],  # ramp up
-                'cz826', # ramp up static ice
-                ['cy837', 'cz834', 'da087'], # stabilise 1.5K
-                ['cy838', 'cz855', 'da266'], # stabilise 2K
-                ['cz374', 'cz859'], # stabilise 2.5K
-                ['cz375', 'db587', 'db597'], # stabilise 3K
-                ['cz376', 'db723', 'db733'], # stabilise 4K
-                ['cz377', 'db731', 'dc324'], # stabilise 5K
-                'cz378', # stabilise 6K
-                ['da697', 'dc052', 'dc248', 'db956'], # ramp down 1.5 K
-                ['cz944', 'dc051', 'da800'], # ramp down 2K
-                ['db223', 'dc032', 'dc249'], # ramp down 3K
-                ['da892', 'dc123'], # ramp down 4K
-                ['dc251', 'dc130'], # ramp down 5K
-                'dc163']  # re-stabilise preindustrial
+    sim_names, colours, sim_dirs = set_expt_list(separate_stages=True)
 
     # Now construct master list of variables
     var_names_all = []
@@ -194,20 +232,8 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
 # Plot timeseries by global warming level for all variables in all experiments.
 def plot_all_by_gw_level (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None, pi_suite='cs568'):
 
-    # A bit different to normal timeseries above - plot ramp downs in same colour as stabilised, as they'll be clearly differentiable on the plot.
-    sim_names = ['preindustrial', 'ramp up', 'ramp up static ice', '1.5 K stabilise & ramp down', '2K stabilise & ramp down', '2.5K stabilise', '3K stabilise & ramp down', '4K stabilise & ramp down', '5K stabilise & ramp down', '6K stabilise']
-    colours = ['Sienna', 'Black', 'DarkGrey', 'DarkMagenta', 'Blue', 'DarkCyan', 'DarkGreen', 'GoldenRod', 'Coral', 'Crimson']
-    sim_dirs = ['cs495', # preindustrial
-                ['cx209', 'cw988', 'cw989', 'cw990'],  # ramp up
-                'cz826', # ramp up static ice
-                ['cy837', 'cz834', 'da087', 'da697', 'dc052', 'dc248', 'db956'], # stabilise 1.5K & ramp down
-                ['cy838', 'cz855', 'da266', 'cz944', 'dc051', 'da800', 'dc163'], # stabilise 2K & ramp down & re-stabilise preinudstrial
-                ['cz374', 'cz859'], # stabilise 2.5K
-                ['cz375', 'db587', 'db597', 'db223', 'dc032', 'dc249'], # stabilise 3K & ramp down
-                ['cz376', 'db723', 'db733', 'da892', 'dc123'], # stabilise 4K
-                ['cz377', 'db731', 'dc324', 'dc251', 'dc130'], # stabilise 5K
-                'cz378'] # stabilise 6K
-
+    sim_names, colours, sim_dirs = set_expt_list()
+    
     # Now construct master list of variables as above - modularise this if I do it a third time!
     var_names_all = []
     for region in regions:
@@ -239,18 +265,7 @@ def gw_level_panel_plots (base_dir='./', pi_suite='cs568', fig_dir=None):
     var_names = ['bwtemp', 'bwsalt', 'massloss']
     var_titles = ['Bottom temperature on continental shelf and cavities', 'Bottom salinity on continental shelf and cavities', 'Basal mass loss']
     units = [deg_string+'C', gkg_string, 'Gt/y']
-    sim_names = ['preindustrial', 'ramp up', 'ramp up static ice', '1.5 K stabilise & ramp down', '2K stabilise & ramp down', '2.5K stabilise', '3K stabilise & ramp down', '4K stabilise & ramp down', '5K stabilise & ramp down', '6K stabilise']
-    colours = ['Sienna', 'Black', 'DarkGrey', 'DarkMagenta', 'Blue', 'DarkCyan', 'DarkGreen', 'GoldenRod', 'Coral', 'Crimson']
-    sim_dirs = ['cs495', # preindustrial
-                ['cx209', 'cw988', 'cw989', 'cw990'],  # ramp up
-                'cz826', # ramp up static ice
-                ['cy837', 'cz834', 'da087', 'da697', 'dc052', 'dc248', 'db956'], # stabilise 1.5K & ramp down
-                ['cy838', 'cz855', 'da266', 'cz944', 'dc051', 'da800', 'dc163'], # stabilise 2K & ramp down & re-stabilise preinudstrial
-                ['cz374', 'cz859'], # stabilise 2.5K
-                ['cz375', 'db587', 'db597', 'db223', 'dc032', 'dc249'], # stabilise 3K & ramp down
-                ['cz376', 'db723', 'db733', 'da892', 'dc123'], # stabilise 4K
-                ['cz377', 'db731', 'dc324', 'dc251', 'dc130'], # stabilise 5K
-                'cz378'] # stabilise 6K
+    sim_names, colours, sim_dirs = set_expt_list()
     timeseries_file = 'timeseries.nc'
     smooth = 24
 
