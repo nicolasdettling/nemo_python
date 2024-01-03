@@ -194,12 +194,19 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
             ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
             data = moving_average(ds[var_name], smooth)
             ds.close()
-            # Trim the two timeseries to be the same length, if needed
-            new_size = min(gw_level.size, data.size)
-            if gw_level.size > new_size:
-                gw_level = gw_level.isel(time_centered=slice(0,new_size))
-            if data.size > new_size:
-                data = data.isel(time_centered=slice(0,new_size))
+            # Trim the two timeseries to line up and be the same length
+            # Find most restrictive endpoints
+            date_start = max(data.time_centered[0], gw_level.time_centered[0])
+            date_end = min(data.time_centered[-1], gw_level.time_centered[-1])
+            # Inner function to trim
+            def trim_timeseries (A):
+                t_start = np.argwhere(A.time_centered.data == date_start)
+                t_end = np.argwhere(A.time_centered.data == date_end)
+                return A.isel(time_centered=slice(t_start, t_end+1))
+            data = trim_timeseries(data)
+            gw_level = trim_timeseries(gw_level)
+            if data.size != gw_level.size:
+                raise Exception('Timeseries do not align')
             gw_levels.append(gw_level)
             datas.append(data)
 
