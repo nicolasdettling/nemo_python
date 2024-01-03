@@ -302,6 +302,54 @@ def gw_level_panel_plots (base_dir='./', pi_suite='cs568', fig_dir=None):
         ax.legend(loc='center left', bbox_to_anchor=(1.2,0.5), fontsize=11)
         finished_plot(fig, fig_name=None if fig_dir is None else fig_dir+'/'+var_names[v]+'_gw_panels.png')
 
+
+# Plot timeseries of the given variable (massloss or cavity_temp) against bottom salinity in the corresponding region for the three big cold cavities (FRIS, Ross, and Amery).
+def cold_cavities_by_bwsalt (var_name, base_dir='./', fig_name=None):
+
+    regions = ['filchner_ronne', 'ross', 'amery']
+    var_x = [region+'_bwsalt' for region in regions]  # Update to cavity_bwsalt when timeseries ready
+    var_y = [region+'_'+var_name for region in regions]
+    sim_names, colours, sim_dirs = set_expt_list()
+    timeseries_file = 'timeseries.nc'
+    smooth = 24
+    if var_name == 'massloss':
+        units = 'Gt/y'
+    elif 'temp' in var_name:
+        units = deg_string+'C'
+
+    fig = plt.figure(figsize=(9,5))
+    gs = plt.GridSpec(1,3)
+    gs.update(left=0.05, right=0.95, bottom=0.3, top=0.9, wspace=0.1)
+    for n in range(len(regions)):
+        ax = plt.subplot(gs[0,n])
+        # Read timeseries from every experiment
+        data_x = []
+        data_y = []
+        labels_plot = []
+        colours_plot = []
+        for expt, label, colour in zip(sim_dirs, sim_names, colours):
+            if isinstance(expt, str):
+                expt = [expt]
+            num_ens = len(expt)
+            labels_plot += [label] + [None]*(num_ens-1)
+            colours_plot += [colour]*num_ens
+            for suite in expt:
+                ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+                data_x.append(moving_average(ds[var_x[n]], smooth))
+                data_y.append(moving_average(ds[var_y[n]], smooth))
+        # Plot
+        for x, y, label, colour in zip(data_x, data_y, labels_plot, colours_plot):
+            ax.plot(x, y, '-', color=colour, label=label, linewidth=1)
+        ax.grid(linestyle='dotted')
+        ax.set_title(region_names[regions[n]], fontsize=14)
+        if n==0:
+            ax.set_xlabel('Bottom salinity ('+gkg_string+')', fontsize=12)
+            ax.set_ylabel(var_name+' ('+units+')', fontsize=12)
+    # Legend at bottom
+    ax.legend(loc='lower center', bbox_to_anchor=(-0.5, -0.5), fontsize=10, ncol=4)
+    finished_plot(fig, fig_name=fig_name)
+        
+
     
         
 
