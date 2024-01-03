@@ -41,8 +41,7 @@ def update_overshoot_timeseries (suite_id, base_dir='./', domain_cfg='/gws/nopw/
 # Call for all simulations (add to the list of suite IDs as needed)
 def update_overshoot_timeseries_all (base_dir='./', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
 
-    # To add when ERROR_SINGLE_COPY_UNAVAILABLE is resolved (and these suites are re-pulled from MASS): cz855
-    for suite_id in ['cs495', 'cs568', 'cx209', 'cw988', 'cw989', 'cw990', 'cz826', 'cy837', 'cz834', 'da087', 'cy838', 'cz374', 'cz859', 'cz375', 'cz376', 'cz377', 'cz378', 'da697', 'cz944', 'da800', 'db587', 'db723', 'db731', 'da266', 'db597', 'db733', 'dc324', 'da832', 'db223', 'dc051', 'dc052', 'dc248', 'dc249', 'dc251', 'db956', 'dc032', 'dc123', 'dc130', 'dc163']:
+    for suite_id in ['cs495', 'cs568', 'cx209', 'cw988', 'cw989', 'cw990', 'cz826', 'cy837', 'cz834', 'da087', 'cy838', 'cz855', 'cz374', 'cz859', 'cz375', 'cz376', 'cz377', 'cz378', 'da697', 'cz944', 'da800', 'db587', 'db723', 'db731', 'da266', 'db597', 'db733', 'dc324', 'da832', 'db223', 'dc051', 'dc052', 'dc248', 'dc249', 'dc251', 'db956', 'dc032', 'dc123', 'dc130', 'dc163']:
         update_overshoot_timeseries(suite_id, base_dir=base_dir, domain_cfg=domain_cfg)
 
 
@@ -69,19 +68,24 @@ def plot_all_timeseries_by_region (suite_id, regions=['all', 'amundsen_sea', 'be
 # Plot timeseries by experiment for all variables and regions, in all experiments.
 def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport', 'global_mean_sat'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None):
 
-    sim_names = ['ramp up', 'ramp up static ice', 'stabilise 1.5 K', 'stabilise 2K', 'stabilise 2.5K', 'stabilise 3K', 'stabilise 4K', 'stabilise 5K', 'stabilise 6K', 'ramp down 1.5K', 'ramp down 2K']
-    colours = ['Black', 'DarkGrey', 'DarkMagenta', 'Blue', 'DarkCyan', 'DarkGreen', 'GoldenRod', 'Coral', 'Crimson', 'MediumOrchid', 'CornflowerBlue']
-    sim_dirs = [['cx209', 'cw988', 'cw989', 'cw990'],  # ramp up
+    sim_names = ['preindustrial', 'ramp up', 'ramp up static ice', 'stabilise 1.5 K', 'stabilise 2K', 'stabilise 2.5K', 'stabilise 3K', 'stabilise 4K', 'stabilise 5K', 'stabilise 6K', 'ramp down 1.5K', 'ramp down 2K', 'ramp down 3K', 'ramp down 4K', 'ramp down 5K', 're-stabilise preindustrial']
+    colours = ['Sienna', 'Black', 'DarkGrey', 'DarkMagenta', 'Blue', 'DarkCyan', 'DarkGreen', 'GoldenRod', 'Coral', 'Crimson', 'MediumOrchid', 'CornflowerBlue', 'DarkSeaGreen', 'Gold', 'LightSalmon', 'Pink', 'Peru']
+    sim_dirs = ['cs495', # preindustrial
+                ['cx209', 'cw988', 'cw989', 'cw990'],  # ramp up
                 'cz826', # ramp up static ice
                 ['cy837', 'cz834', 'da087'], # stabilise 1.5K
-                'cy838', # stabilise 2K - todo add back in cz855
+                ['cy838', 'cz855', 'da266'], # stabilise 2K
                 ['cz374', 'cz859'], # stabilise 2.5K
-                'cz375', # stabilise 3K
-                'cz376', # stabilise 4K
-                'cz377', # stabilise 5K
+                ['cz375', 'db587', 'db597'], # stabilise 3K
+                ['cz376', 'db723', 'db733'], # stabilise 4K
+                ['cz377', 'db731', 'dc324'], # stabilise 5K
                 'cz378', # stabilise 6K
-                'da697', # ramp down 1.5 K
-                ['cz944', 'da800']] # ramp down 2K
+                ['da697', 'dc052', 'dc248', 'db956'], # ramp down 1.5 K
+                ['cz944', 'dc051', 'da800'], # ramp down 2K
+                ['db223', 'dc032', 'dc249'], # ramp down 3K
+                ['da892', 'dc123'], # ramp down 4K
+                ['dc251', 'dc130'], # ramp down 5K
+                'dc163']  # re-stabilise preindustrial
 
     # Now construct master list of variables
     var_names_all = []
@@ -191,16 +195,17 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
 def plot_all_by_gw_level (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None, pi_suite='cs568'):
 
     # A bit different to normal timeseries above - plot ramp downs in same colour as stabilised, as they'll be clearly differentiable on the plot.
-    sim_names = ['ramp up', 'ramp up static ice', '1.5 K stabilise & ramp down', '2K stabilise & ramp down', '2.5K stabilise', '3K stabilise', '4K stabilise', '5K stabilise', '6K stabilise']
-    colours = ['Black', 'DarkGrey', 'DarkMagenta', 'Blue', 'DarkCyan', 'DarkGreen', 'GoldenRod', 'Coral', 'Crimson']
-    sim_dirs = [['cx209', 'cw988', 'cw989', 'cw990'],  # ramp up
+    sim_names = ['preindustrial', 'ramp up', 'ramp up static ice', '1.5 K stabilise & ramp down', '2K stabilise & ramp down', '2.5K stabilise', '3K stabilise & ramp down', '4K stabilise & ramp down', '5K stabilise & ramp down', '6K stabilise']
+    colours = ['Sienna', 'Black', 'DarkGrey', 'DarkMagenta', 'Blue', 'DarkCyan', 'DarkGreen', 'GoldenRod', 'Coral', 'Crimson']
+    sim_dirs = ['cs495', # preindustrial
+                ['cx209', 'cw988', 'cw989', 'cw990'],  # ramp up
                 'cz826', # ramp up static ice
-                ['cy837', 'cz834', 'da087', 'da697'], # stabilise 1.5K & ramp down
-                ['cy838', 'cz944', 'da800'], # stabilise 2K & ramp down - todo add back in cz855 stabilise
+                ['cy837', 'cz834', 'da087', 'da697', 'dc052', 'dc248', 'db956'], # stabilise 1.5K & ramp down
+                ['cy838', 'cz855', 'da266', 'cz944', 'dc051', 'da800', 'dc163'], # stabilise 2K & ramp down & re-stabilise preinudstrial
                 ['cz374', 'cz859'], # stabilise 2.5K
-                'cz375', # stabilise 3K
-                'cz376', # stabilise 4K
-                'cz377', # stabilise 5K
+                ['cz375', 'db587', 'db597', 'db223', 'dc032', 'dc249'], # stabilise 3K & ramp down
+                ['cz376', 'db723', 'db733', 'da892', 'dc123'], # stabilise 4K
+                ['cz377', 'db731', 'dc324', 'dc251', 'dc130'], # stabilise 5K
                 'cz378'] # stabilise 6K
 
     # Now construct master list of variables as above - modularise this if I do it a third time!
@@ -230,20 +235,21 @@ def plot_all_by_gw_level (base_dir='./', regions=['all', 'amundsen_sea', 'bellin
 # Synthesise all this into a set of 5-panel plots for 3 different variables showing timeseries by GW level.
 def gw_level_panel_plots (base_dir='./', pi_suite='cs568', fig_dir=None):
 
-    regions = ['ross', 'filchner_ronne', 'amundsen_sea', 'east_antarctica', 'all']   # To do: swap amundsen_sea for west_antarctica when new timeseries are done
+    regions = ['ross', 'filchner_ronne', 'west_antarctica', 'east_antarctica', 'all']
     var_names = ['bwtemp', 'bwsalt', 'massloss']
     var_titles = ['Bottom temperature on continental shelf and cavities', 'Bottom salinity on continental shelf and cavities', 'Basal mass loss']
     units = [deg_string+'C', gkg_string, 'Gt/y']
-    sim_names = ['ramp up', 'ramp up static ice', '1.5 K stabilise & ramp down', '2K stabilise & ramp down', '2.5K stabilise', '3K stabilise', '4K stabilise', '5K stabilise', '6K stabilise']
-    colours = ['Black', 'DarkGrey', 'DarkMagenta', 'Blue', 'DarkCyan', 'DarkGreen', 'GoldenRod', 'Coral', 'Crimson']
-    sim_dirs = [['cx209', 'cw988', 'cw989', 'cw990'],  # ramp up
+    sim_names = ['preindustrial', 'ramp up', 'ramp up static ice', '1.5 K stabilise & ramp down', '2K stabilise & ramp down', '2.5K stabilise', '3K stabilise & ramp down', '4K stabilise & ramp down', '5K stabilise & ramp down', '6K stabilise']
+    colours = ['Sienna', 'Black', 'DarkGrey', 'DarkMagenta', 'Blue', 'DarkCyan', 'DarkGreen', 'GoldenRod', 'Coral', 'Crimson']
+    sim_dirs = ['cs495', # preindustrial
+                ['cx209', 'cw988', 'cw989', 'cw990'],  # ramp up
                 'cz826', # ramp up static ice
-                ['cy837', 'cz834', 'da087', 'da697'], # stabilise 1.5K & ramp down
-                ['cy838', 'cz944', 'da800'], # stabilise 2K & ramp down - todo add back in cz855 stabilise
+                ['cy837', 'cz834', 'da087', 'da697', 'dc052', 'dc248', 'db956'], # stabilise 1.5K & ramp down
+                ['cy838', 'cz855', 'da266', 'cz944', 'dc051', 'da800', 'dc163'], # stabilise 2K & ramp down & re-stabilise preinudstrial
                 ['cz374', 'cz859'], # stabilise 2.5K
-                'cz375', # stabilise 3K
-                'cz376', # stabilise 4K
-                'cz377', # stabilise 5K
+                ['cz375', 'db587', 'db597', 'db223', 'dc032', 'dc249'], # stabilise 3K & ramp down
+                ['cz376', 'db723', 'db733', 'da892', 'dc123'], # stabilise 4K
+                ['cz377', 'db731', 'dc324', 'dc251', 'dc130'], # stabilise 5K
                 'cz378'] # stabilise 6K
     timeseries_file = 'timeseries.nc'
     smooth = 24
