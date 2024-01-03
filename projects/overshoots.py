@@ -41,7 +41,8 @@ def update_overshoot_timeseries (suite_id, base_dir='./', domain_cfg='/gws/nopw/
 # Call for all simulations (add to the list of suite IDs as needed)
 def update_overshoot_timeseries_all (base_dir='./', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
 
-    for suite_id in ['cs495', 'cs568', 'cx209', 'cw988', 'cw989', 'cw990', 'cz826', 'cy837', 'cz834', 'da087', 'cy838', 'cz855', 'cz374', 'cz859', 'cz375', 'cz376', 'cz377', 'cz378', 'da697', 'cz944', 'da800', 'db587', 'db723', 'db731', 'da266', 'db597', 'db733', 'dc324', 'da832', 'db223', 'dc051', 'dc052', 'dc248', 'dc249', 'dc251', 'db956', 'dc032', 'dc123', 'dc130', 'dc163']:
+    # To do: add in dc123 once ERROR_SINGLE_COPY_UNAVAILABLE goes away
+    for suite_id in ['cs495', 'cs568', 'cx209', 'cw988', 'cw989', 'cw990', 'cz826', 'cy837', 'cz834', 'da087', 'cy838', 'cz855', 'cz374', 'cz859', 'cz375', 'cz376', 'cz377', 'cz378', 'da697', 'cz944', 'da800', 'db587', 'db723', 'db731', 'da266', 'db597', 'db733', 'dc324', 'da832', 'db223', 'dc051', 'dc052', 'dc248', 'dc249', 'dc251', 'db956', 'dc032', 'dc130', 'dc163']:
         update_overshoot_timeseries(suite_id, base_dir=base_dir, domain_cfg=domain_cfg)
 
 
@@ -113,7 +114,7 @@ def set_expt_list (separate_stages=False):
     add_gw_level('2K', ['cy838', 'cz855', 'da266'], ['cz944', 'dc051', 'da800'], 'dc163', 'Blue', 'CornflowerBlue', 'LightBlue')
     add_gw_level('2.5K', ['cz374', 'cz859'], None, None, 'DarkCyan', None, None)
     add_gw_level('3K', ['cz375', 'db587', 'db597'], ['db223', 'dc032', 'dc249'], None, 'DarkGreen', 'DarkSeaGreen', None)
-    add_gw_level('4K', ['cz376', 'db723', 'db733'], ['da892', 'dc123'], None, 'GoldenRod', 'Gold', None)
+    add_gw_level('4K', ['cz376', 'db723', 'db733'], 'da892', None, 'GoldenRod', 'Gold', None)  # To do: add in dc123 (ramp down) once ERROR_SINGLE_COPY_UNAVAILABLE fixed
     add_gw_level('5K', ['cz377', 'db731', 'dc324'], ['dc251', 'dc130'], None, 'Coral', 'LightSalmon', None)
     add_gw_level('6K', 'cz378', None, None, 'Crimson', None, None)
 
