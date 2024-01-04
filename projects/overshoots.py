@@ -42,7 +42,7 @@ def update_overshoot_timeseries (suite_id, base_dir='./', domain_cfg='/gws/nopw/
 def update_overshoot_timeseries_all (base_dir='./', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
 
     # To do: add in dc123 once ERROR_SINGLE_COPY_UNAVAILABLE goes away
-    for suite_id in ['cs495', 'cs568', 'cx209', 'cw988', 'cw989', 'cw990', 'cz826', 'cy837', 'cz834', 'da087', 'cy838', 'cz855', 'cz374', 'cz859', 'cz375', 'cz376', 'cz377', 'cz378', 'da697', 'cz944', 'da800', 'db587', 'db723', 'db731', 'da266', 'db597', 'db733', 'dc324', 'da832', 'db223', 'dc051', 'dc052', 'dc248', 'dc249', 'dc251', 'db956', 'dc032', 'dc130', 'dc163']:
+    for suite_id in ['cs495', 'cs568', 'cx209', 'cw988', 'cw989', 'cw990', 'cz826', 'cy837', 'cz834', 'da087', 'cy838', 'cz855', 'cz374', 'cz859', 'cz375', 'cz376', 'cz377', 'cz378', 'da697', 'cz944', 'da800', 'db587', 'db723', 'db731', 'da266', 'db597', 'db733', 'dc324', 'da892', 'db223', 'dc051', 'dc052', 'dc248', 'dc249', 'dc251', 'db956', 'dc032', 'dc130', 'dc163']:
         update_overshoot_timeseries(suite_id, base_dir=base_dir, domain_cfg=domain_cfg)
 
 
