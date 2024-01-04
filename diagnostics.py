@@ -52,10 +52,13 @@ def barotropic_streamfunction (ds):
 def ross_gyre_eastern_extent (ds):
 
     # Find all points where the barotropic streamfunction is negative
-    strf = barotropic_streamfunction(ds)
+    strf = barotropic_streamfunction(ds)    
     gyre_mask = strf < 0
     # Now only keep the ones connected to the known Ross Gyre point
-    gyre_mask.data = remove_disconnected(gyre_mask, closest_point(ds, ross_gyre_point0))
+    connected = gyre_mask.data
+    for t in range(connected.shape[0]):
+        connected[t,:] = remove_disconnected(gyre_mask.isel(time_counter=t), closest_point(ds, ross_gyre_point0))
+    gyre_mask.data = connected
     # Find all longitudes within this mask which are also in the western hemisphere
     gyre_lon = ds['nav_lon'].where((gyre_mask==1)*(ds['nav_lon']<0))
     # Return the easternmost point

@@ -139,7 +139,7 @@ def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/i
         # Calculate zonal or meridional transport
         data = transport(ds_nemo, lon0=lon0, lat0=lat0, lon_bounds=lon_bounds, lat_bounds=lat_bounds)
     elif option == 'ross_gyre_eastern_extent':
-        data = ross_gyre_eastern_extent(ds)
+        data = ross_gyre_eastern_extent(ds_nemo)
         
     data *= factor
     data = data.assign_attrs(long_name=title, units=units)
