@@ -127,7 +127,7 @@ def set_expt_list (separate_stages=False, only_up=False, only_down=False):
 
     # Now add the suites
     if not only_down:
-        add_ens('preindustrial', 'Sienna', 'cs495')
+        #add_ens('preindustrial', 'Sienna', 'cs495')
         add_ens('ramp up', 'Black', ['cx209', 'cw988', 'cw989', 'cw990'])
         add_ens('ramp up static ice', 'DarkGrey', 'cz826')        
     add_gw_level('1.5K', ['cy837', 'cz834', 'da087'], ['da697', 'dc052', 'dc248'], None, 'DarkMagenta', 'MediumOrchid', None)
