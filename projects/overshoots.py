@@ -115,10 +115,9 @@ def set_expt_list (separate_stages=False, only_up=False, only_down=False):
                 else:
                     add_ens(gw+' ramp down & re-stabilise', colour1, combine_ens(ramp_down, restabilise))
             if not only_up and not only_down:
-                if ramp_down is None:
-                    ens = stabilise
-                    name = gw+' stabilise'
-                else:
+                name = gw+' stabilise'
+                ens = stabilise
+                if ramp_down is not None:
                     ens = combine_ens(stabilise, ramp_down)
                     name += ' & ramp_down'
                     if restabilise is not None:
