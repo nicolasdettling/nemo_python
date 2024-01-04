@@ -62,5 +62,5 @@ def ross_gyre_eastern_extent (ds):
     # Find all longitudes within this mask which are also in the western hemisphere
     gyre_lon = ds['nav_lon'].where((gyre_mask==1)*(ds['nav_lon']<0))
     # Return the easternmost point
-    return gyre_lon.max()
+    return gyre_lon.max(dim={'x','y'})
 
