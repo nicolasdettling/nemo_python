@@ -77,7 +77,7 @@ def set_expt_list (separate_stages=False, only_up=False, only_down=False):
     # Inner function to add a new suite or ensemble to the lists
     def add_ens (name, colour, dirs):
         sim_names.append(name)
-        sim_colours.append(colour)
+        colours.append(colour)
         sim_dirs.append(dirs)
         
     # Inner function to combine two strings and/or lists into lists
