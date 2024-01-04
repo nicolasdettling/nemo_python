@@ -2,6 +2,7 @@
 
 import xarray as xr
 import matplotlib.pyplot as plt
+import os
 
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
 from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot
@@ -103,12 +104,23 @@ def set_expt_list (separate_stages=False):
                 colours.append(colour3)
                 sim_dirs.append(restabilise)
         else:
+            if isinstance(stabilise, str):
+                dirs_tmp = [stabilise]
+            else:
+                dirs_tmp = stabilise
+            if isinstance(ramp_down, str):
+                dirs_tmp += [ramp_down]
+            else:
+                dirs_tmp += ramp_down
             if restabilise is not None:
                 sim_names.append(gw+' stabilise & ramp down & restabilise')
-                sim_dirs.append(stabilise + ramp_down + restabilise)
+                if isinstance(restabilise, str):
+                    dirs_tmp += [restabilise]
+                else:
+                    dirs_tmp += restabilise
             else:
                 sim_names.append(gw+' stabilise & ramp down')
-                sim_dirs.append(stabilise + ramp_down)
+            sim_dirs.append(dirs_tmp)
 
     add_gw_level('1.5K', ['cy837', 'cz834', 'da087'], ['da697', 'dc052', 'dc248'], None, 'DarkMagenta', 'MediumOrchid', None)
     add_gw_level('2K', ['cy838', 'cz855', 'da266'], ['cz944', 'dc051', 'da800'], 'dc163', 'Blue', 'CornflowerBlue', 'LightBlue')
@@ -307,7 +319,7 @@ def gw_level_panel_plots (base_dir='./', pi_suite='cs568', fig_dir=None):
 def cold_cavities_by_bwsalt (var_name, base_dir='./', fig_name=None):
 
     regions = ['filchner_ronne', 'ross', 'amery']
-    var_x = [region+'_bwsalt' for region in regions]  # Update to cavity_bwsalt when timeseries ready
+    var_x = [region+'_shelf_salt' for region in regions]  # Update to shelf_bwsalt when timeseries ready
     var_y = [region+'_'+var_name for region in regions]
     sim_names, colours, sim_dirs = set_expt_list()
     timeseries_file = 'timeseries.nc'
@@ -317,9 +329,9 @@ def cold_cavities_by_bwsalt (var_name, base_dir='./', fig_name=None):
     elif 'temp' in var_name:
         units = deg_string+'C'
 
-    fig = plt.figure(figsize=(9,5))
+    fig = plt.figure(figsize=(10,6))
     gs = plt.GridSpec(1,3)
-    gs.update(left=0.05, right=0.95, bottom=0.3, top=0.9, wspace=0.1)
+    gs.update(left=0.08, right=0.98, bottom=0.3, top=0.92, wspace=0.2)
     for n in range(len(regions)):
         ax = plt.subplot(gs[0,n])
         # Read timeseries from every experiment
@@ -343,14 +355,15 @@ def cold_cavities_by_bwsalt (var_name, base_dir='./', fig_name=None):
                 data_y.append(moving_average(ds[var_y[n]], smooth))
         # Plot
         for x, y, label, colour in zip(data_x, data_y, labels_plot, colours_plot):
-            ax.plot(x, y, '-', color=colour, label=label, linewidth=1)
+            if x is not None and y is not None:
+                ax.plot(x, y, '-', color=colour, label=label, linewidth=1)
         ax.grid(linestyle='dotted')
         ax.set_title(region_names[regions[n]], fontsize=14)
         if n==0:
-            ax.set_xlabel('Bottom salinity ('+gkg_string+')', fontsize=12)
-            ax.set_ylabel(var_name+' ('+units+')', fontsize=12)
+            ax.set_xlabel('Shelf salinity ('+gkg_string+')', fontsize=10)
+            ax.set_ylabel(var_name+' ('+units+')', fontsize=10)
     # Legend at bottom
-    ax.legend(loc='lower center', bbox_to_anchor=(-0.5, -0.5), fontsize=10, ncol=4)
+    ax.legend(loc='lower center', bbox_to_anchor=(-0.7, -0.42), fontsize=10, ncol=3)
     finished_plot(fig, fig_name=fig_name)
         
 
