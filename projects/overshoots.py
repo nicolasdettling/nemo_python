@@ -74,55 +74,63 @@ def set_expt_list (separate_stages=False, only_up=False, only_down=False):
     colours = []
     sim_dirs = []
 
-    if not only_down:
-        sim_names.append('preindustrial')
-        colours.append('Sienna')
-        sim_dirs.append('cs495')
-
-        sim_names.append('ramp up')
-        colours.append('Black')
-        sim_dirs.append(['cx209', 'cw988', 'cw989', 'cw990'])
-
-        sim_names.append('ramp up static ice')
-        colours.append('DarkGrey')
-        sim_dirs.append('cz826')
+    # Inner function to add a new suite or ensemble to the lists
+    def add_ens (name, colour, dirs):
+        sim_names.append(name)
+        sim_colours.append(colour)
+        sim_dirs.append(dirs)
+        
+    # Inner function to combine two strings and/or lists into lists
+    def combine_ens (ens1, ens2):
+        if isinstance(ens1, str):
+            all_ens = [ens1]
+        else:
+            all_ens = ens1
+        if isinstance(ens2, str):
+            all_ens += [ens2]
+        else:
+            all_ens += ens2
+        return all_ens    
 
     # Inner function to process stabilisation targets. 7 arguments:
     # gw: string with the global warming level (eg '2K')
     # stabilise, ramp_down, restabilise: strings or lists of strings containing suite(s) corresponding to stabilisation, ramp-down, and restabilisation (at 0K) respectively. They can be None if no such suites exist.
     # colour1, colour2, colour3: colour names corresponding to stabilise, ramp_down, and restabilise. Can be None if the corresponding suite lists are None.
-    def add_gw_level (gw, stabilise, ramp_down, restabilise, colour1, colour2, colour3):        
-        colours.append(colour1)
-        if separate_stages or ramp_down is None:
-            sim_names.append(gw+' stabilise')
-            sim_dirs.append(stabilise)
-        elif separate_stages:
-            sim_names.append(gw+' ramp down')
-            colours.append(colour2)
-            sim_dirs.append(ramp_down)
-            if restabilise is not None:
-                sim_names.append(gw+' restabilise at 0K')
-                colours.append(colour3)
-                sim_dirs.append(restabilise)
+    def add_gw_level (gw, stabilise, ramp_down, restabilise, colour1, colour2, colour3):
+        if separate_stages:
+            # Keep the distinct colours regardless of values of only_up, only_down
+            if stabilise is not None and not only_down:
+                add_ens(gw+' stabilise', colour1, stabilise)
+            if ramp_down is not None and not only_up:
+                add_ens(gw+' ramp down', colour2, ramp_down)
+            if restabilise is not None and not only_up:
+                add_ens(gw+' re-stabilise at 0K', colour3, restabilise)
         else:
-            if isinstance(stabilise, str):
-                dirs_tmp = [stabilise]
-            else:
-                dirs_tmp = stabilise
-            if isinstance(ramp_down, str):
-                dirs_tmp += [ramp_down]
-            else:
-                dirs_tmp += ramp_down
-            if restabilise is not None:
-                sim_names.append(gw+' stabilise & ramp down & restabilise')
-                if isinstance(restabilise, str):
-                    dirs_tmp += [restabilise]
+            # Only use colour1
+            if only_up and stabilise is not None:
+                add_ens(gw+' stabilise', colour1, stabilise)
+            if only_down and ramp_down is not None:
+                if restabilise is None:
+                    add_ens(gw+' ramp down', colour1, ramp_down)
                 else:
-                    dirs_tmp += restabilise
-            else:
-                sim_names.append(gw+' stabilise & ramp down')
-            sim_dirs.append(dirs_tmp)
+                    add_ens(gw+' ramp down & re-stabilise', colour1, combine_ens(ramp_down, restabilise))
+            if not only_up and not only_down:
+                if ramp_down is None:
+                    ens = stabilise
+                    name = gw+' stabilise'
+                else:
+                    ens = combine_ens(stabilise, ramp_down)
+                    name += ' & ramp_down'
+                    if restabilise is not None:
+                        ens = combine_ens(ens, restabilise)
+                        name += ' & re-stabilise'
+                add_ens(name, colour1, ens)
 
+    # Now add the suites
+    if not only_down:
+        add_ens('preindustrial', 'Sienna', 'cs495')
+        add_ens('ramp up', 'Black', ['cx209', 'cw988', 'cw989', 'cw990'])
+        add_ens('ramp up static ice', 'DarkGrey', 'cz826')        
     add_gw_level('1.5K', ['cy837', 'cz834', 'da087'], ['da697', 'dc052', 'dc248'], None, 'DarkMagenta', 'MediumOrchid', None)
     add_gw_level('2K', ['cy838', 'cz855', 'da266'], ['cz944', 'dc051', 'da800'], 'dc163', 'Blue', 'CornflowerBlue', 'LightBlue')
     add_gw_level('2.5K', ['cz374', 'cz859'], None, None, 'DarkCyan', None, None)
