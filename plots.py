@@ -19,7 +19,7 @@ def finished_plot (fig, fig_name=None, dpi=None):
 # Plot a 2D field (lat-lon) on a polar stereographic projection of Antarctica. Assumes it's a periodic grid covering all longitudes.
 # Arguments:
 # data: an xarray DataArray of a 2D field (lat-lon)
-# grid: an xarray Dataset containing the fields (option 1:) nav_lon_grid_T, nav_lat_grid_T, bounds_nav_lon_grid_T, bounds_nav_lat_grid_T or (option 2): glamt, gphit, glamf, gphif
+# grid: an xarray Dataset containing the fields (option 1:) nav_lon_grid_T, nav_lat_grid_T, bounds_nav_lon_grid_T, bounds_nav_lat_grid_T or (option 2): glamt, gphit, glamf, gphif or (option3): nav_lon, nav_lat, bounds_lon, bounds_lat
 # Optional keyword arguments:
 # ax: handle to Axes object to make the plot in
 # make_cbar: whether to make a colourbar (default True)
@@ -47,6 +47,8 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
         lat_name = 'nav_lat_grid_T'
     elif 'gphit' in grid:
         lat_name = 'gphit'
+    elif 'nav_lat' in grid:
+        lat_name = 'nav_lat'
     # Enforce northern boundary
     if lat_max is None:
         if grid[lat_name].max() > 0:
@@ -62,6 +64,10 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
     elif lat_name == 'gphit':
         lon_edges = extend_grid_edges(grid['glamf'], 'f', periodic=True)
         lat_edges = extend_grid_edges(grid['gphif'], 'f', periodic=True)
+    elif lat_name == 'nav_lat':
+        import cf_xarray as cfxr
+        lon_edges = cfxr.bounds_to_vertices(grid['bounds_lon'], 'nvertex')
+        lat_edges = cfxr.bounds_to_vertices(grid['bounds_lat'], 'nvertex')
     x_edges, y_edges = polar_stereo(lon_edges, lat_edges)
 
     # Get axes bounds

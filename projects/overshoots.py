@@ -361,6 +361,7 @@ def cold_cavities_by_bwsalt (var_name, base_dir='./', fig_name=None):
                 ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
                 data_x.append(moving_average(ds[var_x[n]], smooth))
                 data_y.append(moving_average(ds[var_y[n]], smooth))
+                ds.close()
         # Plot
         for x, y, label, colour in zip(data_x, data_y, labels_plot, colours_plot):
             if x is not None and y is not None:
