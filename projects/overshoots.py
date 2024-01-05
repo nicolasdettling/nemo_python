@@ -292,7 +292,7 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
 # Plot timeseries by global warming level for all variables in all experiments.
 def plot_all_by_gw_level (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None, pi_suite='cs568'):
 
-    sim_names, colours, sim_dirs = set_expt_list()
+    sim_names, colours, sim_dirs = set_expt_list(separate_stages=True)
     
     # Now construct master list of variables as above - modularise this if I do it a third time!
     var_names_all = []
@@ -325,7 +325,7 @@ def gw_level_panel_plots (base_dir='./', pi_suite='cs568', fig_dir=None):
     var_names = ['bwtemp', 'bwsalt', 'massloss']
     var_titles = ['Bottom temperature on continental shelf and cavities', 'Bottom salinity on continental shelf and cavities', 'Basal mass loss']
     units = [deg_string+'C', gkg_string, 'Gt/y']
-    sim_names, colours, sim_dirs = set_expt_list()
+    sim_names, colours, sim_dirs = set_expt_list(separate_stages=True)
     timeseries_file = 'timeseries.nc'
     smooth = 24
 
