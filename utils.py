@@ -171,7 +171,33 @@ def closest_point (ds, target):
     return (int(point0['y'].data), int(point0['x'].data))
 
 
-# Select ice shelf cavities. Pass it the path to an xarray Dataset which contains either 'maskisf' (NEMO3.6 mesh_mask), 'top_level' (NEMO4.2 domain_cfg), or a 3D data variable with a zero-mask applied (current options are thetao or so) (NEMO output file)
+# Helper function to calculate a bunch of grid variables (bathymetry, draft, ocean mask, ice shelf mask) from a NEMO output file, only using thkcello and the mask on a 3D data variable (current options are to look for thetao and so).
+# This varies a little if the sea surface height changes, so not perfect, but it does take partial cells into account.
+def calc_geometry (ds):
+
+    mask_3d = None
+    for var in ['thetao', 'so']:
+        if var in ds:
+            mask_3d = xr.where(ds[var]==0, 0, 1).squeeze()
+            break
+    if mask_3d is None:
+        raise Exception('No known 3D masked variable is present. Add another variable to the code?')
+    # 2D ocean cells are unmasked at some depth
+    ocean_mask = mask_3d.sum(dim='deptht')>0
+    # 2D ice shelf cells are ocean cells which are masked at the surface
+    ice_mask = ocean_mask*(mask_3d.isel(deptht=0)==0)
+    # Water column thickness is sum of thkcello in unmasked cells
+    wct = (ds['thkcello']*mask_3d).sum(dim='deptht').squeeze()
+    # Now identify the 3D ice shelf cells using cumulative sum of mask
+    ice_mask_3d = (mask_3d.cumsum(dim='deptht')==0)*ocean_mask
+    # Ice draft is sum of thkcello in ice shelf cells
+    draft = (ds['thkcello']*ice_mask_3d).sum(dim='deptht').squeeze()
+    # Bathymetry is ice draft plus water column thickness
+    bathy = draft + wct
+    return bathy, draft, ocean_mask, ice_mask
+    
+
+# Select ice shelf cavities. Pass it the path to an xarray Dataset which contains either 'maskisf' (NEMO3.6 mesh_mask), 'top_level' (NEMO4.2 domain_cfg), or 'thkcello' plus a 3D data variable with a zero-mask applied (NEMO output file - see calc_geometry)
 def build_ice_mask (ds):
 
     if 'ice_mask' in ds:
@@ -183,11 +209,7 @@ def build_ice_mask (ds):
     elif 'top_level' in ds:
         ice_mask = xr.where(ds['top_level']>1, 1, 0).squeeze()
     else:
-        for var in ['thetao', 'so']:
-            if var in ds:
-                mask_3d = xr.where(ds[var]==0, 0, 1).squeeze()
-                break
-        ice_mask = xr.where((mask_3d.isel(deptht=0)==0)*mask_3d.sum(dim='deptht'), 1, 0)
+        ice_mask = calc_geometry(ds)[3]
     # Save to the Dataset in case it's useful later
     ds = ds.assign({'ice_mask':ice_mask})
     return ice_mask, ds
@@ -210,15 +232,8 @@ def build_shelf_mask (ds):
         bathy = ds['bathy_metry'].squeeze()
         ocean_mask = xr.where(ds['bottom_level']>0, 1, 0).squeeze()
     elif 'thkcello' in ds:
-        for var in ['thetao', 'so']:
-            if var in ds:
-                mask_3d = xr.where(ds[var]==0, 0, 1).squeeze()
-                ocean_mask = mask_3d.sum(dim='deptht')>0
-                break
-        ice_mask, ds = build_ice_mask(ds)
-        # Here bathy is actually water column thickness
-        bathy = (ds['thkcello']*mask_3d).sum(dim='deptht').squeeze()
-        # To make sure cavities are selected, set bathymetry to 0 there
+        bathy, draft, ocean_mask, ice_mask = calc_geometry(ds)
+        # Make sure ice shelves are included in the final mask, by setting bathy to 0 here
         bathy = xr.where(ice_mask, 0, bathy)
     else:
         raise Exception('invalid Dataset for build_shelf_mask')        
