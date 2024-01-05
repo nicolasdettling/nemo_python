@@ -229,18 +229,14 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
             # Generalise to ensemble of 1
             expt = [expt]
         num_ens = len(expt)
-        labels_plot += [label] + [None]*(num_ens-1)
-        colours_plot += [colour]*num_ens
         for suite in expt:
             # Read global mean SAT in this suite and convert to GW level
             ds_um = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
             gw_level = ds_um['global_mean_sat'] - baseline_temp
             ds_um.close()
-            # Smooth it in time
-            gw_level = moving_average(gw_level, smooth)
             # Finally read and smooth the variable
             ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
-            data = moving_average(ds[var_name], smooth)
+            data = ds[var_name]
             ds.close()
             # Trim the two timeseries to line up and be the same length
             # Find most restrictive endpoints
@@ -254,9 +250,16 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
             data = trim_timeseries(data)
             gw_level = trim_timeseries(gw_level)
             if data.size != gw_level.size:
-                raise Exception('Timeseries do not align')
+                print('Warning: timeseries do not align for suite '+suite+'. Removing suite from plot')
+                num_ens -= 1
+            # Smooth in time
+            gw_level = moving_average(gw_level, smooth)
+            data = moving_average(data, smooth)
             gw_levels.append(gw_level)
             datas.append(data)
+        if num_ens > 0:
+            labels_plot += [label] + [None]*(num_ens-1)
+            colours_plot += [colour]*num_ens
 
     # Plot
     if new_ax:
