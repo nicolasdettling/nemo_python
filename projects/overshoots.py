@@ -248,8 +248,8 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
             date_end = min(data.time_centered[-1], gw_level.time_centered[-1])
             # Inner function to trim
             def trim_timeseries (A):
-                t_start = np.argwhere(A.time_centered.data == date_start)
-                t_end = np.argwhere(A.time_centered.data == date_end)
+                t_start = np.argwhere(A.time_centered.data == date_start.data)[0][0]
+                t_end = np.argwhere(A.time_centered.data == date_end.data)[0][0]
                 return A.isel(time_centered=slice(t_start, t_end+1))
             data = trim_timeseries(data)
             gw_level = trim_timeseries(gw_level)
