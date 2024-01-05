@@ -47,6 +47,33 @@ def update_overshoot_timeseries_all (base_dir='./', domain_cfg='/gws/nopw/j04/te
         update_overshoot_timeseries(suite_id, base_dir=base_dir, domain_cfg=domain_cfg)
 
 
+# Calculate a new timeseries variable(s) for the given suite, and then concatenate it with the existing corresponding timeseries file. After running this, add the variable(s) to the list in update_overshoot_timeseries.
+def new_timeseries_var (suite_id, timeseries_types, timeseries_file_new, timeseries_file='timeseries.nc', base_dir='./', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
+
+    # Calculate a new file
+    if timeseries_file == 'timeseries_um.nc':
+        # Atmospheric variable
+        update_simulation_timeseries_um(suite_id, timeseries_types, timeseries_file=timeseries_file_new, sim_dir=base_dir+'/'+suite_id+'/', stream='p5')
+    else:
+        # Ocean variable
+        if timeseries_file == 'timeseries.nc':
+            gtype = 'T'
+        elif timeseries_file == 'timeseries_u.nc':
+            gtype = 'U'
+        else:
+            raise Exception('unknown gtype - add another case to the code?')
+        update_simulation_timeseries(suite_id, timeseries_types, timeseries_file=timeseries_file_new, sim_dir=base_dir+'/'+suite_id+'/', freq='m', halo=True, gtype=gtype, domain_cfg=domain_cfg)
+
+    # Now concatenate with existing file
+    print('Merging with '+timeseries_file)
+    os.rename(timeseries_file, 'tmp_'+timeseries_file)
+    ds = xr.open_mfdataset([suite_id+'/tmp_'+timeseries_file, suite_id+'/'+timeseries_file_new])
+    ds.to_netcdf(suite_id+'/'+timeseries_file)
+    os.remove('tmp_'+timeseries_file)
+    os.remove(timeseries_file_new)
+    ds.close()    
+
+
 # Plot timeseries by region for all variables in one simulation.
 def plot_all_timeseries_by_region (suite_id, regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m'], colours=None, timeseries_file='timeseries.nc', base_dir='./', smooth=24, fig_dir=None):
 
