@@ -66,11 +66,11 @@ def new_timeseries_var (suite_id, timeseries_types, timeseries_file_new, timeser
 
     # Now concatenate with existing file
     print('Merging with '+timeseries_file)
-    os.rename(timeseries_file, 'tmp_'+timeseries_file)
+    os.rename(suite_id+'/'+timeseries_file, suite_id+'/tmp_'+timeseries_file)
     ds = xr.open_mfdataset([suite_id+'/tmp_'+timeseries_file, suite_id+'/'+timeseries_file_new])
     ds.to_netcdf(suite_id+'/'+timeseries_file)
-    os.remove('tmp_'+timeseries_file)
-    os.remove(timeseries_file_new)
+    os.remove(suite_id+'/tmp_'+timeseries_file)
+    os.remove(suite_id+'/'+timeseries_file_new)
     ds.close()    
 
 
