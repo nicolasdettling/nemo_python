@@ -163,7 +163,7 @@ def set_expt_list (separate_stages=False, only_up=False, only_down=False):
     add_gw_level('2.5K', ['cz374', 'cz859'], None, None, 'DarkCyan', None, None)
     add_gw_level('3K', ['cz375', 'db587', 'db597'], ['db223', 'dc032', 'dc249'], None, 'DarkGreen', 'DarkSeaGreen', None)
     add_gw_level('4K', ['cz376', 'db723', 'db733'], 'da892', None, 'GoldenRod', 'Gold', None)  # To do: add in dc123 (ramp down) once ERROR_SINGLE_COPY_UNAVAILABLE fixed
-    add_gw_level('5K', ['cz377', 'db731', 'dc324'], ['dc251', 'dc130'], None, 'Coral', 'PeachPuff', None)
+    add_gw_level('5K', ['cz377', 'db731', 'dc324'], ['dc251', 'dc130'], None, 'Chocolate', 'LightSalmon', None)
     add_gw_level('6K', 'cz378', None, None, 'Crimson', None, None)
 
     return sim_names, colours, sim_dirs
