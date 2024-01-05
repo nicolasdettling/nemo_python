@@ -365,7 +365,7 @@ def gw_level_panel_plots (base_dir='./', pi_suite='cs568', fig_dir=None, integra
 def cold_cavities_by_bwsalt (var_name, base_dir='./', fig_name=None):
 
     regions = ['filchner_ronne', 'ross', 'amery']
-    var_x = [region+'_shelf_salt' for region in regions]  # Update to shelf_bwsalt when timeseries ready
+    var_x = [region+'_shelf_bwsalt' for region in regions] 
     var_y = [region+'_'+var_name for region in regions]
     sim_names, colours, sim_dirs = set_expt_list()
     timeseries_file = 'timeseries.nc'
