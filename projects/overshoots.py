@@ -252,6 +252,7 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
             if data.size != gw_level.size:
                 print('Warning: timeseries do not align for suite '+suite+'. Removing suite from plot')
                 num_ens -= 1
+                continue
             # Smooth in time
             gw_level = moving_average(gw_level, smooth)
             data = moving_average(data, smooth)
