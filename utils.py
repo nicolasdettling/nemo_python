@@ -173,7 +173,8 @@ def closest_point (ds, target):
 
 # Helper function to calculate a bunch of grid variables (bathymetry, draft, ocean mask, ice shelf mask) from a NEMO output file, only using thkcello and the mask on a 3D data variable (current options are to look for thetao and so).
 # This varies a little if the sea surface height changes, so not perfect, but it does take partial cells into account.
-def calc_geometry (ds):
+# If keep_time_dim, will preserve any time dimension even if it's of size 1 (useful for timeseries)
+def calc_geometry (ds, keep_time_dim=False):
 
     mask_3d = None
     for var in ['thetao', 'so']:
@@ -187,13 +188,16 @@ def calc_geometry (ds):
     # 2D ice shelf cells are ocean cells which are masked at the surface
     ice_mask = ocean_mask*(mask_3d.isel(deptht=0)==0)
     # Water column thickness is sum of thkcello in unmasked cells
-    wct = (ds['thkcello']*mask_3d).sum(dim='deptht').squeeze()
+    wct = (ds['thkcello']*mask_3d).sum(dim='deptht')
     # Now identify the 3D ice shelf cells using cumulative sum of mask
     ice_mask_3d = (mask_3d.cumsum(dim='deptht')==0)*ocean_mask
     # Ice draft is sum of thkcello in ice shelf cells
-    draft = (ds['thkcello']*ice_mask_3d).sum(dim='deptht').squeeze()
+    draft = (ds['thkcello']*ice_mask_3d).sum(dim='deptht')
     # Bathymetry is ice draft plus water column thickness
     bathy = draft + wct
+    if not keep_time_dim:
+        bathy = bathy.squeeze()
+        draft = draft.squeeze()
     return bathy, draft, ocean_mask, ice_mask
     
 
@@ -203,7 +207,6 @@ def build_ice_mask (ds):
     if 'ice_mask' in ds:
         # Previously computed
         return ds['ice_mask'], ds
-
     if 'maskisf' in ds:
         ice_mask = ds['maskisf'].squeeze()
     elif 'top_level' in ds:

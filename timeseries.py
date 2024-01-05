@@ -2,12 +2,13 @@ import xarray as xr
 import os
 
 from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year, deg_string, gkg_string, drake_passage_lon0, drake_passage_lat_bounds
-from .utils import single_cavity_mask, region_mask, add_months, closest_point, month_convert
+from .utils import single_cavity_mask, region_mask, add_months, closest_point, month_convert, calc_geometry
 from .diagnostics import transport, ross_gyre_eastern_extent
 
 # Calculate a timeseries of the given preset variable from an xarray Dataset of NEMO output (must have halo removed). Returns DataArrays of the timeseries data, the associated time values, and the variable title. Specify whether there is a halo (true for periodic boundaries in NEMO 3.6).
 # Preset variables include:
 # <region>_massloss: basal mass loss from the given ice shelf or region of multiple ice shelves (eg brunt, amundsen_sea)
+# <region>_draft: area-averaged ice draft from the given ice shelf or region of multiple ice shelves - only useful if there's a coupled ice sheet
 # <region>_bwtemp, <region>_bwsalt: area-averaged bottom water temperature or salinity from the given region or cavity (eg ross_cavity, ross_shelf, ross)
 # <region>_temp, <region>_salt: volume-averaged temperature or salinity from the given region or cavity
 # <region>_temp_btw_xxx_yyy_m, <region>_salt_btw_xxx_yyy_m: volume-averaged temperature or salinity from the given region or cavity, between xxx and yyy metres (positive integers, shallowest first)
@@ -28,6 +29,13 @@ def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/i
         factor = -rho_ice/rho_fw*1e-12*sec_per_year
         units = 'Gt/y'
         title = 'Basal mass loss'
+    elif var.endswith('_draft'):
+        option = 'area_avg'
+        region = var[:var.index('_draft')]
+        region_type = 'cavity'
+        nemo_var = 'draft'  # Will trigger a special case later
+        units = 'm'
+        title = 'Mean ice draft'
     elif var.endswith('_bwtemp'):
         option = 'area_avg'
         region = var[:var.index('_bwtemp')]
@@ -118,7 +126,11 @@ def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/i
     elif option == 'area_avg':
         # Area average
         dA = ds_nemo['area']*mask
-        data = (ds_nemo[nemo_var]*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
+        if nemo_var == 'draft':
+            data_xy = calc_geometry(ds_nemo, keep_time_dim=True)[1]
+        else:
+            data_xy = ds_nemo[nemo_var]
+        data = (data_xy*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
     elif option == 'volume_avg':
         # Volume average
         # First need a 3D mask
