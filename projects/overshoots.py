@@ -200,8 +200,9 @@ def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 
         timeseries_by_expt(var, sim_dirs, sim_names=sim_names, colours=colours, timeseries_file=fname, smooth=smooth, linewidth=1, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_master.png'))
 
 
-# Plot the timeseries of one or more experiments/ensembles (expts can be a string, a list of strings, or a list of lists of string) and one variable against global warming level (relative to preindustrial mean in the given PI suite). 
-def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None):
+# Plot the timeseries of one or more experiments/ensembles (expts can be a string, a list of strings, or a list of lists of string) and one variable against global warming level (relative to preindustrial mean in the given PI suite).
+# If integrate=True, plot as a function of integrated global warming level (i.e. degree-years above preindustrial).
+def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None, integrate=False):
 
     new_ax = ax is None
 
@@ -234,7 +235,9 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
             ds_um = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
             gw_level = ds_um['global_mean_sat'] - baseline_temp
             ds_um.close()
-            # Finally read and smooth the variable
+            if integrate:
+                gw_level = (gw_level/12.).cumsum(dim='time_centered')
+            # Read the variable
             ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
             data = ds[var_name]
             ds.close()
@@ -279,7 +282,10 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
         units = datas[0].units
     ax.set_title(title, fontsize=16)
     ax.set_ylabel(units, fontsize=14)
-    ax.set_xlabel('Global warming relative to preindustrial (K)', fontsize=14)
+    if integrate:
+        ax.set_xlabel('Time-integrated global warming (K*years above preindustrial)', fontsize=14)
+    else:
+        ax.set_xlabel('Global warming relative to preindustrial (K)', fontsize=14)
     if labels is not None and new_ax:
         # Make legend
         box = ax.get_position()
@@ -290,7 +296,7 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
 
 
 # Plot timeseries by global warming level for all variables in all experiments.
-def plot_all_by_gw_level (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None, pi_suite='cs568'):
+def plot_all_by_gw_level (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None, pi_suite='cs568', integrate=False):
 
     sim_names, colours, sim_dirs = set_expt_list(separate_stages=True)
     
@@ -315,11 +321,11 @@ def plot_all_by_gw_level (base_dir='./', regions=['all', 'amundsen_sea', 'bellin
             fname = timeseries_file_u
         else:
             fname = timeseries_file
-        plot_by_gw_level(sim_dirs, var, pi_suite=pi_suite, base_dir=base_dir, timeseries_file=fname, timeseries_file_um=timeseries_file_um, smooth=smooth, labels=sim_names, colours=colours, linewidth=1, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_gw.png'))
+        plot_by_gw_level(sim_dirs, var, pi_suite=pi_suite, base_dir=base_dir, timeseries_file=fname, timeseries_file_um=timeseries_file_um, smooth=smooth, labels=sim_names, colours=colours, linewidth=1, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_gw.png'), integrate=integrate)
 
 
 # Synthesise all this into a set of 5-panel plots for 3 different variables showing timeseries by GW level.
-def gw_level_panel_plots (base_dir='./', pi_suite='cs568', fig_dir=None):
+def gw_level_panel_plots (base_dir='./', pi_suite='cs568', fig_dir=None, integrate=False):
 
     regions = ['ross', 'filchner_ronne', 'west_antarctica', 'east_antarctica', 'all']
     var_names = ['bwtemp', 'bwsalt', 'massloss']
@@ -335,7 +341,7 @@ def gw_level_panel_plots (base_dir='./', pi_suite='cs568', fig_dir=None):
         gs.update(left=0.09, right=0.98, bottom=0.07, top=0.9, hspace=0.3, wspace=0.15)
         for n in range(len(regions)):
             ax = plt.subplot(gs[n//2,n%2])
-            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=0.5, ax=ax)
+            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=0.5, ax=ax, integrate=integrate)
             if n == len(regions)-1:
                 title = 'Antarctica mean'
             else:
