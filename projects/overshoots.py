@@ -6,9 +6,11 @@ import os
 import numpy as np
 
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
-from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, timeseries_plot
+from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, timeseries_plot, circumpolar_plot
 from ..utils import moving_average
 from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year
+from ..file_io import read_schmidtko, read_woa
+from ..interpolation import interp_latlon_cf
 
 
 # Call update_simulation_timeseries for the given suite ID
@@ -132,7 +134,7 @@ def set_expt_list (separate_stages=False, only_up=False, only_down=False):
             if ramp_down is not None and not only_up:
                 add_ens(gw+' ramp down', colour2, ramp_down)
             if restabilise is not None and not only_up:
-                add_ens(gw+' re-stabilise at 0K', colour3, restabilise)
+                add_ens(gw+' re-stabilise', colour3, restabilise)
         else:
             # Only use colour1
             if only_up and stabilise is not None:
@@ -465,12 +467,67 @@ def cold_cavities_by_bwsalt (var_name, base_dir='./', fig_name=None):
         ax.grid(linestyle='dotted')
         ax.set_title(region_names[regions[n]], fontsize=14)
         if n==0:
-            ax.set_xlabel('Shelf salinity ('+gkg_string+')', fontsize=10)
+            ax.set_xlabel('Shelf bottom salinity ('+gkg_string+')', fontsize=10)
             ax.set_ylabel(var_name+' ('+units+')', fontsize=10)
     # Legend at bottom
     ax.legend(loc='lower center', bbox_to_anchor=(-0.7, -0.42), fontsize=10, ncol=3)
     finished_plot(fig, fig_name=fig_name)
-        
+
+
+def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/schmidtko_TS.txt', woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_decav_*00_04.nc', fig_name=None, base_dir='./'):
+
+    start_year = 1995
+    end_year = 2014
+    eos = 'eos80'
+
+    # Identify NEMO output files in the suite directory within the given date range
+    sim_dir = base_dir + '/' + suite + '/'
+    file_head = 'nemo_'+suite+'o_1m_'
+    file_tail = '_grid-T.nc'
+    nemo_files = []
+    for f in os.listdir(sim_dir):
+        if f.startswith(file_head) and f.endswith(file_tail):
+            year = int(f[:4])
+            if year >= start_year and year <= end_year:
+                nemo_files.append(sim_dir+f)
+    # Read and time-average
+    nemo_plot = xr.open_mfdataset(nemo_files)
+    nemo_plot = nemo_plot.mean(dim='time_counter').squeeze()
+    nemo_plot.load()
+
+    # Read observations
+    schmidtko = read_schmidtko(schmidtko_file=schmidtko_file, eos=eos)
+    woa = read_woa(woa_files=woa_files, eos=eos)
+    # Regrid to the NEMO grid, giving precedence to Schmidtko where both datasets exist
+    schmidtko_interp = interp_latlon_cf(schmidtko, nemo_plot, method='bilinear')
+    woa_interp = interp_latlon_cf(woa, nemo_plot, method='bilinear')
+    obs_plot = xr.where(schmidtko_interp.isnull(), woa_interp, schmidtko_interp)
+    # Apply NEMO land mask to both
+    nemo_plot = nemo_plot.where(nemo_plot['sob']!=0)
+    obs_plot = obs_plot.where(nemo_plot['sob'].notnull()*obs_plot.notnull())
+    obs_plot = obs_plot.where(nemo_plot['sob']!=0)
+
+    # Make the plot
+    fig = plt.figure(figsize=(5,7))
+    gs = plt.GridSpec(1,3)
+    gs.update(left=0.1, right=0.9, bottom=0.1, top=0.9, wspace=0.1)
+    data_plot = [nemo_plot['sob'], obs_plot['salt'], nemo_plot['sob']-obs_plot['salt']]
+    titles = ['UKESM', 'Observations', 'Model bias']
+    vmin_abs = min(data_plot[0].min(), data_plot[1].min())
+    vmax_abs = max(data_plot[0].max(), data_plot[1].max())
+    ctype = ['RdBu_r', 'RdBu_r', 'plusminus']
+    for n in range(3):
+        ax = plt.subplot(gs[0,n])
+        ax.axis('equal')
+        img = circumpolar_plot(data_plot[n], nemo_plot, ax=ax, masked=True, make_cbar=False, title=titles[n], vmin=(vmin_abs if n<2 else None), vmax=(vmax_abs if n<2 else None), ctype=ctype[n])
+        if n != 1:
+            cax = cax = fig.add_axes([0.01+0.46*n, 0.2, 0.02, 0.6])
+            plt.colorbar(img, cax=cax)
+    plt.suptitle('Bottom salinity (psu), historical ('+str(start_year)+'-'+str(end_year)+')', fontsize=20)
+    finished_plot(fig, fig_name=fig_name)
+            
+    
+       
 
     
         
