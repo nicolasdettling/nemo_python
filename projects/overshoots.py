@@ -170,7 +170,7 @@ def set_expt_list (separate_stages=False, only_up=False, only_down=False):
 
 
 # Plot timeseries by experiment for all variables and regions, in all experiments.
-def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport', 'global_mean_sat'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None):
+def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'draft', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport', 'global_mean_sat'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None):
 
     sim_names, colours, sim_dirs = set_expt_list(separate_stages=True)
 
@@ -200,6 +200,43 @@ def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 
         timeseries_by_expt(var, sim_dirs, sim_names=sim_names, colours=colours, timeseries_file=fname, smooth=smooth, linewidth=1, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_master.png'))
 
 
+# Calculate the integrated global warming relative to preindustrial mean, in Kelvin-years, for the given suite (starting from the beginning of the relevant ramp-up simulation). Returns a timeseries over the given experiment, with the first value being the sum of all branched-from experiments before then.
+def integrated_gw (suite, pi_suite='cs568', timeseries_file_um='timeseries_um.nc', base_dir='./'):
+
+    # Dictionary of which suites branch from which. None means it's a ramp-up suite (so branched from a piControl run, but we don't care about that for the purposes of integrated GW)
+    branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'cz944':'cy838', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'db223':'cz375', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'dc163':'cz944'}
+
+    # Inner function to read global mean SAT
+    def global_mean_sat (suite):
+        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
+        sat = ds['global_mean_sat']
+        ds.close()
+        return sat
+
+    # Get baseline global mean SAT
+    baseline_temp = global_mean_sat(pi_suite).mean()
+    # Get timeseries of global warming relative to preindustrial, in this suite
+    gw_level = global_mean_sat(suite) - baseline_temp
+    # Indefinite integral over time
+    integrated_gw = (gw_level/months_per_year).cumsum(dim='time_centered')
+
+    # Now add on definite integrals of all branched-from suites before that
+    prev_suite = branched[suite]
+    while prev_suite is not None:
+        # Find the starting date of the current suite
+        start_date = gw_level.time_centered[0]
+        # Now calculate global warming timeseries over the previous suite
+        gw_level = global_mean_sat(prev_suite) - baseline_temp
+        # Find the time index at the branch point
+        time_branch = np.argwhere(gw_level.time_centered.data == start_date.data)[0][0]
+        # Integrate from the beginning to just before that point
+        integrated_gw += (gw_level.isel(time_centered=slice(0,time_branch))/months_per_year).sum(dim='time_centered')
+        # Prepare for next iteration of loop
+        suite = prev_suite
+
+    return integrated_gw
+    
+
 # Plot the timeseries of one or more experiments/ensembles (expts can be a string, a list of strings, or a list of lists of string) and one variable against global warming level (relative to preindustrial mean in the given PI suite).
 # If integrate=True, plot as a function of integrated global warming level (i.e. degree-years above preindustrial).
 def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None, integrate=False):
@@ -216,10 +253,11 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
     if labels is None:
         labels = [None]*num_expt            
 
-    # Get baseline global mean SAT
-    ds_pi = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
-    baseline_temp = ds_pi['global_mean_sat'].mean()
-    ds_pi.close()
+    if not integrate:
+        # Get baseline global mean SAT
+        ds_pi = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
+        baseline_temp = ds_pi['global_mean_sat'].mean()
+        ds_pi.close()
     
     gw_levels = []
     datas = []
@@ -231,12 +269,13 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
             expt = [expt]
         num_ens = len(expt)
         for suite in expt:
-            # Read global mean SAT in this suite and convert to GW level
-            ds_um = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
-            gw_level = ds_um['global_mean_sat'] - baseline_temp
-            ds_um.close()
             if integrate:
-                gw_level = (gw_level/12.).cumsum(dim='time_centered')
+                gw_level = integrated_gw(suite, pi_suite=pi_suite, timeseries_file_um=timeseries_file_um, base_dir=base_dir)
+            else:
+                # Read global mean SAT in this suite and convert to GW level
+                ds_um = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
+                gw_level = ds_um['global_mean_sat'] - baseline_temp
+                ds_um.close()
             # Read the variable
             ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
             data = ds[var_name]
@@ -296,7 +335,7 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
 
 
 # Plot timeseries by global warming level for all variables in all experiments.
-def plot_all_by_gw_level (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None, pi_suite='cs568', integrate=False):
+def plot_all_by_gw_level (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'draft', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None, pi_suite='cs568', integrate=False):
 
     sim_names, colours, sim_dirs = set_expt_list(separate_stages=True)
     
