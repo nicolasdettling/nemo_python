@@ -8,7 +8,7 @@ import numpy as np
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
 from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot
 from ..utils import moving_average
-from ..constants import line_colours, region_names, deg_string, gkg_string
+from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year
 
 
 # Call update_simulation_timeseries for the given suite ID
