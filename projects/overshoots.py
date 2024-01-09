@@ -6,7 +6,7 @@ import os
 import numpy as np
 
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
-from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot
+from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, timeseries_plot
 from ..utils import moving_average
 from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year
 
@@ -233,8 +233,27 @@ def integrated_gw (suite, pi_suite='cs568', timeseries_file_um='timeseries_um.nc
         integrated_gw += (gw_level.isel(time_centered=slice(0,time_branch))/months_per_year).sum(dim='time_centered')
         # Prepare for next iteration of loop
         suite = prev_suite
+        prev_suite = branched[suite]
 
     return integrated_gw
+
+
+# Plot timeseries of integrated global warming in every experiment.
+def plot_integrated_gw (base_dir='./', timeseries_file_um='timeseries_um.nc', pi_suite='cs568', fig_name=None):
+
+    sim_names, colours, sim_dirs = set_expt_list(separate_stages=True)
+    datas = []
+    labels_plot = []
+    colours_plot = []
+    for expt, label, colour in zip(sim_dirs, sim_names, colours):
+        if isinstance(expt, str):
+            expt = [expt]
+        num_ens = len(expt)
+        for suite in expt:
+            datas.append(integrated_gw(suite, pi_suite=pi_suite, timeseries_file_um=timeseries_file_um, base_dir=base_dir))
+        labels_plot += [label] + [None]*(num_ens-1)
+        colours_plot += [colour]*num_ens
+    timeseries_plot(datas, labels=labels_plot, colours=colours_plot, title='Integrated global warming relative to preindustrial', units='Kelvin-years', linewidth=1, fig_name=fig_name)
     
 
 # Plot the timeseries of one or more experiments/ensembles (expts can be a string, a list of strings, or a list of lists of string) and one variable against global warming level (relative to preindustrial mean in the given PI suite).
