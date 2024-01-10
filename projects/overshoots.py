@@ -474,6 +474,7 @@ def cold_cavities_by_bwsalt (var_name, base_dir='./', fig_name=None):
     finished_plot(fig, fig_name=fig_name)
 
 
+# Before running this on Jasmin, do "source ~/pyenv/bin/activate" so we can use gsw
 def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/schmidtko_TS.txt', woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_decav_*00_04.nc', precomputed_file='bwsalt_1995_2014.nc', fig_name=None, base_dir='./'):
 
     start_year = 1995

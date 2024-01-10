@@ -40,7 +40,7 @@ def read_schmidtko (schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/s
 
     import gsw
     # Read Schmidtko data on continental shelf
-    obs = np.loadtxt(schmidtko_file, dtype=np.str)[1:,:]
+    obs = np.loadtxt(schmidtko_file, dtype=str)[1:,:]
     obs_lon_vals = obs[:,0].astype(float)
     obs_lat_vals = obs[:,1].astype(float)
     obs_depth_vals = obs[:,2].astype(float)
