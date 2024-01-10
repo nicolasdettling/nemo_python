@@ -535,8 +535,8 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
     finished_plot(fig, fig_name=fig_name)
 
 
-# Time-average each stabilisation scenario (all years and all ensemble members) for the given gtype (U or T).
-def calc_stabilisation_means (base_dir='./', gtype='T', out_dir='time_averaged/'):
+# Time-average each stabilisation scenario (all years and all ensemble members) for the given file type (grid-T, isf-T, grid-U).
+def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_averaged/'):
 
     # Dictionary for which suites correspond to each scenario
     suite_list = {'piControl':['cs495'],
@@ -553,7 +553,7 @@ def calc_stabilisation_means (base_dir='./', gtype='T', out_dir='time_averaged/'
         for suite in suite_list[scenario]:
             sim_dir = base_dir+'/'+suite+'/'
             file_head = 'nemo_'+suite+'o_1m_'
-            file_tail = '-'+gtype+'.nc'
+            file_tail = '_'+file_type+'.nc'
             for f in os.listdir(sim_dir):
                 if f.startswith(file_head) and f.endswith(file_tail):
                     nemo_files.append(sim_dir+f)
@@ -566,7 +566,7 @@ def calc_stabilisation_means (base_dir='./', gtype='T', out_dir='time_averaged/'
                 ds_accum += ds
             ds.close()
         ds_accum /= len(nemo_files)
-        ds_accum.to_netcdf(out_dir+'/'+scenario+'-grid'+gtype+'.nc')
+        ds_accum.to_netcdf(out_dir+'/'+scenario+'_'+file_type+'.nc')
                     
         #ds = xr.open_mfdataset(nemo_files, concat_dim='time_counter', combine='nested')
         #ds = ds.mean(dim='time_counter')
