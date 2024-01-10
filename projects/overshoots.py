@@ -565,6 +565,8 @@ def calc_stabilisation_means (base_dir='./', gtype='T', out_dir='time_averaged/'
             else:
                 ds_accum += ds
             ds.close()
+        ds_accum /= len(nemo_files)
+        ds_accum.to_netcdf(out_dir+'/'+scenario+'-grid'+gtype+'.nc')
                     
         #ds = xr.open_mfdataset(nemo_files, concat_dim='time_counter', combine='nested')
         #ds = ds.mean(dim='time_counter')
