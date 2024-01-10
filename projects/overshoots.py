@@ -474,26 +474,31 @@ def cold_cavities_by_bwsalt (var_name, base_dir='./', fig_name=None):
     finished_plot(fig, fig_name=fig_name)
 
 
-def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/schmidtko_TS.txt', woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_decav_*00_04.nc', fig_name=None, base_dir='./'):
+def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/schmidtko_TS.txt', woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_decav_*00_04.nc', precomputed_file='bwsalt_1995_2014.nc', fig_name=None, base_dir='./'):
 
     start_year = 1995
     end_year = 2014
     eos = 'eos80'
 
-    # Identify NEMO output files in the suite directory within the given date range
-    sim_dir = base_dir + '/' + suite + '/'
-    file_head = 'nemo_'+suite+'o_1m_'
-    file_tail = '_grid-T.nc'
-    nemo_files = []
-    for f in os.listdir(sim_dir):
-        if f.startswith(file_head) and f.endswith(file_tail):
-            year = int(f[:4])
-            if year >= start_year and year <= end_year:
-                nemo_files.append(sim_dir+f)
-    # Read and time-average
-    nemo_plot = xr.open_mfdataset(nemo_files)
-    nemo_plot = nemo_plot.mean(dim='time_counter').squeeze()
-    nemo_plot.load()
+    sim_dir = base_dir + '/' + suite + '_bwsalt/'
+    if os.path.isfile(sim_dir+precomputed_file):
+        nemo_plot = xr.open_dataset(sim_dir+precomputed_file)
+    else:
+        # Identify NEMO output files in the suite directory within the given date range
+        file_head = 'nemo_'+suite+'o_1m_'
+        file_tail = '_grid-T.nc'
+        nemo_files = []
+        for f in os.listdir(sim_dir):
+            if f.startswith(file_head) and f.endswith(file_tail):
+                year = int(f[len(file_head):len(file_head)+4])
+                if year >= start_year and year <= end_year:
+                    nemo_files.append(sim_dir+f)
+        # Read and time-average
+        nemo_plot = xr.open_mfdataset(nemo_files, concat_dim='time_counter', combine='nested')
+        nemo_plot = nemo_plot.mean(dim='time_counter').squeeze()
+        nemo_plot.load()
+        # Save to NetCDF for next time
+        nemo_plot.to_netcdf(sim_dir+precomputed_file)
 
     # Read observations
     schmidtko = read_schmidtko(schmidtko_file=schmidtko_file, eos=eos)
@@ -525,6 +530,36 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
             plt.colorbar(img, cax=cax)
     plt.suptitle('Bottom salinity (psu), historical ('+str(start_year)+'-'+str(end_year)+')', fontsize=20)
     finished_plot(fig, fig_name=fig_name)
+
+
+# Time-average each stabilisation scenario (all years and all ensemble members) for the given gtype (U or T).
+def calc_stabilisation_means (base_dir='./', gtype='T', out_dir='time_averaged/'):
+
+    # Dictionary for which suites correspond to each scenario
+    suite_list = {'piControl':['cs495'],
+                  '1.5K':['cy837','cz834','da087'],
+                  '2K':['cy838','cz855','da266'],
+                  '2.5K':['cz374','cz859'],
+                  '3K':['cz375','db587','db597'],
+                  '4K':['cz376','db723','db733'],
+                  '5K':['cz377','db731','dc324'],
+                  '6K':['cz378']}
+    for scenario in suite_list:
+        print('Processing '+scenario)
+        nemo_files = []
+        for suite in suite_list[scenario]:
+            sim_dir = base_dir+'/'+suite+'/'
+            file_head = 'nemo_'+suite+'o_1m_'
+            file_tail = '-'+gtype+'.nc'
+            for f in os.listdir(sim_dir):
+                if f.startswith(file_head) and f.endswith(file_tail):
+                    nemo_files.append(sim_dir+f)
+        ds = xr.open_mfdataset(nemo_files, concat_dim='time_counter', combine='nested')
+        ds = ds.mean(dim='time_counter')
+        ds.to_netcdf(out_dir+'/'+scenario+'-grid'+gtype+'.nc')
+        ds.close()
+                
+                  
             
     
        
