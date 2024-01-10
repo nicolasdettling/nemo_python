@@ -538,6 +538,8 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
 # Time-average each stabilisation scenario (all years and all ensemble members) for the given file type (grid-T, isf-T, grid-U).
 def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_averaged/'):
 
+    from tqdm import tqdm
+
     # Dictionary for which suites correspond to each scenario
     suite_list = {'piControl':['cs495'],
                   '1.5K':['cy837','cz834','da087'],
@@ -558,14 +560,15 @@ def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_a
                 if f.startswith(file_head) and f.endswith(file_tail):
                     nemo_files.append(sim_dir+f)
         ds_accum = None
-        for fname in nemo_files:
-            ds = xr.open_dataset(fname).squeeze()
+        num_files = len(nemo_files)
+        for n in tqdm(range(num_files), desc=' files'):
+            ds = xr.open_dataset(nemo_files[n]).squeeze()
             if ds_accum is None:
                 ds_accum = ds
             else:
                 ds_accum += ds
             ds.close()
-        ds_accum /= len(nemo_files)
+        ds_accum /= num_files
         ds_accum.to_netcdf(out_dir+'/'+scenario+'_'+file_type+'.nc')
                     
         #ds = xr.open_mfdataset(nemo_files, concat_dim='time_counter', combine='nested')
