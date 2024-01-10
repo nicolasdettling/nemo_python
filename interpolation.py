@@ -148,7 +148,7 @@ def construct_cf (data, x, y, lon=None, lat=None, lon_bounds=None, lat_bounds=No
 # Interpolate the source dataset to the NEMO coordinates using CF. This is good for smaller interpolation jobs (i.e. not BedMachine3) and hopefully will be good for big interpolation jobs once CF is next updated.
 # Inputs:
 # source: xarray Dataset containing the coordinates 'x' and 'y' (could be either lat/lon or polar stereographic), and any data variables you want
-# nemo: xarray Dataset containing the NEMO grid: must contain at least (option 1:) glamt, gphit, glamf, gphif, and dimensions x and y, or (option 2): nav_lon_grid_T, nav_lat_grid_T, bounds_nav_lon_grid_T, bounds_nav_lat_grid_T, and dimensions x_grid_T and y_grid_T
+# nemo: xarray Dataset containing the NEMO grid: must contain at least (option 1:) glamt, gphit, glamf, gphif, and dimensions x and y; (option 2): nav_lon_grid_T, nav_lat_grid_T, bounds_nav_lon_grid_T, bounds_nav_lat_grid_T, and dimensions x_grid_T and y_grid_T; (option 3): nav_lon, nav_lat, bounds_lon, bounds_lat, and dimensions x and y.
 # pster_src: whether the source dataset is polar stereographic
 # periodic_src: whether the source dataset is periodic in the x dimension
 # periodic_nemo: whether the NEMO grid is periodic in longitude
@@ -233,6 +233,12 @@ def interp_latlon_cf (source, nemo, pster_src=False, periodic_src=False, periodi
         y_name = 'y_grid_T'
         lon_name = 'nav_lon_grid_T'
         lat_name = 'nav_lat_grid_T'
+    elif 'nav_lon' in nemo:
+        # model output type NEMO 3.6
+        x_name = 'x'
+        y_name = 'y'
+        lon_name = 'nav_lon'
+        lat_name = 'nav_lat'
     else:
         raise Exception('Unknown type of NEMO dataset.')
         
@@ -244,9 +250,12 @@ def interp_latlon_cf (source, nemo, pster_src=False, periodic_src=False, periodi
         if lon_name == 'glamt':
             lon_bounds_nemo = construct_nemo_bounds(nemo['glamf'])
             lat_bounds_nemo = construct_nemo_bounds(nemo['gphif'])
-        else:
+        elif lon_name == 'nav_lon_grid_T':
             lon_bounds_nemo = nemo['bounds_nav_lon_grid_T']
             lat_bounds_nemo = nemo['bounds_nav_lat_grid_T']
+        elif lon_name == 'nav_lon':
+            lon_bounds_nemo = nemo['bounds_lon']
+            lat_bounds_nemo = nemo['bounds_lat']
     else:
         lon_bounds_nemo = None
         lat_bounds_nemo = None
