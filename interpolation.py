@@ -169,6 +169,9 @@ def construct_cf (data, x, y, lon=None, lat=None, lon_bounds=None, lat_bounds=No
 # interp: xarray Dataset containing all data variables from source on the nemo grid
 def interp_latlon_cf (source, nemo, pster_src=False, periodic_src=False, periodic_nemo=True, method='conservative'):
 
+    source.load()
+    nemo.load()
+
     # Helper function to get an xarray DataArray of edges (size N+1, or N+1 by M+1) into a Numpy array of bounds for CF (size N x 2, or N x M x 4)
     def edges_to_bounds (edges):
         if len(edges.shape)==1:
