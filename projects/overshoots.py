@@ -500,6 +500,8 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
         nemo_plot.load()
         # Save to NetCDF for next time
         nemo_plot.to_netcdf(sim_dir+precomputed_file)
+    # Trim halo
+    nemo_plot = nemo_plot.isel(x=slice(1,-1))
 
     # Read observations
     schmidtko = read_schmidtko(schmidtko_file=schmidtko_file, eos=eos)

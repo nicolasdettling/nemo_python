@@ -116,6 +116,18 @@ def construct_cf (data, x, y, lon=None, lat=None, lon_bounds=None, lat_bounds=No
 
     import cf
     native_latlon = lon is None and lat is None
+
+    # Inner function to convert to np arrays if needed
+    def convert_np (var):
+        if isinstance(var, xr.DataArray):
+            var = var.data
+        return var
+    x = convert_np(x)
+    y = convert_np(y)
+    lon = convert_np(lon)
+    lat = convert_np(lat)
+    lon_bounds = convert_np(lon_bounds)
+    lat_bounds = convert_np(lat_bounds)
     
     field = cf.Field()
     if native_latlon:
