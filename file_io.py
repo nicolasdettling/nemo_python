@@ -66,8 +66,9 @@ def read_schmidtko (schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/s
         # Have conservative temperature and absolute salinity; want potential temperature and practical salinity
         # Pressure in dbar is approx depth in m
         obs_press = np.abs(obs_depth)
+        lon_2d, lat_2d = np.meshgrid(obs_lon, obs_lat)
         obs_temp = gsw.pt_from_CT(obs_salt, obs_temp)
-        obs_salt = gsw.SP_from_SA(obs_salt, obs_press, obs_lon, obs_lat)
+        obs_salt = gsw.SP_from_SA(obs_salt, obs_press, lon_2d, lat_2d)
     # Wrap up into an xarray Dataset for later interpolation
     obs_temp = xr.DataArray(obs_temp, coords=[obs_lat, obs_lon], dims=['lat', 'lon'])
     obs_temp = obs_temp.where(obs_temp!=-999)
