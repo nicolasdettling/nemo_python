@@ -557,10 +557,19 @@ def calc_stabilisation_means (base_dir='./', gtype='T', out_dir='time_averaged/'
             for f in os.listdir(sim_dir):
                 if f.startswith(file_head) and f.endswith(file_tail):
                     nemo_files.append(sim_dir+f)
-        ds = xr.open_mfdataset(nemo_files, concat_dim='time_counter', combine='nested')
-        ds = ds.mean(dim='time_counter')
-        ds.to_netcdf(out_dir+'/'+scenario+'-grid'+gtype+'.nc')
-        ds.close()
+        ds_accum = None
+        for fname in nemo_files:
+            ds = xr.open_dataset(fname).squeeze()
+            if ds_accum is None:
+                ds_accum = ds
+            else:
+                ds_accum += ds
+            ds.close()
+                    
+        #ds = xr.open_mfdataset(nemo_files, concat_dim='time_counter', combine='nested')
+        #ds = ds.mean(dim='time_counter')
+        #ds.to_netcdf(out_dir+'/'+scenario+'-grid'+gtype+'.nc')
+        #ds.close()
                 
                   
             
