@@ -122,6 +122,7 @@ def construct_cf (data, x, y, lon=None, lat=None, lon_bounds=None, lat_bounds=No
         if isinstance(var, xr.DataArray):
             var = var.data
         return var
+    data = convert_np(data)
     x = convert_np(x)
     y = convert_np(y)
     lon = convert_np(lon)
