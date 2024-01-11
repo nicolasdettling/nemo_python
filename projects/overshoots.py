@@ -516,22 +516,22 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
     obs_plot = obs_plot.where(nemo['sob']!=0)
 
     # Make the plot
-    fig = plt.figure(figsize=(8,5))
+    fig = plt.figure(figsize=(8,3))
     gs = plt.GridSpec(1,3)
-    gs.update(left=0.1, right=0.9, bottom=0.1, top=0.9, wspace=0.1)
+    gs.update(left=0.1, right=0.9, bottom=0.05, top=0.8, wspace=0.1)
     data_plot = [nemo_plot, obs_plot, nemo_plot-obs_plot]
     titles = ['UKESM', 'Observations', 'Model bias']
-    vmin_abs = min(data_plot[0].min(), data_plot[1].min())
-    vmax_abs = max(data_plot[0].max(), data_plot[1].max())
+    vmin = [34, 34, -0.5]
+    vmax = [34.85, 34.85, 0.5]
     ctype = ['RdBu_r', 'RdBu_r', 'plusminus']
     for n in range(3):
         ax = plt.subplot(gs[0,n])
         ax.axis('equal')
-        img = circumpolar_plot(data_plot[n], nemo, ax=ax, masked=True, make_cbar=False, title=titles[n], vmin=(vmin_abs if n<2 else None), vmax=(vmax_abs if n<2 else None), ctype=ctype[n])
+        img = circumpolar_plot(data_plot[n], nemo, ax=ax, masked=True, make_cbar=False, title=titles[n], titlesize=14, vmin=vmin[n], vmax=vmax[n], ctype=ctype[n], lat_max=-63)
         if n != 1:
-            cax = cax = fig.add_axes([0.01+0.46*n, 0.2, 0.02, 0.6])
-            plt.colorbar(img, cax=cax)
-    plt.suptitle('Bottom salinity (psu), historical ('+str(start_year)+'-'+str(end_year)+')', fontsize=20)
+            cax = cax = fig.add_axes([0.01+0.45*n, 0.1, 0.02, 0.6])
+            plt.colorbar(img, cax=cax, extend=('both' if n==0 else None))
+    plt.suptitle('Bottom salinity (psu), historical ('+str(start_year)+'-'+str(end_year)+')', fontsize=18)
     finished_plot(fig, fig_name=fig_name)
 
 
