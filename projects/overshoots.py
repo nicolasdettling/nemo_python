@@ -530,7 +530,7 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
         img = circumpolar_plot(data_plot[n], nemo, ax=ax, masked=True, make_cbar=False, title=titles[n], titlesize=14, vmin=vmin[n], vmax=vmax[n], ctype=ctype[n], lat_max=-63)
         if n != 1:
             cax = cax = fig.add_axes([0.01+0.45*n, 0.1, 0.02, 0.6])
-            plt.colorbar(img, cax=cax, extend=('both' if n==0 else None))
+            plt.colorbar(img, cax=cax, extend='both')
     plt.suptitle('Bottom salinity (psu), historical ('+str(start_year)+'-'+str(end_year)+')', fontsize=18)
     finished_plot(fig, fig_name=fig_name)
 
