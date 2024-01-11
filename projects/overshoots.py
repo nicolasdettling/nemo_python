@@ -483,7 +483,7 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
 
     sim_dir = base_dir + '/' + suite + '_bwsalt/'
     if os.path.isfile(sim_dir+precomputed_file):
-        nemo_plot = xr.open_dataset(sim_dir+precomputed_file)
+        nemo = xr.open_dataset(sim_dir+precomputed_file)
     else:
         # Identify NEMO output files in the suite directory within the given date range
         file_head = 'nemo_'+suite+'o_1m_'
@@ -495,13 +495,13 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
                 if year >= start_year and year <= end_year:
                     nemo_files.append(sim_dir+f)
         # Read and time-average
-        nemo_plot = xr.open_mfdataset(nemo_files, concat_dim='time_counter', combine='nested')
-        nemo_plot = nemo_plot.mean(dim='time_counter').squeeze()
-        nemo_plot.load()
+        nemo = xr.open_mfdataset(nemo_files, concat_dim='time_counter', combine='nested')
+        nemo = nemo.mean(dim='time_counter').squeeze()
+        nemo.load()
         # Save to NetCDF for next time
-        nemo_plot.to_netcdf(sim_dir+precomputed_file)
+        nemo.to_netcdf(sim_dir+precomputed_file)
     # Trim halo
-    nemo_plot = nemo_plot.isel(x=slice(1,-1))
+    nemo = nemo.isel(x=slice(1,-1))
 
     # Read observations
     schmidtko = read_schmidtko(schmidtko_file=schmidtko_file, eos=eos)
@@ -509,17 +509,17 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
     # Regrid to the NEMO grid, giving precedence to Schmidtko where both datasets exist
     schmidtko_interp = interp_latlon_cf(schmidtko, nemo_plot, method='bilinear')
     woa_interp = interp_latlon_cf(woa, nemo_plot, method='bilinear')
-    obs_plot = xr.where(schmidtko_interp.isnull(), woa_interp, schmidtko_interp)
+    obs = xr.where(schmidtko_interp.isnull(), woa_interp, schmidtko_interp)
     # Apply NEMO land mask to both
-    nemo_plot = nemo_plot.where(nemo_plot['sob']!=0)
-    obs_plot = obs_plot.where(nemo_plot['sob'].notnull()*obs_plot.notnull())
-    obs_plot = obs_plot.where(nemo_plot['sob']!=0)
+    nemo_plot = nemo['sob'].where(nemo['sob']!=0)
+    obs_plot = obs['salt'].where(nemo_plot.notnull()*obs['salt'].notnull())
+    obs_plot = obs_plot.where(nemo['sob']!=0)
 
     # Make the plot
     fig = plt.figure(figsize=(5,7))
     gs = plt.GridSpec(1,3)
     gs.update(left=0.1, right=0.9, bottom=0.1, top=0.9, wspace=0.1)
-    data_plot = [nemo_plot['sob'], obs_plot['salt'], nemo_plot['sob']-obs_plot['salt']]
+    data_plot = [nemo_plot, obs_plot, nemo_plot-obs_plot]
     titles = ['UKESM', 'Observations', 'Model bias']
     vmin_abs = min(data_plot[0].min(), data_plot[1].min())
     vmax_abs = max(data_plot[0].max(), data_plot[1].max())
@@ -527,7 +527,7 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
     for n in range(3):
         ax = plt.subplot(gs[0,n])
         ax.axis('equal')
-        img = circumpolar_plot(data_plot[n], nemo_plot, ax=ax, masked=True, make_cbar=False, title=titles[n], vmin=(vmin_abs if n<2 else None), vmax=(vmax_abs if n<2 else None), ctype=ctype[n])
+        img = circumpolar_plot(data_plot[n], nemo, ax=ax, masked=True, make_cbar=False, title=titles[n], vmin=(vmin_abs if n<2 else None), vmax=(vmax_abs if n<2 else None), ctype=ctype[n])
         if n != 1:
             cax = cax = fig.add_axes([0.01+0.46*n, 0.2, 0.02, 0.6])
             plt.colorbar(img, cax=cax)
