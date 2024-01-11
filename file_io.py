@@ -61,6 +61,12 @@ def read_schmidtko (schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/s
         obs_temp[j,i] = obs_temp_vals[n]
         obs_salt[j,i] = obs_salt_vals[n]
         obs_depth[j,i] = obs_depth_vals[n]
+    obs_temp = xr.DataArray(obs_temp, coords=[obs_lat, obs_lon], dims=['lat', 'lon'])
+    obs_temp = obs_temp.where(obs_temp!=-999)
+    obs_salt = xr.DataArray(obs_salt, coords=[obs_lat, obs_lon], dims=['lat', 'lon'])
+    obs_salt = obs_salt.where(obs_salt!=-999)
+    obs_depth = xr.DataArray(obs_depth, coords=[obs_lat, obs_lon], dims=['lat', 'lon'])
+    obs_depth = obs_depth.where(obs_depth!=-999)
     if eos == 'eos80':
         # Convert from TEOS10 to EOS80
         # Have conservative temperature and absolute salinity; want potential temperature and practical salinity
@@ -69,11 +75,6 @@ def read_schmidtko (schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/s
         lon_2d, lat_2d = np.meshgrid(obs_lon, obs_lat)
         obs_temp = gsw.pt_from_CT(obs_salt, obs_temp)
         obs_salt = gsw.SP_from_SA(obs_salt, obs_press, lon_2d, lat_2d)
-    # Wrap up into an xarray Dataset for later interpolation
-    obs_temp = xr.DataArray(obs_temp, coords=[obs_lat, obs_lon], dims=['lat', 'lon'])
-    obs_temp = obs_temp.where(obs_temp!=-999)
-    obs_salt = xr.DataArray(obs_salt, coords=[obs_lat, obs_lon], dims=['lat', 'lon'])
-    obs_salt = obs_salt.where(obs_salt!=-999)
     obs = xr.Dataset({'temp':obs_temp, 'salt':obs_salt})
     return obs
 

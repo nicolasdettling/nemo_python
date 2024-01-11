@@ -507,8 +507,8 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
     schmidtko = read_schmidtko(schmidtko_file=schmidtko_file, eos=eos)
     woa = read_woa(woa_files=woa_files, eos=eos)
     # Regrid to the NEMO grid, giving precedence to Schmidtko where both datasets exist
-    schmidtko_interp = interp_latlon_cf(schmidtko, nemo_plot, method='bilinear')
-    woa_interp = interp_latlon_cf(woa, nemo_plot, method='bilinear')
+    schmidtko_interp = interp_latlon_cf(schmidtko, nemo, method='bilinear')
+    woa_interp = interp_latlon_cf(woa, nemo, method='bilinear')
     obs = xr.where(schmidtko_interp.isnull(), woa_interp, schmidtko_interp)
     # Apply NEMO land mask to both
     nemo_plot = nemo['sob'].where(nemo['sob']!=0)
@@ -516,7 +516,7 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
     obs_plot = obs_plot.where(nemo['sob']!=0)
 
     # Make the plot
-    fig = plt.figure(figsize=(5,7))
+    fig = plt.figure(figsize=(8,5))
     gs = plt.GridSpec(1,3)
     gs.update(left=0.1, right=0.9, bottom=0.1, top=0.9, wspace=0.1)
     data_plot = [nemo_plot, obs_plot, nemo_plot-obs_plot]
