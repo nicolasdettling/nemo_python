@@ -559,7 +559,7 @@ def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_a
             for f in os.listdir(sim_dir):
                 if f.startswith(file_head) and f.endswith(file_tail):
                     nemo_files.append(sim_dir+f)
-        ds_accum = None
+        '''ds_accum = None
         num_files = len(nemo_files)
         for n in tqdm(range(num_files), desc=' files'):
             ds = xr.open_dataset(nemo_files[n]).squeeze()
@@ -569,12 +569,12 @@ def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_a
                 ds_accum += ds
             ds.close()
         ds_accum /= num_files
-        ds_accum.to_netcdf(out_dir+'/'+scenario+'_'+file_type+'.nc')
+        ds_accum.to_netcdf(out_dir+'/'+scenario+'_'+file_type+'.nc')'''
                     
-        #ds = xr.open_mfdataset(nemo_files, concat_dim='time_counter', combine='nested')
-        #ds = ds.mean(dim='time_counter')
-        #ds.to_netcdf(out_dir+'/'+scenario+'-grid'+gtype+'.nc')
-        #ds.close()
+        ds = xr.open_mfdataset(nemo_files, concat_dim='time_counter', combine='nested', parallel=True)
+        ds = ds.mean(dim='time_counter')
+        ds.to_netcdf(out_dir+'/'+scenario+'_'+file_type+'.nc')
+        ds.close()
                 
                   
             
