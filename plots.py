@@ -31,9 +31,10 @@ def finished_plot (fig, fig_name=None, dpi=None):
 # vmin, vmax: optional bounds on colour map
 # ctype: colourmap type (see set_colours in plot_utils.py)
 # change_points: arguments to ismr colourmap (see above)
+# contour: list of levels to contour in black
 
 # TODO colour maps, contour ice front, shade land in grey
-def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None, periodic=True, lat_max=None):
+def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None, periodic=True, lat_max=None, contour=None):
 
     new_fig = ax is None
     if title is None:
@@ -45,10 +46,13 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
 
     if 'nav_lat_grid_T' in grid:
         lat_name = 'nav_lat_grid_T'
+        lon_name = 'nav_lon_grid_T'
     elif 'gphit' in grid:
         lat_name = 'gphit'
+        lon_name = 'glamt'
     elif 'nav_lat' in grid:
         lat_name = 'nav_lat'
+        lon_name = 'nav_lon'
     # Enforce northern boundary
     if lat_max is None:
         if grid[lat_name].max() > 0:
@@ -81,6 +85,9 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
     if new_fig:
         fig, ax = plt.subplots()
     img = ax.pcolormesh(x_edges, y_edges, data, cmap=cmap, vmin=vmin, vmax=vmax)
+    if contour is not None:
+        x, y = polar_stereo(grid[lon_name], grid[lat_name])
+        ax.contour(x, y, data, levels=contour, colors=('black'), linewidths=1, linestyles='solid')
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
     ax.axis('off')

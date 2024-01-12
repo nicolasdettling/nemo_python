@@ -11,6 +11,7 @@ from ..utils import moving_average
 from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year
 from ..file_io import read_schmidtko, read_woa
 from ..interpolation import interp_latlon_cf
+from ..diagnostics import barotropic_streamfunction
 
 
 # Call update_simulation_timeseries for the given suite ID
@@ -535,8 +536,8 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
     finished_plot(fig, fig_name=fig_name)
 
 
-# Time-average last 30 years of each stabilisation scenario (all ensemble members) for the given file type (grid-T, isf-T, grid-U).
-def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_averaged/', num_years=30):
+# Time-average each stabilisation scenario (all ensemble members, last num_years years OR all years if num_years is None) for the given file type (grid-T, isf-T, grid-U).
+def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_averaged/', num_years=None):
 
     from tqdm import tqdm
 
@@ -560,16 +561,13 @@ def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_a
             for f in os.listdir(sim_dir):
                 if f.startswith(file_head) and f.endswith(file_tail):
                     suite_files.append(sim_dir+f)
-            # Now select the last num_years files
             suite_files.sort()
-            suite_files = suite_files[-num_years*months_per_year:]
+            if num_years is not None:
+                suite_files = suite_files[-num_years*months_per_year:]
             nemo_files += suite_files
         ds_accum = None
         num_files = len(nemo_files)
         for n in tqdm(range(num_files), desc=' files'):
-            f = open(scenario+'.log', 'a')
-            f.write(str(n)+'\n')
-            f.close()
             ds = xr.open_dataset(nemo_files[n]).squeeze()
             if ds_accum is None:
                 ds_accum = ds
@@ -579,6 +577,39 @@ def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_a
         ds_accum /= num_files
         ds_accum.to_netcdf(out_dir+'/'+scenario+'_'+file_type+'.nc')
         ds_accum.close()
+
+
+def plot_barotropic_streamfunction (fig_name=None):
+
+    scenarios = ['piControl', '1.5K', '2K', '2.5K', '3K', '4K', '5K', '6K']
+    in_dir = 'time_averaged_dummy/'  # TODO: update when real time averages exist
+    num_scenarios = len(scenarios)
+    domain_cfg = '/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'
+    
+    fig = plt.figure(figsize=(4,8))
+    gs = plt.GridSpec(num_scenarios//2, 2)
+    gs.update(left=0.05, right=0.95, bottom=0.1, top=0.9, hspace=0.2, wspace=0.2)
+    for n in range(num_scenarios):
+        ds = xr.open_dataset(in_dir+scenarios[n]+'_grid-U.nc').squeeze()
+        if n == 0:
+            # Grab e2u from domain_cfg
+            ds_domcfg = xr.open_dataset(domain_cfg).squeeze()
+            ds_domcfg = ds_domcfg.isel(y=slice(0, ds.sizes['y']))
+        ds = ds.assign({'e2u':ds_domcfg['e2u']})
+        data_plot = barotropic_streamfunction(ds)
+        ax = plt.subplot(gs[n//2, n%2])
+        ax.axis('equal')
+        img = circumpolar_plot(data_plot, ds, ax=ax, make_cbar=False, title=scenarios[n], ctype='plusminus', titlesize=14, vmin=-60, vmax=60, contour=[-15,0])
+        if n == num_scenarios-1:
+            cax = fig.add_axes([0.2, 0.04, 0.6, 0.02])
+            plt.colorbar(img, cax=cax, orientation='horizontal', extend='both')
+        ds.close()
+    plt.suptitle('Barotropic streamfunction (Sv)', fontsize=18)
+    finished_plot(fig, fig_name=fig_name)
+
+
+
+        
                 
                   
             

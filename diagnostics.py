@@ -38,13 +38,13 @@ def transport (ds, lon0=None, lat0=None, lon_bounds=None, lat_bounds=None):
 
 
 # Calculate the barotropic streamfunction. The dataset ds must include the variables uo, thkcello, and e2u (grab it from domain_cfg).
-# WARNING, this is in x-y space, working out how to rotate to proper zonal velocities.
+# WARNING, this is in x-y space, might need to rotate to proper zonal velocities - but then would also need rotated dy integrand - is it equivalent?
 def barotropic_streamfunction (ds):
 
     # Definite integral over depth (thkcello is dz)
     udz = (ds['uo']*ds['thkcello']).sum(dim='depthu')
-    # Indefinite integral from south to north (e2u is dy)
-    return (udz*ds['e2u']).cumsum(dim='y')
+    # Indefinite integral from south to north (e2u is dy) and convert to Sv
+    return (udz*ds['e2u']).cumsum(dim='y')*1e-6
 
 
 # Calculate the easternmost extent of the Ross Gyre: first find the 0 Sv contour of barotropic streamfunction which contains the point (160E, 70S), and then find the easternmost point within this contour.
