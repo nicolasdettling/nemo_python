@@ -535,8 +535,8 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
     finished_plot(fig, fig_name=fig_name)
 
 
-# Time-average each stabilisation scenario (all years and all ensemble members) for the given file type (grid-T, isf-T, grid-U).
-def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_averaged/'):
+# Time-average last 30 years of each stabilisation scenario (all ensemble members) for the given file type (grid-T, isf-T, grid-U).
+def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_averaged/', num_years=30):
 
     from tqdm import tqdm
 
@@ -553,13 +553,18 @@ def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_a
         print('Processing '+scenario)
         nemo_files = []
         for suite in suite_list[scenario]:
+            suite_files = []
             sim_dir = base_dir+'/'+suite+'/'
             file_head = 'nemo_'+suite+'o_1m_'
             file_tail = '_'+file_type+'.nc'
             for f in os.listdir(sim_dir):
                 if f.startswith(file_head) and f.endswith(file_tail):
-                    nemo_files.append(sim_dir+f)
-        '''ds_accum = None
+                    suite_files.append(sim_dir+f)
+            # Now select the last num_years files
+            suite_files.sort()
+            suite_files = suite_files[-num_years*months_per_year:]
+            nemo_files += suite_files
+        ds_accum = None
         num_files = len(nemo_files)
         for n in tqdm(range(num_files), desc=' files'):
             ds = xr.open_dataset(nemo_files[n]).squeeze()
@@ -569,12 +574,8 @@ def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_a
                 ds_accum += ds
             ds.close()
         ds_accum /= num_files
-        ds_accum.to_netcdf(out_dir+'/'+scenario+'_'+file_type+'.nc')'''
-                    
-        ds = xr.open_mfdataset(nemo_files, concat_dim='time_counter', combine='nested', parallel=True)
-        ds = ds.mean(dim='time_counter')
-        ds.to_netcdf(out_dir+'/'+scenario+'_'+file_type+'.nc')
-        ds.close()
+        ds_accum.to_netcdf(out_dir+'/'+scenario+'_'+file_type+'.nc')
+        ds_accum.close()
                 
                   
             
