@@ -536,8 +536,8 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
     finished_plot(fig, fig_name=fig_name)
 
 
-# Time-average each stabilisation scenario (all ensemble members, last num_years years OR all years if num_years is None) for the given file type (grid-T, isf-T, grid-U).
-def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_averaged/', num_years=None):
+# Time-average each stabilisation scenario (all years and all ensemble members) for the given file type (grid-T, isf-T, grid-U).
+def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_averaged/'):
 
     from tqdm import tqdm
 
@@ -549,22 +549,31 @@ def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_a
                   '3K':['cz375','db587','db597'],
                   '4K':['cz376','db723','db733'],
                   '5K':['cz377','db731','dc324'],
-                  '6K':['cz378']}      
+                  '6K':['cz378']}    
     for scenario in suite_list:
         print('Processing '+scenario)
+        out_file = base_dir+'/'+out_dir+'/'+scenario+'_'+file_type+'.nc'
+        log_file = base_dir+'/'+out_dir+'/'+scenario+'_'+file_type+'.log'
+        update_file = os.path.isfile(out_file)
+        if update_file:
+            # Read the log file to find out which files have already been processed
+            old_files = np.loadtxt(log_file, dtype=str)
+            num_old_files = old_files.size
+        # Open the log file (may or may not already exist) to append to it
+        log = open(log_file, 'a')
         nemo_files = []
         for suite in suite_list[scenario]:
-            suite_files = []
             sim_dir = base_dir+'/'+suite+'/'
             file_head = 'nemo_'+suite+'o_1m_'
             file_tail = '_'+file_type+'.nc'
             for f in os.listdir(sim_dir):
                 if f.startswith(file_head) and f.endswith(file_tail):
-                    suite_files.append(sim_dir+f)
-            suite_files.sort()
-            if num_years is not None:
-                suite_files = suite_files[-num_years*months_per_year:]
-            nemo_files += suite_files
+                    if update_file and f in old_files:
+                        # Skip it; already processed
+                        continue
+                    nemo_files.append(sim_dir+f)
+                    log.write(f+'\n')        
+        log.close()
         ds_accum = None
         num_files = len(nemo_files)
         for n in tqdm(range(num_files), desc=' files'):
@@ -574,29 +583,47 @@ def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_a
             else:
                 ds_accum += ds
             ds.close()
-        ds_accum /= num_files
-        ds_accum.to_netcdf(out_dir+'/'+scenario+'_'+file_type+'.nc')
-        ds_accum.close()
+        ds_mean = ds_accum/num_files
+        if update_file:
+            # Now combine with existing mean as weighted average
+            num_files_total = num_files + num_old_files
+            ds_mean_old = xr.open_dataset(out_file)
+            ds_mean = ds_mean*num_files/num_files_total + ds_mean_old*num_old_files/num_files_total
+            ds_mean_old.close()
+        ds_mean.to_netcdf(out_file, mode='w')
+        ds_mean.close()
+        
 
-
-def plot_barotropic_streamfunction (fig_name=None):
+# Plot maps of the time-mean of the given variable in each stabilisation scenario
+def plot_stabilisation_maps (var_name, file_type='grid-T', fig_name=None):
 
     scenarios = ['piControl', '1.5K', '2K', '2.5K', '3K', '4K', '5K', '6K']
     in_dir = 'time_averaged_dummy/'  # TODO: update when real time averages exist
     num_scenarios = len(scenarios)
     domain_cfg = '/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'
+    if var_name == 'barotropic_streamfunction':
+        title = 'Barotropic streamfunction (Sv)'
+    elif var_name == 'tob':
+        title = 'Bottom temperature ('+deg_string+'C)'
+    elif var_name == 'sob':
+        title = 'Bottom salinity ('+gkg_string+')'
+    else:
+        raise Exception('invalid var_name')
     
     fig = plt.figure(figsize=(4,8))
     gs = plt.GridSpec(num_scenarios//2, 2)
     gs.update(left=0.05, right=0.95, bottom=0.1, top=0.9, hspace=0.2, wspace=0.2)
     for n in range(num_scenarios):
-        ds = xr.open_dataset(in_dir+scenarios[n]+'_grid-U.nc').squeeze()
-        if n == 0:
+        ds = xr.open_dataset(in_dir+scenarios[n]+'_'+file_type+'.nc').squeeze()
+        if var_name=='barotropic_streamfunction' and n==0:
             # Grab e2u from domain_cfg
             ds_domcfg = xr.open_dataset(domain_cfg).squeeze()
             ds_domcfg = ds_domcfg.isel(y=slice(0, ds.sizes['y']))
         ds = ds.assign({'e2u':ds_domcfg['e2u']})
-        data_plot = barotropic_streamfunction(ds)
+        if var_name == 'barotropic_streamfunction':
+            data_plot = barotropic_streamfunction(ds)
+        else:
+            data_plot = ds[var_name]
         ax = plt.subplot(gs[n//2, n%2])
         ax.axis('equal')
         img = circumpolar_plot(data_plot, ds, ax=ax, make_cbar=False, title=scenarios[n], ctype='plusminus', titlesize=14, vmin=-60, vmax=60, contour=[-15,0])
@@ -604,7 +631,7 @@ def plot_barotropic_streamfunction (fig_name=None):
             cax = fig.add_axes([0.2, 0.04, 0.6, 0.02])
             plt.colorbar(img, cax=cax, orientation='horizontal', extend='both')
         ds.close()
-    plt.suptitle('Barotropic streamfunction (Sv)', fontsize=18)
+    plt.suptitle(title, fontsize=18)
     finished_plot(fig, fig_name=fig_name)
 
 
