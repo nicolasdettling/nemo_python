@@ -576,6 +576,8 @@ def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_a
         log.close()
         ds_accum = None
         num_files = len(nemo_files)
+        if num_files == 0:
+            continue
         for n in tqdm(range(num_files), desc=' files'):
             ds = xr.open_dataset(nemo_files[n]).squeeze()
             if ds_accum is None:
