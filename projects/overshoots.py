@@ -657,6 +657,44 @@ def plot_stabilisation_maps (var_name, fig_name=None):
     finished_plot(fig, fig_name=fig_name)
 
 
+# Plot T and S profiles averaged over the given region, for each stabilisation scenario
+def plot_stabilisation_profiles (region='amundsen_sea', fig_name=None):
+
+    scenarios = ['piControl', '1.5K', '2K', '2.5K', '3K', '4K', '5K', '6K']
+    colours = ['Black', 'DarkMagenta', 'Blue', 'DarkCyan', 'DarkGreen', 'GoldenRod', 'Chocolate', 'Crimson']
+    in_dir = 'time_averaged/'
+    file_tail = '_grid-T.nc'
+    num_scenarios = len(scenarios)
+    var_names = ['thetao', 'so']
+    num_var = len(var_names)
+    var_titles = ['Temperature', 'Salinity']
+    var_units = [deg_string+'C', 'psu']
+
+    fig = plt.figure(figsize=(8,5))
+    gs = plt.GridSpec(1,num_var)
+    gs.update(left=0.05, right=0.05, bottom=0.1, top=0.85, wspace=0.1)
+    ax_all = [plt.subplot(gs[0,v]) for v in range(num_var)]
+    for n in range(num_scenarios):
+        ds = xr.open_dataset(in_dir+scenarios[n]+file_tail).squeeze()
+        if n==0:
+            mask, ds, region_name = region_mask(region, ds, region_type='shelf', return_name=True)
+            dA = ds['area']*mask
+        for v in range(num_var):
+            ax = ax_all[v]
+            # Area-average the given variable to get a depth profile
+            data = (ds[var_names[v]]*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
+            ax.plot(data, ds['deptht'], '-', color=colours[n], label=scenarios[n])
+            ax.set_title(var_titles[v], fontsize=14)
+            ax.set_xlabel(var_units[v], fontsize=12)
+            ax.set_ylabel('Depth (m)', fontsize=12)
+    ax.legend(loc='lower center', bbox_to_anchor=(0,-0.1), fontsize=10, ncol=num_scenarios)
+    plt.suptitle(region_name, fontsize=16)
+    finished_plot(fig, fig_name=fig_name)
+            
+
+    
+
+
 
         
                 
