@@ -7,7 +7,7 @@ import numpy as np
 
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
 from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, timeseries_plot, circumpolar_plot
-from ..utils import moving_average
+from ..utils import moving_average, region_mask
 from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year
 from ..file_io import read_schmidtko, read_woa
 from ..interpolation import interp_latlon_cf
@@ -672,22 +672,28 @@ def plot_stabilisation_profiles (region='amundsen_sea', fig_name=None):
 
     fig = plt.figure(figsize=(8,5))
     gs = plt.GridSpec(1,num_var)
-    gs.update(left=0.05, right=0.05, bottom=0.1, top=0.85, wspace=0.1)
+    gs.update(left=0.1, right=0.98, bottom=0.2, top=0.85, wspace=0.2)
     ax_all = [plt.subplot(gs[0,v]) for v in range(num_var)]
     for n in range(num_scenarios):
         ds = xr.open_dataset(in_dir+scenarios[n]+file_tail).squeeze()
         if n==0:
-            mask, ds, region_name = region_mask(region, ds, region_type='shelf', return_name=True)
-            dA = ds['area']*mask
+            mask, ds, region_name = region_mask(region, ds, option='shelf', return_name=True)
+            mask_3d = xr.where(ds[var_names[0]]==0, 0, mask)
+            dA = ds['area']*mask_3d
         for v in range(num_var):
             ax = ax_all[v]
             # Area-average the given variable to get a depth profile
-            data = (ds[var_names[v]]*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
+            data = (ds[var_names[v]]*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])            
             ax.plot(data, ds['deptht'], '-', color=colours[n], label=scenarios[n])
+            # Find deepest unmasked depth
+            zdeep = ds['deptht'].where(data.notnull()).max()
+            ax.set_ylim([zdeep, 0])
             ax.set_title(var_titles[v], fontsize=14)
             ax.set_xlabel(var_units[v], fontsize=12)
-            ax.set_ylabel('Depth (m)', fontsize=12)
-    ax.legend(loc='lower center', bbox_to_anchor=(0,-0.1), fontsize=10, ncol=num_scenarios)
+            if v==0:
+                ax.set_ylabel('Depth (m)', fontsize=12)
+            ax.grid(linestyle='dotted')
+    ax.legend(loc='lower center', bbox_to_anchor=(-0.1,-0.3), fontsize=10, ncol=num_scenarios)
     plt.suptitle(region_name, fontsize=16)
     finished_plot(fig, fig_name=fig_name)
             
