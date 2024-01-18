@@ -597,18 +597,36 @@ def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_a
         
 
 # Plot maps of the time-mean of the given variable in each stabilisation scenario
-def plot_stabilisation_maps (var_name, file_type='grid-T', fig_name=None):
+def plot_stabilisation_maps (var_name, fig_name=None):
 
     scenarios = ['piControl', '1.5K', '2K', '2.5K', '3K', '4K', '5K', '6K']
-    in_dir = 'time_averaged_dummy/'  # TODO: update when real time averages exist
+    in_dir = 'time_averaged/' 
     num_scenarios = len(scenarios)
     domain_cfg = '/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'
     if var_name == 'barotropic_streamfunction':
         title = 'Barotropic streamfunction (Sv)'
+        file_type = 'grid-U'
+        contour = [-15, 0]
+        vmin = -60
+        vmax = 60
+        lat_max = None
+        ctype = 'plusminus'
     elif var_name == 'tob':
         title = 'Bottom temperature ('+deg_string+'C)'
+        file_type = 'grid-T'
+        contour = None
+        vmin = -2
+        vmax = 4.5
+        lat_max = -63
+        ctype = 'RdBu_r'
     elif var_name == 'sob':
         title = 'Bottom salinity ('+gkg_string+')'
+        file_type = 'grid-T'
+        contour = None
+        vmin = 33.5
+        vmax = 34.8
+        lat_max = -63
+        ctype = 'RdBu_r'
     else:
         raise Exception('invalid var_name')
     
@@ -617,18 +635,20 @@ def plot_stabilisation_maps (var_name, file_type='grid-T', fig_name=None):
     gs.update(left=0.05, right=0.95, bottom=0.1, top=0.9, hspace=0.2, wspace=0.2)
     for n in range(num_scenarios):
         ds = xr.open_dataset(in_dir+scenarios[n]+'_'+file_type+'.nc').squeeze()
-        if var_name=='barotropic_streamfunction' and n==0:
-            # Grab e2u from domain_cfg
-            ds_domcfg = xr.open_dataset(domain_cfg).squeeze()
-            ds_domcfg = ds_domcfg.isel(y=slice(0, ds.sizes['y']))
-        ds = ds.assign({'e2u':ds_domcfg['e2u']})
+        if var_name=='barotropic_streamfunction':
+            if n==0:
+                # Grab e2u from domain_cfg
+                ds_domcfg = xr.open_dataset(domain_cfg).squeeze()
+                ds_domcfg = ds_domcfg.isel(y=slice(0, ds.sizes['y']))
+            ds = ds.assign({'e2u':ds_domcfg['e2u']})
         if var_name == 'barotropic_streamfunction':
             data_plot = barotropic_streamfunction(ds)
         else:
             data_plot = ds[var_name]
+            contour = None
         ax = plt.subplot(gs[n//2, n%2])
         ax.axis('equal')
-        img = circumpolar_plot(data_plot, ds, ax=ax, make_cbar=False, title=scenarios[n], ctype='plusminus', titlesize=14, vmin=-60, vmax=60, contour=[-15,0])
+        img = circumpolar_plot(data_plot, ds, ax=ax, make_cbar=False, title=scenarios[n], ctype=ctype, titlesize=14, vmin=vmin, vmax=vmax, contour=contour, lat_max=lat_max)
         if n == num_scenarios-1:
             cax = fig.add_axes([0.2, 0.04, 0.6, 0.02])
             plt.colorbar(img, cax=cax, orientation='horizontal', extend='both')
