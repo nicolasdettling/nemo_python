@@ -788,6 +788,7 @@ def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None):
     # Get global mean SAT anomalies relative to that time index
     # Print some statistics (which ones tip; mean and std of warming at that point; risk of tipping eventually if GW exceeds given target)
     # Plot cavity temp vs SAT anomalies (should all line up around 0): each trajectory in a different colour, or all in grey with one highlighted on top?
+    pass
             
 
     
