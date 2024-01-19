@@ -842,6 +842,7 @@ def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None, static_ice=False
         gw_targets = [1.5, 2, 2.5, 3, 4, 5, 6]
         for n in range(len(gw_targets)):
             warming_exceeds = gw_targets[n]
+            if n==len(gw_targets)-1:
                 warming_below = 1000
             else:
                 warming_below = gw_targets[n+1]
