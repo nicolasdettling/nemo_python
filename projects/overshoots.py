@@ -744,7 +744,7 @@ def all_suite_trajectories (static_ice=False):
     if static_ice:
         name0 = 'ramp_up_static_ice'
     else:
-        name0 = 'ramp_up':
+        name0 = 'ramp_up'
     for suite in suites_by_scenario[name0]:
         complete_sequence([suite])
 
