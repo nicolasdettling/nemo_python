@@ -278,6 +278,22 @@ def plot_integrated_gw (base_dir='./', timeseries_file_um='timeseries_um.nc', pi
         labels_plot += [label] + [None]*(num_ens-1)
         colours_plot += [colour]*num_ens
     timeseries_plot(datas, labels=labels_plot, colours=colours_plot, title='Integrated global warming relative to preindustrial', units='Kelvin-years', linewidth=1, fig_name=fig_name)
+
+
+# Given two timeseries, trim them to line up along the time_centered axis and be the same length.
+def align_timeseries (data1, data2):
+
+    # Find most restrictive endpoints
+    date_start = max(data1.time_centered[0], data2.time_centered[0])
+    date_end = min(data1.time_centered[-1], data2.time_centered[-1])
+    # Inner function to trim
+    def trim_timeseries (A):
+        t_start = np.argwhere(A.time_centered.data == date_start.data)[0][0]
+        t_end = np.argwhere(A.time_centered.data == date_end.data)[0][0]
+        return A.isel(time_centered=slice(t_start, t_end+1))
+    data1 = trim_timeseries(data1)
+    data2 = trim_timeseries(data2)
+    return data1, data2
     
 
 # Plot the timeseries of one or more experiments/ensembles (expts can be a string, a list of strings, or a list of lists of string) and one variable against global warming level (relative to preindustrial mean in the given PI suite).
@@ -324,16 +340,7 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
             data = ds[var_name]
             ds.close()
             # Trim the two timeseries to line up and be the same length
-            # Find most restrictive endpoints
-            date_start = max(data.time_centered[0], gw_level.time_centered[0])
-            date_end = min(data.time_centered[-1], gw_level.time_centered[-1])
-            # Inner function to trim
-            def trim_timeseries (A):
-                t_start = np.argwhere(A.time_centered.data == date_start.data)[0][0]
-                t_end = np.argwhere(A.time_centered.data == date_end.data)[0][0]
-                return A.isel(time_centered=slice(t_start, t_end+1))
-            data = trim_timeseries(data)
-            gw_level = trim_timeseries(gw_level)
+            data, gw_level = align_timeseries(data, gw_level)
             if data.size != gw_level.size:
                 print('Warning: timeseries do not align for suite '+suite+'. Removing suite from plot')
                 num_ens -= 1
@@ -730,6 +737,9 @@ def all_suite_trajectories (static_ice=False):
         new_suites = []
         for scenario in suites_by_scenario:
             for s in suites_by_scenario[scenario]:
+                if s not in suites_branched:
+                    # Some suites (eg preindustrial) not considered in branching
+                    continue
                 if suites_branched[s] == suite:
                     new_suites.append(s)
         if len(new_suites)==0:
@@ -737,7 +747,7 @@ def all_suite_trajectories (static_ice=False):
             pass
         else:
             # Loop over each suite that branches, and go another level down in the recursion
-            for s in new_suite:
+            for s in new_suites:
                 complete_sequence(sequence+[s])
 
     # Start from each ramp-up ensemble member and use it as a seed
@@ -748,9 +758,12 @@ def all_suite_trajectories (static_ice=False):
     for suite in suites_by_scenario[name0]:
         complete_sequence([suite])
 
+    return suite_sequences
+
 
 # Assemble a list of all possible trajectories of the given timeseries variable (precomputed).
-def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='timeseries.nc', static_ice=False):
+# Can add an offset if needed (eg the negative of the preindustrial baseline temperature)
+def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='timeseries.nc', static_ice=False, offset=0):
 
     suite_sequences = all_suite_trajectories(static_ice=static_ice)
     timeseries = []
@@ -759,14 +772,14 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
     for suite_list in suite_sequences:
         for suite in suite_list:
             ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
-            data = ds[var_name]            
+            data = ds[var_name] + offset           
             if suite == suite_list[0]:
                 suite_string = suite
             else:
                 suite_string += '-'+suite
                 # Find the starting date of the current suite
                 start_date = data.time_centered[0]
-                if data_old.time_centered[-1].data > start_date.data:
+                if data_prev.time_centered[-1].data > start_date.data:
                     # Trim the previous timeseries to just before that date
                     time_branch = np.argwhere(data_prev.time_centered.data == start_date.data)[0][0]
                     data_prev = data_prev.isel(time_centered=slice(0,time_branch))
@@ -779,16 +792,72 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
     return timeseries, suite_strings              
 
 
-def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None):
+def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None, static_ice=False):
 
-    # Assemble all possible trajectories of given variable (<region>_cavity_temp) - separate function
-    # Do the same for global mean SAT relative to PI; trim timeseries as needed
-    # Smooth both - 24 months?
-    # Identify the ones that tip (>-1.9C) and save the time index where this happens
-    # Get global mean SAT anomalies relative to that time index
-    # Print some statistics (which ones tip; mean and std of warming at that point; risk of tipping eventually if GW exceeds given target)
+    regions = ['ross', 'filchner_ronne']
+    pi_suite = 'cs568'
+    timeseries_file_um = 'timeseries_um.nc'
+    smooth = 24
+    tipping_threshold = -1.9  # If cavity mean temp is warmer than surface freezing point, it's tipped
+
+    # Assemble all possible trajectories of global mean temperature anomalies relative to preindustrial
+    ds = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
+    baseline_temp = ds['global_mean_sat'].mean()
+    ds.close()
+    warming_ts, suite_strings = all_timeseries_trajectories('global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, static_ice=static_ice, offset=-1*baseline_temp)
+    num_trajectories = len(warming_ts)
+    # Smooth each
+    for n in range(num_trajectories):
+        warming_ts[n] = moving_average(warming_ts[n], smooth)
+
+    for region in regions:
+        
+        # Assemble all possible trajectories of cavity mean temperature
+        cavity_temp_ts = all_timeseries_trajectories(region+'_cavity_temp', base_dir=base_dir, static_ice=static_ice)[0]
+        # Now loop over them and find the ones that have tipped
+        cavity_temp_tipped = []
+        warming_wrt_tipped = []
+        warming_at_tip = []
+        suites_tipped = []
+        for n in range(num_trajectories):
+            # Smooth and trim/align with warming timeseries
+            cavity_temp_ts[n] = moving_average(cavity_temp_ts[n], smooth)
+            cavity_temp, warming = align_timeseries(cavity_temp_ts[n], warming_ts[n])
+            if cavity_temp.max() > tipping_threshold:
+                # Find the time index of first tipping
+                tip_time = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
+                # Find the global warming level at that time index
+                tip_warming = warming.isel(time_centered=tip_time)
+                # Save the cavity temperature timeseries and the global warming anomalies relative to tipping time
+                cavity_temp_tipped.append(cavity_temp)
+                warming_wrt_tipped.append(warming-tip_warming)
+                warming_at_tip.append(tip_warming)
+                suites_tipped.append(suite_strings[n])
+                
+        # Print some statistics about which ones tipped
+        print('\n'+region+':')
+        print(str(len(suites_tipped))+' trajectories tip')
+        print('Global warming at time of tipping has mean '+str(np.mean(warming_at_tip))+'K, standard deviation '+str(np.std(warming_at_tip))+'K')
+        # Risk of tipping eventually if max GW is within certain range
+        gw_targets = [1.5, 2, 2.5, 3, 4, 5, 6]
+        for n in range(len(gw_targets)):
+            warming_exceeds = gw_targets[n]
+                warming_below = 1000
+            else:
+                warming_below = gw_targets[n+1]
+            # Find all trajectories with max warming in this range, and keep track of which ones do and don't tip
+            num_tip = 0
+            num_total = 0
+            for n in range(num_trajectories):
+                if warming_ts[n].max() > warming_exceeds and warming_ts[n].max() < warming_below:
+                    num_total += 1
+                if suite_strings[n] in suites_tipped:
+                    num_tip += 1
+            print('Maximum warming between '+str(warming_exceeds)+'-'+str(warming_below)+'K causes '+str(num_tip)+' of '+str(num_total)+' trajectories to eventually tip ('+str(num_tip/num_total*100)+'%)')
+            
+        
+        
     # Plot cavity temp vs SAT anomalies (should all line up around 0): each trajectory in a different colour, or all in grey with one highlighted on top?
-    pass
             
 
     
