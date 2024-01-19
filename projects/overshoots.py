@@ -29,7 +29,7 @@ suites_by_scenario = {'piControl' : ['cs495'],
                       '3K_stabilise' : ['cz375','db587','db597'],
                       '3K_ramp_down' : ['db223', 'dc032', 'dc249'],
                       '4K_stabilise' : ['cz376','db723','db733'],
-                      '4K_ramp_down' : ['da892'], # To do: add dc123 once single_copy_unavailable errors gone
+                      '4K_ramp_down' : ['da892', 'dc123'],
                       '5K_stabilise' : ['cz377','db731','dc324'],
                       '5K_ramp_down' : ['dc251', 'dc130'],
                       '6K_stabilise' : ['cz378']}
@@ -810,7 +810,13 @@ def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None, static_ice=False
     for n in range(num_trajectories):
         warming_ts[n] = moving_average(warming_ts[n], smooth)
 
-    for region in regions:
+    # Set up plot
+    fig = plt.figure(figsize=(8,6))
+    gs = plt.GridSpec(1,2)
+    gs.update(left=0.05, right=0.95, bottom=0.05, top=0.9)
+    # Loop over regions
+    for r in range(len(regions)):
+        region = regions[r]
         
         # Assemble all possible trajectories of cavity mean temperature
         cavity_temp_ts = all_timeseries_trajectories(region+'_cavity_temp', base_dir=base_dir, static_ice=static_ice)[0]
@@ -852,9 +858,12 @@ def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None, static_ice=False
             for n in range(num_trajectories):
                 if warming_ts[n].max() > warming_exceeds and warming_ts[n].max() < warming_below:
                     num_total += 1
-                if suite_strings[n] in suites_tipped:
-                    num_tip += 1
+                    if suite_strings[n] in suites_tipped:
+                        num_tip += 1
             print('Maximum warming between '+str(warming_exceeds)+'-'+str(warming_below)+'K causes '+str(num_tip)+' of '+str(num_total)+' trajectories to eventually tip ('+str(num_tip/num_total*100)+'%)')
+
+        # Plot
+        ax = plt.subplot(gs[0,r])
             
         
         
