@@ -13,6 +13,31 @@ from ..file_io import read_schmidtko, read_woa
 from ..interpolation import interp_latlon_cf
 from ..diagnostics import barotropic_streamfunction
 
+# Global dictionaries of suites - update these as more suites become available!
+
+# Dictionary of which suites correspond to which scenario
+suites_by_scenario = {'piControl' : ['cs495'],
+                      'piControl_static_ice' : ['cs568'],
+                      'ramp_up' : ['cx209', 'cw988', 'cw989', 'cw990'],
+                      'ramp_up_static_ice': ['cz826'],
+                      '1.5K_stabilise': ['cy837','cz834','da087'],
+                      '1.5K_ramp_down': ['da697', 'dc052', 'dc248'],
+                      '2K_stabilise': ['cy838','cz855','da266'],
+                      '2K_ramp_down': ['cz944', 'dc051', 'da800'],
+                      '2K_restabilise' : ['dc163'],
+                      '2.5K_stabilise' : ['cz374','cz859'],
+                      '3K_stabilise' : ['cz375','db587','db597'],
+                      '3K_ramp_down' : ['db223', 'dc032', 'dc249'],
+                      '4K_stabilise' : ['cz376','db723','db733'],
+                      '4K_ramp_down' : ['da892'], # To do: add dc123 once single_copy_unavailable errors gone
+                      '5K_stabilise' : ['cz377','db731','dc324'],
+                      '5K_ramp_down' : ['dc251', 'dc130'],
+                      '6K_stabilise' : ['cz378']}
+# Dictionary of which suites branch from which. None means it's a ramp-up suite (so branched from a piControl run, but we don't care about that for the purposes of integrated GW)
+suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'cz944':'cy838', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'db223':'cz375', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'dc163':'cz944'}
+
+# End global vars
+
 
 # Call update_simulation_timeseries for the given suite ID
 def update_overshoot_timeseries (suite_id, base_dir='./', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
@@ -46,9 +71,9 @@ def update_overshoot_timeseries (suite_id, base_dir='./', domain_cfg='/gws/nopw/
 # Call for all simulations (add to the list of suite IDs as needed)
 def update_overshoot_timeseries_all (base_dir='./', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
 
-    # To do: add in dc123 once ERROR_SINGLE_COPY_UNAVAILABLE goes away
-    for suite_id in ['cs495', 'cs568', 'cx209', 'cw988', 'cw989', 'cw990', 'cz826', 'cy837', 'cz834', 'da087', 'cy838', 'cz855', 'cz374', 'cz859', 'cz375', 'cz376', 'cz377', 'cz378', 'da697', 'cz944', 'da800', 'db587', 'db723', 'db731', 'da266', 'db597', 'db733', 'dc324', 'da892', 'db223', 'dc051', 'dc052', 'dc248', 'dc249', 'dc251', 'dc032', 'dc130', 'dc163']:
-        update_overshoot_timeseries(suite_id, base_dir=base_dir, domain_cfg=domain_cfg)
+    for scenario in suites_by_scenario:
+        for suite_id in suites_by_scenario[scenario]:
+            update_overshoot_timeseries(suite_id, base_dir=base_dir, domain_cfg=domain_cfg)
 
 
 # Calculate a new timeseries variable(s) for the given suite, and then concatenate it with the existing corresponding timeseries file. After running this, add the variable(s) to the list in update_overshoot_timeseries.
@@ -158,16 +183,15 @@ def set_expt_list (separate_stages=False, only_up=False, only_down=False):
 
     # Now add the suites
     if not only_down:
-        #add_ens('preindustrial', 'Sienna', 'cs495')
-        add_ens('ramp up', 'Black', ['cx209', 'cw988', 'cw989', 'cw990'])
-        add_ens('ramp up static ice', 'DarkGrey', 'cz826')        
-    add_gw_level('1.5K', ['cy837', 'cz834', 'da087'], ['da697', 'dc052', 'dc248'], None, 'DarkMagenta', 'MediumOrchid', None)
-    add_gw_level('2K', ['cy838', 'cz855', 'da266'], ['cz944', 'dc051', 'da800'], 'dc163', 'Blue', 'CornflowerBlue', 'LightBlue')
-    add_gw_level('2.5K', ['cz374', 'cz859'], None, None, 'DarkCyan', None, None)
-    add_gw_level('3K', ['cz375', 'db587', 'db597'], ['db223', 'dc032', 'dc249'], None, 'DarkGreen', 'DarkSeaGreen', None)
-    add_gw_level('4K', ['cz376', 'db723', 'db733'], 'da892', None, 'GoldenRod', 'Gold', None)  # To do: add in dc123 (ramp down) once ERROR_SINGLE_COPY_UNAVAILABLE fixed
-    add_gw_level('5K', ['cz377', 'db731', 'dc324'], ['dc251', 'dc130'], None, 'Chocolate', 'LightSalmon', None)
-    add_gw_level('6K', 'cz378', None, None, 'Crimson', None, None)
+        add_ens('ramp up', 'Black', suites_by_scenario['ramp_up'])
+        add_ens('ramp up static ice', 'DarkGrey', suites_by_scenario['ramp_up_static_ice'])
+    add_gw_level('1.5K', suites_by_scenario['1.5K_stabilise'], suites_by_scenario['1.5K_ramp_down'], None, 'DarkMagenta', 'MediumOrchid', None)
+    add_gw_level('2K', suites_by_scenario['2K_stabilise'], suites_by_scenario['2K_ramp_down'], suites_by_scenario['2K_restabilise'], 'Blue', 'CornflowerBlue', 'LightBlue')
+    add_gw_level('2.5K', suites_by_scenario['2.5K_stabilise'], None, None, 'DarkCyan', None, None)
+    add_gw_level('3K', suites_by_scenario['3K_stabilise'], suites_by_scenario['3K_ramp_down'], None, 'DarkGreen', 'DarkSeaGreen', None)
+    add_gw_level('4K', suites_by_scenario['4K_stabilise'], suites_by_scenario['4K_ramp_down'], None, 'GoldenRod', 'Gold', None)
+    add_gw_level('5K', suites_by_scenario['5K_stabilise'], suites_by_scenario['5K_ramp_down'], None, 'Chocolate', 'LightSalmon', None)
+    add_gw_level('6K', suites_by_scenario['6K_stabilise'], None, None, 'Crimson', None, None)
 
     return sim_names, colours, sim_dirs
 
@@ -206,9 +230,6 @@ def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 
 # Calculate the integrated global warming relative to preindustrial mean, in Kelvin-years, for the given suite (starting from the beginning of the relevant ramp-up simulation). Returns a timeseries over the given experiment, with the first value being the sum of all branched-from experiments before then.
 def integrated_gw (suite, pi_suite='cs568', timeseries_file_um='timeseries_um.nc', base_dir='./'):
 
-    # Dictionary of which suites branch from which. None means it's a ramp-up suite (so branched from a piControl run, but we don't care about that for the purposes of integrated GW)
-    branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'cz944':'cy838', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'db223':'cz375', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'dc163':'cz944'}
-
     # Inner function to read global mean SAT
     def global_mean_sat (suite):
         ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
@@ -224,7 +245,7 @@ def integrated_gw (suite, pi_suite='cs568', timeseries_file_um='timeseries_um.nc
     integrated_gw = (gw_level/months_per_year).cumsum(dim='time_centered')
 
     # Now add on definite integrals of all branched-from suites before that
-    prev_suite = branched[suite]
+    prev_suite = suites_branched[suite]
     while prev_suite is not None:
         # Find the starting date of the current suite
         start_date = gw_level.time_centered[0]
@@ -236,7 +257,7 @@ def integrated_gw (suite, pi_suite='cs568', timeseries_file_um='timeseries_um.nc
         integrated_gw += (gw_level.isel(time_centered=slice(0,time_branch))/months_per_year).sum(dim='time_centered')
         # Prepare for next iteration of loop
         suite = prev_suite
-        prev_suite = branched[suite]
+        prev_suite = suites_branched[suite]
 
     return integrated_gw
 
@@ -540,18 +561,14 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
 def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_averaged/'):
 
     from tqdm import tqdm
-
-    # Dictionary for which suites correspond to each scenario
-    suite_list = {'piControl':['cs495'],
-                  '1.5K':['cy837','cz834','da087'],
-                  '2K':['cy838','cz855','da266'],
-                  '2.5K':['cz374','cz859'],
-                  '3K':['cz375','db587','db597'],
-                  '4K':['cz376','db723','db733'],
-                  '5K':['cz377','db731','dc324'],
-                  '6K':['cz378']}    
-    for scenario in suite_list:
+    scenarios = ['piControl', '1.5K', '2K', '2.5K', '3K', '4K', '5K', '6K']
+    
+    for scenario in scenarios:
         print('Processing '+scenario)
+        if scenario == 'piControl':
+            scenario_full = scenario
+        else:
+            scenario_full = scenario + '_stabilise'
         out_file = base_dir+'/'+out_dir+'/'+scenario+'_'+file_type+'.nc'
         log_file = base_dir+'/'+out_dir+'/'+scenario+'_'+file_type+'.log'
         update_file = os.path.isfile(out_file)
@@ -562,7 +579,7 @@ def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_a
         # Open the log file (may or may not already exist) to append to it
         log = open(log_file, 'a')
         nemo_files = []
-        for suite in suite_list[scenario]:
+        for suite in suites_by_scenario[scenario_full]:
             sim_dir = base_dir+'/'+suite+'/'
             file_head = 'nemo_'+suite+'o_1m_'
             file_tail = '_'+file_type+'.nc'
@@ -696,6 +713,81 @@ def plot_stabilisation_profiles (region='amundsen_sea', fig_name=None):
     ax.legend(loc='lower center', bbox_to_anchor=(-0.1,-0.3), fontsize=10, ncol=num_scenarios)
     plt.suptitle(region_name, fontsize=16)
     finished_plot(fig, fig_name=fig_name)
+
+
+# Assemble a list of lists of all the possible suite trajectories. eg, one entry is ['cx209', 'cy837', 'da697']: each simulation branches from the previous one.
+def all_suite_trajectories (static_ice=False):
+
+    suite_sequences = []
+    
+    # Recursive inner function to build the list
+    def complete_sequence (sequence):
+        # Add the (possibly partial) sequence to the list, for example to consider perpetual ramp-up case
+        suite_sequences.append(sequence)
+        # Find the last suite in the sequence
+        suite = sequence[-1]
+        # Find all new suites which branched from this original suite
+        new_suites = []
+        for scenario in suites_by_scenario:
+            for s in suites_by_scenario[scenario]:
+                if suites_branched[s] == suite:
+                    new_suites.append(s)
+        if len(new_suites)==0:
+            # Exit condition: nothing branches from this suite; sequence is complete
+            pass
+        else:
+            # Loop over each suite that branches, and go another level down in the recursion
+            for s in new_suite:
+                complete_sequence(sequence+[s])
+
+    # Start from each ramp-up ensemble member and use it as a seed
+    if static_ice:
+        name0 = 'ramp_up_static_ice'
+    else:
+        name0 = 'ramp_up':
+    for suite in suites_by_scenario[name0]:
+        complete_sequence([suite])
+
+
+# Assemble a list of all possible trajectories of the given timeseries variable (precomputed).
+def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='timeseries.nc', static_ice=False):
+
+    suite_sequences = all_suite_trajectories(static_ice=static_ice)
+    timeseries = []
+    suite_strings = []
+    # Loop over each suite trajectory and build the timeseries
+    for suite_list in suite_sequences:
+        for suite in suite_list:
+            ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+            data = ds[var_name]            
+            if suite == suite_list[0]:
+                suite_string = suite
+            else:
+                suite_string += '-'+suite
+                # Find the starting date of the current suite
+                start_date = data.time_centered[0]
+                if data_old.time_centered[-1].data > start_date.data:
+                    # Trim the previous timeseries to just before that date
+                    time_branch = np.argwhere(data_prev.time_centered.data == start_date.data)[0][0]
+                    data_prev = data_prev.isel(time_centered=slice(0,time_branch))
+                # Concatenate with the previous timeseries
+                data = xr.concat([data_prev, data], dim='time_centered')
+            # Prepare for next iteration of loop
+            data_prev = data
+        suite_strings.append(suite_string)
+        timeseries.append(data)
+    return timeseries, suite_strings              
+
+
+def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None):
+
+    # Assemble all possible trajectories of given variable (<region>_cavity_temp) - separate function
+    # Do the same for global mean SAT relative to PI; trim timeseries as needed
+    # Smooth both - 24 months?
+    # Identify the ones that tip (>-1.9C) and save the time index where this happens
+    # Get global mean SAT anomalies relative to that time index
+    # Print some statistics (which ones tip; mean and std of warming at that point; risk of tipping eventually if GW exceeds given target)
+    # Plot cavity temp vs SAT anomalies (should all line up around 0): each trajectory in a different colour, or all in grey with one highlighted on top?
             
 
     
