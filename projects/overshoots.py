@@ -864,6 +864,14 @@ def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None, static_ice=False
 
         # Plot
         ax = plt.subplot(gs[0,r])
+        for n in range(len(cavity_temp_tipped)):
+            ax.plot(warming_wrt_tipped[n], cavity_temp_tipped[n], '-', color='DarkGrey', linewidth=1)
+        if r==0:
+            ax.set_xlabel('Global mean temperature anomaly, relative to time of tipping ('+deg_string+'C)', fontsize=12)
+            ax.set_ylabel('Cavity mean temperature ('+deg_string+'C)', fontsize=12)
+        ax.set_title(region_names[region[r]]+' Ice Shelf', fontsize=16)
+    finished_plot(fig, fig_name=fig_name)
+                        
             
         
         
