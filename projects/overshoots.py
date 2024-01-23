@@ -814,7 +814,7 @@ def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None, static_ice=False
     # Set up plot
     fig = plt.figure(figsize=(8,6))
     gs = plt.GridSpec(1,2)
-    gs.update(left=0.05, right=0.95, bottom=0.05, top=0.9)
+    gs.update(left=0.1, right=0.98, bottom=0.1, top=0.9)
     # Loop over regions
     for r in range(len(regions)):
         region = regions[r]
@@ -865,11 +865,14 @@ def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None, static_ice=False
 
         # Plot
         ax = plt.subplot(gs[0,r])
-        for n in range(len(cavity_temp_tipped)):
-            ax.plot(warming_wrt_tipped[n], cavity_temp_tipped[n], '-', color='DarkGrey', linewidth=1)
+        num_tipped = len(cavity_temp_tipped)
+        colours = cmap(np.linspace(0,1,num_tipped))
+        for n in range(num_tipped):
+            ax.plot(warming_wrt_tipped[n], cavity_temp_tipped[n], '-', color=colours[n], linewidth=1)
         if r==0:
-            ax.set_xlabel('Global mean temperature anomaly, relative to time of tipping ('+deg_string+'C)', fontsize=12)
+            ax.set_xlabel('Global mean temperature anomaly,\nrelative to time of tipping ('+deg_string+'C)', fontsize=12)
             ax.set_ylabel('Cavity mean temperature ('+deg_string+'C)', fontsize=12)
+        ax.grid(linestyle='dotted')
         ax.set_title(region_names[region]+' Ice Shelf', fontsize=16)
     finished_plot(fig, fig_name=fig_name)
                         
