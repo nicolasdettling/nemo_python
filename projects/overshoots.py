@@ -615,9 +615,10 @@ def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_a
             num_files_total = num_files + num_old_files
             ds_mean_old = xr.open_dataset(out_file)
             ds_mean = ds_mean*num_files/num_files_total + ds_mean_old*num_old_files/num_files_total
-            ds_mean_old.close()
-        ds_mean.to_netcdf(out_file, mode='w')
+        ds_mean.to_netcdf(out_file+'_tmp', mode='w')
         ds_mean.close()
+        ds_mean_old.close()
+        os.rename(out_file+'_tmp',out_file)
         
 
 # Plot maps of the time-mean of the given variable in each stabilisation scenario
@@ -869,7 +870,7 @@ def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None, static_ice=False
         if r==0:
             ax.set_xlabel('Global mean temperature anomaly, relative to time of tipping ('+deg_string+'C)', fontsize=12)
             ax.set_ylabel('Cavity mean temperature ('+deg_string+'C)', fontsize=12)
-        ax.set_title(region_names[region[r]]+' Ice Shelf', fontsize=16)
+        ax.set_title(region_names[region]+' Ice Shelf', fontsize=16)
     finished_plot(fig, fig_name=fig_name)
                         
             
