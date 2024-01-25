@@ -204,7 +204,7 @@ def minimal_expt_list ():
 
     keys = ['ramp_up', '_stabilise', '_ramp_down']
     sim_names = ['Ramp up', 'Stabilise', 'Ramp down']
-    colours = ['Crimson', 'black', 'blue']
+    colours = ['Crimson', 'Grey', 'DodgerBlue']
     sim_dirs = []
     for key in keys:
         dirs = []
@@ -532,7 +532,7 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
     end_year = 2014
     eos = 'eos80'
 
-    sim_dir = base_dir + '/' + suite + '_bwsalt/'
+    sim_dir = base_dir + '/' + suite + '/'
     if os.path.isfile(sim_dir+precomputed_file):
         nemo = xr.open_dataset(sim_dir+precomputed_file)
     else:
@@ -675,6 +675,14 @@ def plot_stabilisation_maps (var_name, fig_name=None):
         vmax = 34.8
         lat_max = -63
         ctype = 'RdBu_r'
+    elif var_name == 'temp500m':
+        title = 'Temperature at 500m ('+deg_string+'C)'
+        file_type = 'grid-T'
+        contour = None
+        vmin = -2
+        vmax = 4.5
+        lat_max = -63
+        ctype = 'RdBu_r'
     else:
         raise Exception('invalid var_name')
     
@@ -691,9 +699,11 @@ def plot_stabilisation_maps (var_name, fig_name=None):
             ds = ds.assign({'e2u':ds_domcfg['e2u']})
         if var_name == 'barotropic_streamfunction':
             data_plot = barotropic_streamfunction(ds)
+        elif var_name == 'temp500m':
+            data_3d = ds['thetao'].where(ds['thetao']!=0)
+            data_plot = data_3d.interp(deptht=500)
         else:
             data_plot = ds[var_name]
-            contour = None
         ax = plt.subplot(gs[n//2, n%2])
         ax.axis('equal')
         img = circumpolar_plot(data_plot, ds, ax=ax, make_cbar=False, title=scenarios[n], ctype=ctype, titlesize=14, vmin=vmin, vmax=vmax, contour=contour, lat_max=lat_max)
@@ -895,33 +905,38 @@ def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None, static_ice=False
             print('Maximum warming between '+str(warming_exceeds)+'-'+str(warming_below)+'K causes '+str(num_tip)+' of '+str(num_total)+' trajectories to eventually tip ('+str(num_tip/num_total*100)+'%)')
 
 
-# Final plot for paper: ice shelf basal mass loss as a function of global warming level, for 4 different regions, showing ramp-up, stabilise, and ramp-down in different colours
-def plot_massloss_by_gw_panels (base_dir='./', fig_name=None):
+# Final plots for paper: (1) bottom temperature on continental shelf and in cavities, and (2) ice shelf basal mass loss as a function of global warming level, for 4 different regions, showing ramp-up, stabilise, and ramp-down in different colours
+def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
 
     pi_suite = 'cs568'
     regions = ['ross', 'filchner_ronne', 'west_antarctica', 'east_antarctica']
+    var_names = ['bwtemp', 'massloss']
+    var_titles = ['Bottom temperature on continental shelf and in ice shelf cavities', 'Basal mass loss beneath ice shelves']
+    var_units = [deg_string+'C', 'Gt/y']
+    num_var = len(var_names)
     timeseries_file = 'timeseries.nc'
     smooth = 24
     sim_names, colours, sim_dirs = minimal_expt_list()
 
-    fig = plt.figure(figsize=(8,7))
-    gs = plt.GridSpec(2,2)
-    gs.update(left=0.1, right=0.95, bottom=0.15, top=0.85, hspace=0.3, wspace=0.15)
-    for n in range(len(regions)):
-        ax = plt.subplot(gs[n//2, n%2])
-        plot_by_gw_level(sim_dirs, regions[n]+'_massloss', pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=0.5, ax=ax)
-        ax.set_title(region_names[regions[n]], fontsize=14)
-        if n == 0:
-            ax.set_ylabel('Gt/y', fontsize=12)
-        else:
-            ax.set_ylabel('')
-        if n == 2:
-            ax.set_xlabel('Global warming relative to preindustrial (K)', fontsize=12)
-        else:
-            ax.set_xlabel('')
-    plt.suptitle('Basal mass loss beneath ice shelves', fontsize=16)
-    ax.legend(loc='center left', bbox_to_anchor=(-0.5,-0.2), fontsize=11, ncol=3)
-    finished_plot(fig, fig_name=fig_name, dpi=300)
+    for v in range(num_var):
+        fig = plt.figure(figsize=(10,7))
+        gs = plt.GridSpec(2,2)
+        gs.update(left=0.07, right=0.98, bottom=0.15, top=0.9, hspace=0.3, wspace=0.16)
+        for n in range(len(regions)):
+            ax = plt.subplot(gs[n//2, n%2])
+            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=0.5, ax=ax)
+            ax.set_title(region_names[regions[n]], fontsize=14)
+            if n == 0:
+                ax.set_ylabel(var_units[v], fontsize=12)
+            else:
+                ax.set_ylabel('')
+            if n == 2:
+                ax.set_xlabel('Global warming relative to preindustrial ('+deg_string+'C)', fontsize=12)
+            else:
+                ax.set_xlabel('')
+        plt.suptitle(var_titles[v], fontsize=16)
+        ax.legend(loc='center left', bbox_to_anchor=(-0.75,-0.32), fontsize=11, ncol=3)
+        finished_plot(fig, fig_name='figures/'+var_names[v]+'_by_gw_panels.png', dpi=300)
             
             
 
