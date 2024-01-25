@@ -1045,6 +1045,8 @@ def calc_salinity_bias (base_dir='./'):
 # Calculate the global warming implied by the salinity biases (from above), using a linear regression below 3K for Ross, 5K for FRIS.
 def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='./'):
 
+    from scipy.stats import linregress
+
     pi_suite = 'cs568'
     max_warming_regions = [3, 5]
     smooth = 5*months_per_year
@@ -1090,10 +1092,10 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
                 warming = xr.concat([warming, warming_tmp], dim='time_centered')
                 bwsalt = xr.concat([bwsalt, bwsalt_tmp], dim='time_centered')
         # Now find a linear regression of bwsalt in response to warming
-        slope, intercept, r_value, p_value, std_err = linregress(warming, bwsalt)
+        slope, intercept, r_value, p_value, std_err = linregress(bwsalt, warming)
         if p_value > p0:
             raise Exception('No significant trend')
-        implied_warming = slope*bwsalt_bias + intercept
+        implied_warming = slope*bwsalt_bias
         print(region_names[region]+': Salinity bias of '+str(bwsalt_bias)+' psu implies global warming of '+str(implied_warming)+'K')        
             
         
@@ -1103,7 +1105,7 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
 
 # Historical warming: 0.8621179199280959K
 # Ross bwsalt bias: -0.14493934 psu
-# FRIS bwsalt bias: -0.1254287
+# FRIS bwsalt bias: -0.1254287 psu
 # Recalculate these when cy691 single copy unavailable errors are gone and warming timeseries has been recalculated
         
     
