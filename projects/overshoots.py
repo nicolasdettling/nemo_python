@@ -680,8 +680,8 @@ def plot_stabilisation_maps (var_name, fig_name=None):
         file_type = 'grid-T'
         contour = None
         vmin = -2
-        vmax = 4.5
-        lat_max = -63
+        vmax = 7
+        lat_max = None
         ctype = 'RdBu_r'
     else:
         raise Exception('invalid var_name')
@@ -937,6 +937,91 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
         plt.suptitle(var_titles[v], fontsize=16)
         ax.legend(loc='center left', bbox_to_anchor=(-0.75,-0.32), fontsize=11, ncol=3)
         finished_plot(fig, fig_name='figures/'+var_names[v]+'_by_gw_panels.png', dpi=300)
+
+
+# Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS. To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
+# Before running this on Jasmin, do "source ~/pyenv/bin/activate" so we can use gsw
+def calc_salinity_bias (base_dir='./'):
+
+    regions = ['ross', 'filchner_ronne']
+    pi_suite = 'cs568'  # Preindustrial, static cavities
+    hist_suite = 'cy691'  # Historical, static cavities: to get UKESM's idea of warming relative to preindustrial
+    timeseries_file_um = 'timeseries_um.nc'
+    num_years = 10
+    schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/schmidtko_TS.txt'
+    woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_decav_*00_04.nc'
+    eos = 'eos80'
+
+    # Inner function to read global mean SAT from precomputed timeseries
+    def global_mean_sat (suite):
+        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
+        sat = ds['global_mean_sat']
+        ds.close()
+        return sat
+    # Get preindustrial baseline
+    baseline_temp = global_mean_sat(pi_suite).mean()
+    # Get "present-day" warming according to UKESM
+    hist_warming = global_mean_sat(hist_suite).mean() - baseline_temp
+    print('UKESM historical 1995-2014 was '+str(hist_warming)+'K warmer than preindustrial')
+
+    # Loop over ramp-up suites (no static ice)
+    ramp_up_bwsalt = None
+    for suite in suites_by_scenario['ramp_up']:
+        # Get timeseries of global warming relative to PI
+        warming = global_mean_sat(suite) - baseline_temp
+        for t in range(warming.size):
+            warming_10y = warming.isel(time_centered=slice(t,t+num_years*months_per_year)).mean()
+            if warming_10y >= hist_warming:
+                # Care about the 10-year period beginning at this point
+                time_select = warming_10y.time_centered
+                break
+        for time in time_select:
+            # Find the corresponding grid-T ocean file
+            year_start = time.year
+            month_start = time.month
+            year_end, month_end = add_months(year_start, month_start, 1)
+            file_path = base_dir+'/'+suite+'/nemo_'+suite+'o_1m_'+str(year_start)+str(month_start).zfill(2)+'01-'+str(year_end)+str(month_end).zfill(2)+'01_grid-T.nc'
+            ds = xr.open_dataset(file_path)
+            bwsalt = ds['sob']
+            if ramp_up_bwsalt is None:
+                # Initialise
+                ramp_up_bwsalt = bwsalt
+            else:
+                # Accumulate
+                ramp_up_bwsalt += bwsalt
+    # Convert from integral to average (over months and ensemble members)
+    ramp_up_bwsalt /= (num_years*months_per_year*len(suites_by_scenario['ramp_up']))
+
+    # Now read observations of bottom salinity
+    schmidtko = read_schmidtko(schmidtko_file=schmidtko_file, eos=eos)
+    woa = read_woa(woa_files=woa_files, eos=eos)
+    # Regrid to the NEMO grid, giving precedence to Schmidtko where both datasets exist
+    schmidtko_interp = interp_latlon_cf(schmidtko, nemo, method='bilinear')
+    woa_interp = interp_latlon_cf(woa, nemo, method='bilinear')
+    obs = xr.where(schmidtko_interp.isnull(), woa_interp, schmidtko_interp)
+    obs_bwsalt = obs['salt']
+
+    # Loop over regions and print means and biases
+    for region in regions:
+        print('\n'+region_names[region])
+        mask = region_mask(region, ds, option='shelf')[0]
+        dA = ds['area']*mask
+        ukesm_mean = (ramp_up_bwsalt*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
+        print('UKESM mean '+str(ukesm_mean)+' psu')
+        # Might have to area-average over a smaller region with missing observational points
+        mask_obs = mask.where(obs_bwsalt.notnull())
+        dA_obs = ds['area']*mask_obs
+        obs_mean = (obs_bwsalt*dA_obs).sum(dim=['x','y'])/dA_obs.sum(dim=['x','y'])
+        print('Observational mean '+str(obs_mean)+' psu')
+        print('UKESM bias '+str(ukesm_mean-obs_mean))
+        
+    
+    
+    
+
+    
+
+    
             
             
 
