@@ -1096,14 +1096,92 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
         if p_value > p0:
             raise Exception('No significant trend')
         implied_warming = slope*bwsalt_bias
-        print(region_names[region]+': Salinity bias of '+str(bwsalt_bias)+' psu implies global warming of '+str(implied_warming)+'K')        
+        print(region_names[region]+': Salinity bias of '+str(bwsalt_bias)+' psu implies global warming of '+str(implied_warming)+'K')
+
+
+def plot_ross_fris_by_bwsalt (base_dir='./'):
+
+    from matplotlib.collections import LineCollection
+
+    regions = ['ross', 'filchner_ronne']
+    timeseries_file = 'timeseries.nc'
+    timeseries_file_um = 'timeseries_um.nc'
+    smooth = 5*months_per_year
+    pi_suite = 'cs568'
+    cmap = 'viridis'
+
+    # Inner function to read global mean SAT from precomputed timeseries
+    def global_mean_sat (suite):
+        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
+        sat = ds['global_mean_sat']
+        ds.close()
+        return sat
+    # Get preindustrial baseline
+    baseline_temp = global_mean_sat(pi_suite).mean()
+
+    # Read timeseries from every experiment
+    all_bwsalt = []
+    all_cavity_temp = []
+    all_warming = []
+    max_warming = 0
+    for n in range(len(regions)):
+        data_bwsalt = []
+        data_cavity_temp = []
+        data_warming = []
+        for scenario in suites_by_scenario:
+            if 'piControl' in scenario or 'static_ice' in scenario:
+                continue
+            for suite in suites_by_scenario[scenario]:
+                ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+                bwsalt = ds[region+'_shelf_bwsalt']
+                cavity_temp = ds[region+'_cavity_temp']
+                ds.close()
+                warming = global_mean_sat(suite) - baseline_temp
+                # Smooth and align
+                bwsalt = moving_average(bwsalt, smooth)
+                cavity_temp = moving_average(cavity_temp, smooth)
+                warming = moving_average(warming, smooth)
+                bwsalt = align_timeseries(bwsalt, warming)[0]
+                cavity_temp, warming = align_timeseries(cavity_temp, warming)
+                max_warming = max(max_warming, warming.max())
+        all_bwsalt.append(data_bwsalt)
+        all_cavity_temp.append(data_cavity_temp)
+        all_warming.append(data_warming)
+
+    # Set up colour map to vary with global warming level
+    norm = plt.Normalise(0, max_warming)
+    num_suites = len(all_bwsalt[0])
+
+    # Plot
+    fig = plt.figure(figsize=(8,6))
+    gs = plt.GridSpec(1,2)
+    gs.update(left=0.05, right=0.95, bottom=0.2, top=0.85, wspace=0.2)
+    cax = fig.add_axes([0.2, 0.05, 0.6, 0.05])
+    for n in range(len(regions)):
+        ax = plt.subplot(gs[0,n])
+        for m in range(num_suites):
+            points = np.array([all_bwsalt[n][m].data, all_cavity_temp[n][m].data]).T.reshape(-1,1,2)
+            segments = np.concatenate([points[:-1], points[1:]], axis=1)
+            lc = LineCollection(segments, cmap=cmap, norm=norm)
+            lc.set_array(all_warming[n][m].data)
+            lc.set_linewidth(1)
+            img = ax.add_collection(lc)
+        ax.grid(linestyle='dotted')
+        ax.set_title(region_names[regions[n]], fontsize=14)
+        if n==0:
+            ax.set_xlabel('Bottom salinity on continental shelf (psu)', fontsize=12)
+            ax.set_ylabel('Temperature in ice shelf cavity ('+deg_string+'C)', fontsize=12)
+    plt.colorbar(img, cax=cax, orientation='horizontal')
+    plt.text(0.5, 0.02, 'Global warming relative to preindustrial ('+deg_string+'C)', ha='center', va='center', fontsize=12)
+    finished_plot(fig) #, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
+    
+                
             
         
 
     
 
 
-# Historical warming: 0.8621179199280959K
 # Ross bwsalt bias: -0.14493934 psu
 # FRIS bwsalt bias: -0.1254287 psu
 # Recalculate these when cy691 single copy unavailable errors are gone and warming timeseries has been recalculated
