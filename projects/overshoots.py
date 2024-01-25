@@ -1136,8 +1136,8 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 continue
             for suite in suites_by_scenario[scenario]:
                 ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
-                bwsalt = ds[region+'_shelf_bwsalt']
-                cavity_temp = ds[region+'_cavity_temp']
+                bwsalt = ds[regions[n]+'_shelf_bwsalt']
+                cavity_temp = ds[regions[n]+'_cavity_temp']
                 ds.close()
                 warming = global_mean_sat(suite) - baseline_temp
                 # Smooth and align
@@ -1152,14 +1152,14 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
         all_warming.append(data_warming)
 
     # Set up colour map to vary with global warming level
-    norm = plt.Normalise(0, max_warming)
+    norm = plt.Normalize(0, max_warming)
     num_suites = len(all_bwsalt[0])
 
     # Plot
     fig = plt.figure(figsize=(8,6))
     gs = plt.GridSpec(1,2)
-    gs.update(left=0.05, right=0.95, bottom=0.2, top=0.85, wspace=0.2)
-    cax = fig.add_axes([0.2, 0.05, 0.6, 0.05])
+    gs.update(left=0.1, right=0.98, bottom=0.25, top=0.95, wspace=0.2)
+    cax = fig.add_axes([0.2, 0.05, 0.6, 0.03])
     for n in range(len(regions)):
         ax = plt.subplot(gs[0,n])
         for m in range(num_suites):
@@ -1183,7 +1183,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
         ax.plot([x_end]*2, [bias_print_y-0.1, bias_print_y+0.1], color='black')
         plt.text(0.5*(x_start+x_end), bias_print_y+0.2, 'Salinity bias of '+str(np.round(bwsalt_bias[n],3))+' psu', fontsize=12, color='black')
     plt.colorbar(img, cax=cax, orientation='horizontal')
-    plt.text(0.5, 0.02, 'Global warming relative to preindustrial ('+deg_string+'C)', ha='center', va='center', fontsize=12)
+    plt.text(0.5, 0.02, 'Global warming relative to preindustrial ('+deg_string+'C)', ha='center', va='center', fontsize=12, transform=fig.transFigure)
     finished_plot(fig) #, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
     
                 
