@@ -1104,6 +1104,9 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     from matplotlib.collections import LineCollection
 
     regions = ['ross', 'filchner_ronne']
+    bwsalt_bias = [-0.14493934, -0.1254287] # Recalculate these when cy691 single copy unavailable errors are gone and warming timeseries has been recalculated
+    bias_print_x = [34.4, 34.2]
+    bias_print_y = -1
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
     smooth = 5*months_per_year
@@ -1160,6 +1163,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     for n in range(len(regions)):
         ax = plt.subplot(gs[0,n])
         for m in range(num_suites):
+            # Plot each line with colour varying by global warming level
             points = np.array([all_bwsalt[n][m].data, all_cavity_temp[n][m].data]).T.reshape(-1,1,2)
             segments = np.concatenate([points[:-1], points[1:]], axis=1)
             lc = LineCollection(segments, cmap=cmap, norm=norm)
@@ -1171,21 +1175,22 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
         if n==0:
             ax.set_xlabel('Bottom salinity on continental shelf (psu)', fontsize=12)
             ax.set_ylabel('Temperature in ice shelf cavity ('+deg_string+'C)', fontsize=12)
+        # Indicate salinity bias
+        x_start = bias_print_x[n]
+        x_end = bias_print_x[n] + np.abs(bwsalt_bias[n])
+        ax.plot([x_start, x_end], [bias_print_y]*2, color='black')
+        ax.plot([x_start]*2, [bias_print_y-0.1, bias_print_y+0.1], color='black')
+        ax.plot([x_end]*2, [bias_print_y-0.1, bias_print_y+0.1], color='black')
+        plt.text(0.5*(x_start+x_end), bias_print_y+0.2, 'Salinity bias of '+str(np.round(bwsalt_bias[n],3))+' psu', fontsize=12, color='black')
     plt.colorbar(img, cax=cax, orientation='horizontal')
     plt.text(0.5, 0.02, 'Global warming relative to preindustrial ('+deg_string+'C)', ha='center', va='center', fontsize=12)
     finished_plot(fig) #, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
     
                 
             
-        
-
-    
 
 
-# Ross bwsalt bias: -0.14493934 psu
-# FRIS bwsalt bias: -0.1254287 psu
-# Recalculate these when cy691 single copy unavailable errors are gone and warming timeseries has been recalculated
-        
+
     
     
     
