@@ -1094,7 +1094,7 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
         if p_value > p0:
             raise Exception('No significant trend')
         implied_warming = slope*bwsalt_bias + intercept
-        print(region_names[region]+': Salinity bias of '+str(bwsalt_bias)+' psu implies global warming of '+str(implied_warming)+'K')            
+        print(region_names[region]+': Salinity bias of '+str(bwsalt_bias)+' psu implies global warming of '+str(implied_warming)+'K')        
             
         
 
