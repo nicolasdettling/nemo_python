@@ -617,7 +617,8 @@ def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_a
             ds_mean = ds_mean*num_files/num_files_total + ds_mean_old*num_old_files/num_files_total
         ds_mean.to_netcdf(out_file+'_tmp', mode='w')
         ds_mean.close()
-        ds_mean_old.close()
+        if update_file:
+            ds_mean_old.close()
         os.rename(out_file+'_tmp',out_file)
         
 
@@ -826,6 +827,9 @@ def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None, static_ice=False
         warming_wrt_tipped = []
         warming_at_tip = []
         suites_tipped = []
+        cavity_temp_recovered = []
+        warming_at_recovery = []
+        suites_recovered = []
         for n in range(num_trajectories):
             # Smooth and trim/align with warming timeseries
             cavity_temp_ts[n] = moving_average(cavity_temp_ts[n], smooth)
@@ -840,11 +844,26 @@ def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None, static_ice=False
                 warming_wrt_tipped.append(warming-tip_warming)
                 warming_at_tip.append(tip_warming)
                 suites_tipped.append(suite_strings[n])
+                # Now consider the time after tipping
+                cavity_temp = cavity_temp.isel(time_centered=slice(tip_time,None))
+                warming = warming.isel(time_centered=slice(tip_time, None))
+                if cavity_temp.min() < tipping_threshold:
+                    # Find the time index of recovery
+                    recover_time = np.argwhere(cavity_temp.data < tipping_threshold)[0][0]
+                    recover_warming = warming.isel(time_centered=recover_time)
+                    cavity_temp_recovered.append(cavity_temp)
+                    warming_at_recovery.append(recover_warming)
+                    suites_recovered.append(suite_strings[n])
                 
-        # Print some statistics about which ones tipped
+        # Print some statistics about which ones tipped and recovered
         print('\n'+region+':')
         print(str(len(suites_tipped))+' trajectories tip')
         print('Global warming at time of tipping has mean '+str(np.mean(warming_at_tip))+'K, standard deviation '+str(np.std(warming_at_tip))+'K')
+        if len(suites_recovered) == 0:
+            print('No tipped trajectories recover')
+        else:
+            print(str(len(suites_recovered))+' tipped trajectories recover ('+str(len(suites_recovered)/len(suites_tipped)*100)+'%)')
+            print('Global warming at time of recovery has mean '+str(np.mean(warming_at_recovery))+'K, standard deviation '+str(np.std(warming_at_recovery))+'K')
         # Risk of tipping eventually if max GW is within certain range
         gw_targets = [1.5, 2, 2.5, 3, 4, 5, 6]
         for n in range(len(gw_targets)):
@@ -866,9 +885,8 @@ def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None, static_ice=False
         # Plot
         ax = plt.subplot(gs[0,r])
         num_tipped = len(cavity_temp_tipped)
-        colours = cmap(np.linspace(0,1,num_tipped))
         for n in range(num_tipped):
-            ax.plot(warming_wrt_tipped[n], cavity_temp_tipped[n], '-', color=colours[n], linewidth=1)
+            ax.plot(warming_wrt_tipped[n], cavity_temp_tipped[n], '-', color='DarkGrey', linewidth=1)
         if r==0:
             ax.set_xlabel('Global mean temperature anomaly,\nrelative to time of tipping ('+deg_string+'C)', fontsize=12)
             ax.set_ylabel('Cavity mean temperature ('+deg_string+'C)', fontsize=12)
