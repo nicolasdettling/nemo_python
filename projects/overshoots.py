@@ -123,7 +123,10 @@ def plot_all_timeseries_by_region (suite_id, regions=['all', 'amundsen_sea', 'be
         timeseries_by_region(var, base_dir+'/'+suite_id+'/', regions=regions_use, colours=colours, timeseries_file=timeseries_file, smooth=smooth, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_'+suite_id+'.png'))
 
 
-# Set the list of experiments, names for the legend, and colours to use for timeseries etc. If separate_stages=True, the ramp down and re-stabilise stages will be separated out from the initial stabilisations. If only_up=True, only the ramp-up and stabilise suites will be considered. If only_down=True, only the ramp-down and re-stabilise suites will be considered.
+# Set the list of experiments, names for the legend, and colours to use for timeseries etc.
+# If separate_stages=True, the ramp down and re-stabilise stages will be separated out from the initial stabilisations.
+# If only_up=True, only the ramp-up and stabilise suites will be considered.
+# If only_down=True, only the ramp-down and re-stabilise suites will be considered.
 def set_expt_list (separate_stages=False, only_up=False, only_down=False):
 
     sim_names = []
@@ -192,6 +195,25 @@ def set_expt_list (separate_stages=False, only_up=False, only_down=False):
     add_gw_level('4K', suites_by_scenario['4K_stabilise'], suites_by_scenario['4K_ramp_down'], None, 'GoldenRod', 'Gold', None)
     add_gw_level('5K', suites_by_scenario['5K_stabilise'], suites_by_scenario['5K_ramp_down'], None, 'Chocolate', 'LightSalmon', None)
     add_gw_level('6K', suites_by_scenario['6K_stabilise'], None, None, 'Crimson', None, None)
+
+    return sim_names, colours, sim_dirs
+
+
+# Set the list of experiments, names for the legend, and timeseries to use - but only separating (by names/colours) the ramp-up, stabilise, and ramp-down scenarios, rather than showing all the different stabilisation targets individually. Also, do not include static ice cases.
+def minimal_expt_list ():
+
+    keys = ['ramp_up', '_stabilise', '_ramp_down']
+    sim_names = ['Ramp up', 'Stabilise', 'Ramp down']
+    colours = ['Crimson', 'black', 'blue']
+    sim_dirs = []
+    for key in keys:
+        dirs = []
+        for scenario in suites_by_scenario:
+            if 'static_ice' in scenario:
+                continue
+            if key in scenario:
+                dirs += suites_by_scenario[scenario]
+        sim_dirs.append(dirs)
 
     return sim_names, colours, sim_dirs
 
@@ -794,7 +816,8 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
     return timeseries, suite_strings              
 
 
-def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None, static_ice=False):
+# Analyse the cavity temperature beneath Ross and FRIS to see which scenarios tip and/or recover, under which global warming levels.
+def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None, static_ice=False):
 
     regions = ['ross', 'filchner_ronne']
     pi_suite = 'cs568'
@@ -812,22 +835,15 @@ def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None, static_ice=False
     for n in range(num_trajectories):
         warming_ts[n] = moving_average(warming_ts[n], smooth)
 
-    # Set up plot
-    fig = plt.figure(figsize=(8,6))
-    gs = plt.GridSpec(1,2)
-    gs.update(left=0.1, right=0.98, bottom=0.1, top=0.9)
     # Loop over regions
     for r in range(len(regions)):
         region = regions[r]
         
         # Assemble all possible trajectories of cavity mean temperature
         cavity_temp_ts = all_timeseries_trajectories(region+'_cavity_temp', base_dir=base_dir, static_ice=static_ice)[0]
-        # Now loop over them and find the ones that have tipped
-        cavity_temp_tipped = []
-        warming_wrt_tipped = []
+        # Now loop over them and find the ones that have tipped and/or recovered
         warming_at_tip = []
         suites_tipped = []
-        cavity_temp_recovered = []
         warming_at_recovery = []
         suites_recovered = []
         for n in range(num_trajectories):
@@ -839,21 +855,17 @@ def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None, static_ice=False
                 tip_time = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
                 # Find the global warming level at that time index
                 tip_warming = warming.isel(time_centered=tip_time)
-                # Save the cavity temperature timeseries and the global warming anomalies relative to tipping time
-                cavity_temp_tipped.append(cavity_temp)
-                warming_wrt_tipped.append(warming-tip_warming)
+                # Save the global warming anomalies relative to tipping time
                 warming_at_tip.append(tip_warming)
                 suites_tipped.append(suite_strings[n])
                 # Now consider the time after tipping
                 cavity_temp = cavity_temp.isel(time_centered=slice(tip_time,None))
-                warming = warming.isel(time_centered=slice(tip_time, None))
-                if cavity_temp.min() < tipping_threshold:
-                    # Find the time index of recovery
-                    recover_time = np.argwhere(cavity_temp.data < tipping_threshold)[0][0]
-                    recover_warming = warming.isel(time_centered=recover_time)
-                    cavity_temp_recovered.append(cavity_temp)
-                    warming_at_recovery.append(recover_warming)
-                    suites_recovered.append(suite_strings[n])
+                for t in range(cavity_temp.sizes['time_centered']):
+                    # If the temperature has gone back down below the threshold and stays that way for the rest of the simulation, it's recovered
+                    if cavity_temp.isel(time_centered=slice(t,None)).max() < tipping_threshold:
+                        warming_at_recovery.append(warming.isel(time_centered=t))
+                        suites_recovered.append(suite_strings[n])
+                        break
                 
         # Print some statistics about which ones tipped and recovered
         print('\n'+region+':')
@@ -882,22 +894,35 @@ def cold_cavity_hysteresis_plots (base_dir='./', fig_name=None, static_ice=False
                         num_tip += 1
             print('Maximum warming between '+str(warming_exceeds)+'-'+str(warming_below)+'K causes '+str(num_tip)+' of '+str(num_total)+' trajectories to eventually tip ('+str(num_tip/num_total*100)+'%)')
 
-        # Plot
-        ax = plt.subplot(gs[0,r])
-        num_tipped = len(cavity_temp_tipped)
-        for n in range(num_tipped):
-            ax.plot(warming_wrt_tipped[n], cavity_temp_tipped[n], '-', color='DarkGrey', linewidth=1)
-        if r==0:
-            ax.set_xlabel('Global mean temperature anomaly,\nrelative to time of tipping ('+deg_string+'C)', fontsize=12)
-            ax.set_ylabel('Cavity mean temperature ('+deg_string+'C)', fontsize=12)
-        ax.grid(linestyle='dotted')
-        ax.set_title(region_names[region]+' Ice Shelf', fontsize=16)
-    finished_plot(fig, fig_name=fig_name)
-                        
+
+# Final plot for paper: ice shelf basal mass loss as a function of global warming level, for 4 different regions, showing ramp-up, stabilise, and ramp-down in different colours
+def plot_massloss_by_gw_panels (base_dir='./', fig_name=None):
+
+    pi_suite = 'cs568'
+    regions = ['ross', 'filchner_ronne', 'west_antarctica', 'east_antarctica']
+    timeseries_file = 'timeseries.nc'
+    smooth = 24
+    sim_names, colours, sim_dirs = minimal_expt_list()
+
+    fig = plt.figure(figsize=(8,7))
+    gs = plt.GridSpec(2,2)
+    gs.update(left=0.1, right=0.95, bottom=0.15, top=0.85, hspace=0.3, wspace=0.15)
+    for n in range(len(regions)):
+        ax = plt.subplot(gs[n//2, n%2])
+        plot_by_gw_level(sim_dirs, regions[n]+'_massloss', pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=0.5, ax=ax)
+        ax.set_title(region_names[regions[n]], fontsize=14)
+        if n == 0:
+            ax.set_ylabel('Gt/y', fontsize=12)
+        else:
+            ax.set_ylabel('')
+        if n == 2:
+            ax.set_xlabel('Global warming relative to preindustrial (K)', fontsize=12)
+        else:
+            ax.set_xlabel('')
+    plt.suptitle('Basal mass loss beneath ice shelves', fontsize=16)
+    ax.legend(loc='center left', bbox_to_anchor=(-0.5,-0.2), fontsize=11, ncol=3)
+    finished_plot(fig, fig_name=fig_name, dpi=300)
             
-        
-        
-    # Plot cavity temp vs SAT anomalies (should all line up around 0): each trajectory in a different colour, or all in grey with one highlighted on top?
             
 
     
