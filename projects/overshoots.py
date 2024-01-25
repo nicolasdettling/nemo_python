@@ -7,7 +7,7 @@ import numpy as np
 
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
 from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, timeseries_plot, circumpolar_plot
-from ..utils import moving_average, region_mask
+from ..utils import moving_average, region_mask, add_months
 from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year
 from ..file_io import read_schmidtko, read_woa
 from ..interpolation import interp_latlon_cf
@@ -962,7 +962,7 @@ def calc_salinity_bias (base_dir='./'):
     baseline_temp = global_mean_sat(pi_suite).mean()
     # Get "present-day" warming according to UKESM
     hist_warming = global_mean_sat(hist_suite).mean() - baseline_temp
-    print('UKESM historical 1995-2014 was '+str(hist_warming)+'K warmer than preindustrial')
+    print('UKESM historical 1995-2014 was '+str(hist_warming.data)+'K warmer than preindustrial')
 
     # Loop over ramp-up suites (no static ice)
     ramp_up_bwsalt = None
@@ -970,12 +970,12 @@ def calc_salinity_bias (base_dir='./'):
         # Get timeseries of global warming relative to PI
         warming = global_mean_sat(suite) - baseline_temp
         for t in range(warming.size):
-            warming_10y = warming.isel(time_centered=slice(t,t+num_years*months_per_year)).mean()
-            if warming_10y >= hist_warming:
+            if warming.isel(time_centered=slice(t,t+num_years*months_per_year)).mean() >= hist_warming:
                 # Care about the 10-year period beginning at this point
-                time_select = warming_10y.time_centered
+                time_select = warming.time_centered.isel(time_centered=slice(t,t+num_years*months_per_year))
+                print(suite+' matches historical warming from '+str(t//months_per_year)+' years')
                 break
-        for time in time_select:
+        for time in time_select.data:
             # Find the corresponding grid-T ocean file
             year_start = time.year
             month_start = time.month
