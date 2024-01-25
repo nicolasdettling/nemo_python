@@ -827,19 +827,19 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
 
 
 # Analyse the cavity temperature beneath Ross and FRIS to see which scenarios tip and/or recover, under which global warming levels.
-def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None, static_ice=False):
+def cold_cavity_hysteresis_stats (base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
     pi_suite = 'cs568'
     timeseries_file_um = 'timeseries_um.nc'
-    smooth = 24
+    smooth = 5*months_per_year
     tipping_threshold = -1.9  # If cavity mean temp is warmer than surface freezing point, it's tipped
 
     # Assemble all possible trajectories of global mean temperature anomalies relative to preindustrial
     ds = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
     baseline_temp = ds['global_mean_sat'].mean()
     ds.close()
-    warming_ts, suite_strings = all_timeseries_trajectories('global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, static_ice=static_ice, offset=-1*baseline_temp)
+    warming_ts, suite_strings = all_timeseries_trajectories('global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, static_ice=False, offset=-1*baseline_temp)
     num_trajectories = len(warming_ts)
     # Smooth each
     for n in range(num_trajectories):
@@ -850,7 +850,7 @@ def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None, static_ice=False
         region = regions[r]
         
         # Assemble all possible trajectories of cavity mean temperature
-        cavity_temp_ts = all_timeseries_trajectories(region+'_cavity_temp', base_dir=base_dir, static_ice=static_ice)[0]
+        cavity_temp_ts = all_timeseries_trajectories(region+'_cavity_temp', base_dir=base_dir, static_ice=False)[0]
         # Now loop over them and find the ones that have tipped and/or recovered
         warming_at_tip = []
         suites_tipped = []
@@ -915,7 +915,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     var_units = [deg_string+'C', 'Gt/y']
     num_var = len(var_names)
     timeseries_file = 'timeseries.nc'
-    smooth = 24
+    smooth = 5*months_per_year
     sim_names, colours, sim_dirs = minimal_expt_list()
 
     for v in range(num_var):
@@ -924,7 +924,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
         gs.update(left=0.07, right=0.98, bottom=0.15, top=0.9, hspace=0.3, wspace=0.16)
         for n in range(len(regions)):
             ax = plt.subplot(gs[n//2, n%2])
-            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=0.5, ax=ax)
+            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=0.75, ax=ax)
             ax.set_title(region_names[regions[n]], fontsize=14)
             if n == 0:
                 ax.set_ylabel(var_units[v], fontsize=12)
@@ -935,7 +935,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
             else:
                 ax.set_xlabel('')
         plt.suptitle(var_titles[v], fontsize=16)
-        ax.legend(loc='center left', bbox_to_anchor=(-0.75,-0.32), fontsize=11, ncol=3)
+        ax.legend(loc='center left', bbox_to_anchor=(-0.6,-0.32), fontsize=11, ncol=3)
         finished_plot(fig, fig_name='figures/'+var_names[v]+'_by_gw_panels.png', dpi=300)
 
 
@@ -996,24 +996,115 @@ def calc_salinity_bias (base_dir='./'):
     schmidtko = read_schmidtko(schmidtko_file=schmidtko_file, eos=eos)
     woa = read_woa(woa_files=woa_files, eos=eos)
     # Regrid to the NEMO grid, giving precedence to Schmidtko where both datasets exist
-    schmidtko_interp = interp_latlon_cf(schmidtko, nemo, method='bilinear')
-    woa_interp = interp_latlon_cf(woa, nemo, method='bilinear')
+    schmidtko_interp = interp_latlon_cf(schmidtko, ds, method='bilinear')
+    woa_interp = interp_latlon_cf(woa, ds, method='bilinear')
     obs = xr.where(schmidtko_interp.isnull(), woa_interp, schmidtko_interp)
     obs_bwsalt = obs['salt']
 
+    # Make a quick plot
+    fig = plt.figure(figsize=(8,3))
+    gs = plt.GridSpec(1,3)
+    gs.update(left=0.1, right=0.9, bottom=0.05, top=0.8, wspace=0.1)
+    ukesm_plot = ramp_up_bwsalt.where(ramp_up_bwsalt!=0).squeeze()
+    obs_plot = obs_bwsalt.where(ukesm_plot.notnull()*obs_bwsalt.notnull())
+    obs_plot = obs_plot.where(ramp_up_bwsalt!=0).squeeze()
+    data_plot = [ukesm_plot, obs_plot, ukesm_plot-obs_plot]
+    titles = ['UKESM', 'Observations', 'Model bias']
+    vmin = [34, 34, -0.5]
+    vmax = [34.85, 34.85, 0.5]
+    ctype = ['RdBu_r', 'RdBu_r', 'plusminus']
+    for n in range(3):
+        ax = plt.subplot(gs[0,n])
+        ax.axis('equal')
+        img = circumpolar_plot(data_plot[n], ds, ax=ax, masked=True, make_cbar=False, title=titles[n], titlesize=14, vmin=vmin[n], vmax=vmax[n], ctype=ctype[n], lat_max=-63)
+        if n != 1:
+            cax = cax = fig.add_axes([0.01+0.45*n, 0.1, 0.02, 0.6])
+            plt.colorbar(img, cax=cax, extend='both')
+    plt.suptitle('Bottom salinity (psu)', fontsize=18)
+    finished_plot(fig)
+
     # Loop over regions and print means and biases
+    bias = []
     for region in regions:
         print('\n'+region_names[region])
         mask = region_mask(region, ds, option='shelf')[0]
         dA = ds['area']*mask
         ukesm_mean = (ramp_up_bwsalt*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
-        print('UKESM mean '+str(ukesm_mean)+' psu')
+        print('UKESM mean '+str(ukesm_mean.data)+' psu')
         # Might have to area-average over a smaller region with missing observational points
         mask_obs = mask.where(obs_bwsalt.notnull())
         dA_obs = ds['area']*mask_obs
         obs_mean = (obs_bwsalt*dA_obs).sum(dim=['x','y'])/dA_obs.sum(dim=['x','y'])
-        print('Observational mean '+str(obs_mean)+' psu')
-        print('UKESM bias '+str(ukesm_mean-obs_mean))
+        print('Observational mean '+str(obs_mean.data)+' psu')
+        bias.append((ukesm_mean-obs_mean).data)
+        print('UKESM bias '+str(bias[-1]))
+
+    return bias
+
+
+# Calculate the global warming implied by the salinity biases (from above), using a linear regression below 3K for Ross, 5K for FRIS.
+def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='./'):
+
+    pi_suite = 'cs568'
+    max_warming_regions = [3, 5]
+    smooth = 5*months_per_year
+    timeseries_file = 'timeseries.nc'
+    timeseries_file_um = 'timeseries_um.nc'
+    p0 = 0.05
+
+    # Inner function to read global mean SAT from precomputed timeseries
+    def global_mean_sat (suite):
+        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
+        sat = ds['global_mean_sat']
+        ds.close()
+        return sat
+    # Get preindustrial baseline
+    baseline_temp = global_mean_sat(pi_suite).mean()
+
+    if ross_bias is None or fris_bias is None:
+        # Salinity biases are not precomputed
+        [ross_bias, fris_bias] = calc_salinity_bias(base_dir=base_dir)
+
+    for region, bwsalt_bias, max_warming in zip(['ross', 'filchner_ronne'], [ross_bias, fris_bias], max_warming_regions):
+        # Assemble timeseries of bwsalt and global warming (below given max) in each ramp-up ensemble member
+        warming = None
+        bwsalt = None
+        for suite in suites_by_scenario['ramp_up']:
+            warming_tmp = global_mean_sat(suite) - baseline_temp
+            ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+            bwsalt_tmp = ds[region+'_shelf_bwsalt']
+            ds.close()
+            # Trim and align
+            warming_tmp, bwsalt_tmp = align_timeseries(warming_tmp, bwsalt_tmp)
+            # Smooth
+            warming_tmp = moving_average(warming_tmp, smooth)
+            bwsalt_tmp = moving_average(bwsalt_tmp, smooth)
+            # Trim to just before the warming threshold is crossed
+            t_end = np.argwhere(warming_tmp.data > max_warming)[0][0]
+            warming_tmp = warming_tmp.isel(time_centered=slice(0,t_end))
+            bwsalt_tmp = bwsalt_tmp.isel(time_centered=slice(0,t_end))
+            if warming is None:
+                warming = warming_tmp
+                bwsalt = bwsalt_tmp
+            else:
+                warming = xr.concat([warming, warming_tmp], dim='time_centered')
+                bwsalt = xr.concat([bwsalt, bwsalt_tmp], dim='time_centered')
+        # Now find a linear regression of bwsalt in response to warming
+        slope, intercept, r_value, p_value, std_err = linregress(warming, bwsalt)
+        if p_value > p0:
+            raise Exception('No significant trend')
+        implied_warming = slope*bwsalt_bias + intercept
+        print(region_names[region]+': Salinity bias of '+str(bwsalt_bias)+' psu implies global warming of '+str(implied_warming)+'K')            
+            
+        
+
+    
+
+
+# Historical warming: 0.8621179199280959K
+# Ross bwsalt bias: -0.14493934 psu
+# FRIS bwsalt bias: -0.1254287
+# Recalculate these when cy691 single copy unavailable errors are gone and warming timeseries has been recalculated
         
     
     
