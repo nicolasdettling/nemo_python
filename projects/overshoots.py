@@ -7,7 +7,7 @@ import numpy as np
 
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
 from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, timeseries_plot, circumpolar_plot
-from ..utils import moving_average, region_mask, add_months
+from ..utils import moving_average, region_mask, add_months, build_ice_mask
 from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year
 from ..file_io import read_schmidtko, read_woa
 from ..interpolation import interp_latlon_cf, interp_grid
@@ -1234,7 +1234,8 @@ def amundsen_temp_velocity_map (scenario, vel='barotropic', base_dir='./', fig_n
         dz = read_var('thkcello', gtype)
         mask_3d = xr.where(vel==0, 0, 1)
         dim = 'depth'+gtype.lower()
-        vel_avg = (vel*mask_3d*dz).sum(dim=dim)/(mask_3d*dz).sum(dim=dim)    
+        vel_avg = (vel*mask_3d*dz).sum(dim=dim)/(mask_3d*dz).sum(dim=dim)
+        return vel_avg
     if vel == 'barotropic':
         u = barotropic(u_3d, 'U')
         v = barotropic(v_3d, 'V')
@@ -1249,14 +1250,26 @@ def amundsen_temp_velocity_map (scenario, vel='barotropic', base_dir='./', fig_n
     ds = xr.open_dataset(mean_dir + scenario + '_grid-T.nc')
     lon_edges = cfxr.bounds_to_vertices(ds['bounds_lon'], 'nvertex')
     lat_edges = cfxr.bounds_to_vertices(ds['bounds_lat'], 'nvertex')
+    ocean_mask, ice_mask = calc_geometry(ds)[2:]
+    # Inner function to mask out regions we don't care about so they don't mess up colour scale or lat-lon projection; also mask ice shelf cavities
+    def apply_mask (var):
+        var = var.where((ds['nav_lon']>=lon_bounds[0]-2)*(ds['nav_lon']<=lon_bounds[1]+2)*(ds['nav_lat']>=lat_bounds[0]-2)*(ds['nav_lat']<=lat_bounds[1]+2))
+        var = var.where(np.invert(ice_mask))
+        return var
+    temp = apply_mask(temp)
+    u_t = apply_mask(u_t)
+    v_t = apply_mask(v_t)
+    
     # Plot
     fig, ax = plt.subplots()
     img = ax.pcolormesh(lon_edges, lat_edges, temp, cmap='RdBu_r')
-    ax.quiver(ds['nav_lon'], ds['nav_lat'], u_t, v_t)
+    # Overlay land mask 
+    ax.quiver(ds['nav_lon'].data[::2,::2], ds['nav_lat'].data[::2,::2], u_t.data[::2,::2], v_t.data[::2,::2], scale=0.4)
     ax.set_xlim(lon_bounds)
     ax.set_ylim(lat_bounds)
-    ax.set_title(title, fontsize=16)
+    ax.set_title(title)
     plt.colorbar(img)
+    finished_plot(fig, fig_name=fig_name)
     
 
 
