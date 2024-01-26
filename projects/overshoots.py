@@ -1099,13 +1099,14 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
         print(region_names[region]+': Salinity bias of '+str(bwsalt_bias)+' psu implies global warming of '+str(implied_warming)+'K')
 
 
+# Plot cavity-mean temperature beneath Ross and FRIS as a function of shelf-mean bottom water salinity, in all scenarios. Colour the lines based on the global warming level relative to preindustrial, and indicate the magnitude of the salinity bias.
 def plot_ross_fris_by_bwsalt (base_dir='./'):
 
     from matplotlib.collections import LineCollection
 
     regions = ['ross', 'filchner_ronne']
     bwsalt_bias = [-0.14493934, -0.1254287] # Recalculate these when cy691 single copy unavailable errors are gone and warming timeseries has been recalculated
-    bias_print_x = [34.4, 34.2]
+    bias_print_x = [34.3, 34]
     bias_print_y = -1
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
@@ -1147,6 +1148,9 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 bwsalt = align_timeseries(bwsalt, warming)[0]
                 cavity_temp, warming = align_timeseries(cavity_temp, warming)
                 max_warming = max(max_warming, warming.max())
+                data_bwsalt.append(bwsalt)
+                data_cavity_temp.append(cavity_temp)
+                data_warming.append(warming)
         all_bwsalt.append(data_bwsalt)
         all_cavity_temp.append(data_cavity_temp)
         all_warming.append(data_warming)
@@ -1158,8 +1162,8 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     # Plot
     fig = plt.figure(figsize=(8,6))
     gs = plt.GridSpec(1,2)
-    gs.update(left=0.1, right=0.98, bottom=0.25, top=0.95, wspace=0.2)
-    cax = fig.add_axes([0.2, 0.05, 0.6, 0.03])
+    gs.update(left=0.1, right=0.98, bottom=0.23, top=0.93, wspace=0.2)
+    cax = fig.add_axes([0.3, 0.08, 0.5, 0.03])
     for n in range(len(regions)):
         ax = plt.subplot(gs[0,n])
         for m in range(num_suites):
@@ -1170,8 +1174,10 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
             lc.set_array(all_warming[n][m].data)
             lc.set_linewidth(1)
             img = ax.add_collection(lc)
+            #ax.plot(all_bwsalt[n][m], all_cavity_temp[n][m], '-', linewidth=1)
         ax.grid(linestyle='dotted')
-        ax.set_title(region_names[regions[n]], fontsize=14)
+        ax.axhline(-1.9, color='black', linestyle='dashed')
+        ax.set_title(region_names[regions[n]], fontsize=16)
         if n==0:
             ax.set_xlabel('Bottom salinity on continental shelf (psu)', fontsize=12)
             ax.set_ylabel('Temperature in ice shelf cavity ('+deg_string+'C)', fontsize=12)
@@ -1179,12 +1185,12 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
         x_start = bias_print_x[n]
         x_end = bias_print_x[n] + np.abs(bwsalt_bias[n])
         ax.plot([x_start, x_end], [bias_print_y]*2, color='black')
-        ax.plot([x_start]*2, [bias_print_y-0.1, bias_print_y+0.1], color='black')
-        ax.plot([x_end]*2, [bias_print_y-0.1, bias_print_y+0.1], color='black')
-        plt.text(0.5*(x_start+x_end), bias_print_y+0.2, 'Salinity bias of '+str(np.round(bwsalt_bias[n],3))+' psu', fontsize=12, color='black')
+        ax.plot([x_start]*2, [bias_print_y-0.05, bias_print_y+0.05], color='black')
+        ax.plot([x_end]*2, [bias_print_y-0.05, bias_print_y+0.05], color='black')
+        plt.text(0.5*(x_start+x_end), bias_print_y+0.3, 'Salinity bias of\n'+str(np.round(bwsalt_bias[n],3))+' psu', fontsize=10, color='black', ha='center', va='center')
     plt.colorbar(img, cax=cax, orientation='horizontal')
-    plt.text(0.5, 0.02, 'Global warming relative to preindustrial ('+deg_string+'C)', ha='center', va='center', fontsize=12, transform=fig.transFigure)
-    finished_plot(fig) #, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
+    plt.text(0.55, 0.02, 'Global warming relative to preindustrial ('+deg_string+'C)', ha='center', va='center', fontsize=12, transform=fig.transFigure)
+    finished_plot(fig, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
     
                 
             
