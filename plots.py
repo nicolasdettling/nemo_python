@@ -4,7 +4,7 @@ import socket
 import numpy as np
 from .utils import polar_stereo, extend_grid_edges, moving_average
 from .plot_utils import set_colours
-from .constants import line_colours, region_names
+from .constants import line_colours, region_names, deg_string
 
 # If a figure name is defined, save the figure to that file. Otherwise, display the figure on screen.
 def finished_plot (fig, fig_name=None, dpi=None):

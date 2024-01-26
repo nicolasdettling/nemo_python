@@ -12,6 +12,7 @@ from ..constants import line_colours, region_names, deg_string, gkg_string, mont
 from ..file_io import read_schmidtko, read_woa
 from ..interpolation import interp_latlon_cf, interp_grid
 from ..diagnostics import barotropic_streamfunction
+from ..plot_utils import set_colours, latlon_axes
 
 # Global dictionaries of suites - update these as more suites become available!
 
@@ -1193,83 +1194,118 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     finished_plot(fig, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
 
 
-# Warning: velocities not unrotated yet, this is just for an initial look
-def amundsen_temp_velocity_map (scenario, vel='barotropic', base_dir='./', fig_name=None):
+def plot_amundsen_temp_velocity (base_dir='./', fig_name=None):
+
+    # TODO: rotate velocities
 
     import cf_xarray as cfxr
+    import matplotlib.colors as cl
 
+    scenarios = ['piControl', '1.5K', '6K']
+    num_scenarios = len(scenarios)
+    scenario_titles = ['Preindustrial', '1.5'+deg_string+'C stabilisation', '6'+deg_string+'C stabilisation']
     mean_dir = base_dir + '/time_averaged/'
     depth_temp = 500
-    depth_vel = 400
-    lon_bounds = [-140, -75]
-    lat_bounds = [-76, -65]
-    title = scenario + ': 500m temperature and '
+    [xmin, xmax] = [-170, -60]
+    [ymin, ymax] = [-76, -60]
+    vel_scale = 0.4
+    domain_cfg = '/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'
 
-    # Inner function to read a variable
-    def read_var (var_name, gtype):
+    # Set up grid for plotting
+    ds_grid = xr.open_dataset(mean_dir+scenario+'_grid-T.nc').squeeze()
+    lon_edges = cfxr.bounds_to_vertices(ds_grid['bounds_lon'], 'nvertex')
+    lat_edges = cfxr.bounds_to_vertices(ds_grid['bounds_lat'], 'nvertex')
+    ocean_mask, ice_mask = calc_geometry(ds_grid)[2:]
+    mask_plot = ocean_mask*np.invert(ice_mask)
+    mask_plot = mask_plot.where(mask_plot)
+
+    # Inner functions
+    # Read a variable
+    def read_var (var_name, scenario, gtype):
         ds = xr.open_dataset(mean_dir + scenario + '_grid-' + gtype + '.nc')
         data = ds[var_name].squeeze()
         ds.close()
         return data
-    temp_3d = read_var('thetao', 'T')
-    u_3d = read_var('uo', 'U')
-    v_3d = read_var('vo', 'V')
-
-    # Get 2D versions of what we need
-    # Inner function to interpolate a variable to a given depth
+    # Interpolate a variable to a given depth
     def interp_depth (data_3d, gtype, depth0):
         data_3d = data_3d.where(data_3d!=0)
         dim = 'depth'+gtype.lower()
         data_interp = data_3d.interp({dim:depth0})
-        return data_interp    
-    # Interpolate temperature to 500m
-    temp = interp_depth(temp_3d, 'T', depth_temp)
-    if vel == '400m':
-        # Interpolate velocity to 400m
-        u = interp_depth(u_3d, 'U', depth_vel)
-        v = interp_depth(v_3d, 'V', depth_vel)
-        title += '400m velocity'
-    # Inner function to vertically average a velocity component
+        return data_interp
+    # Vertically average a velocity component
     def barotropic (vel, gtype):
         dz = read_var('thkcello', gtype)
         mask_3d = xr.where(vel==0, 0, 1)
         dim = 'depth'+gtype.lower()
         vel_avg = (vel*mask_3d*dz).sum(dim=dim)/(mask_3d*dz).sum(dim=dim)
         return vel_avg
-    if vel == 'barotropic':
-        u = barotropic(u_3d, 'U')
-        v = barotropic(v_3d, 'V')
-        title += 'barotropic velocity'
-    # Now interpolate velocities to tracer grid
-    u_t = interp_grid(u, 'u', 't', periodic=True)
-    v_t = interp_grid(v, 'v', 't', periodic=True)
+    # Read and vertically average a velocity component and interpolate it to the tracer grid
+    def process_vel (scenario, direction):
+        data_3d = read_var(direction+'o', scenario, direction.upper())
+        data = barotropic(data_3d, direction.upper())
+        data_t = interp_grid(data, direction, 't', periodic=True)
+    # Mask out anything beyond region of interest, plus ice shelf cavities
+    def apply_mask (data):
+        data = data.where((ds_grid['nav_lon']>=xmin-2)*(ds_grid['nav_lon']<=xmax+2)*(ds_grid['nav_lat']>=ymin-2)*(ds_grid['nav_lat']<=ymax+2))
+        data = data.where(np.invert(ice_mask))
+        return data
 
-    # TODO: rotate to geographic (zonal and meridional) velocities
+    # Read all the data
+    all_temp = []
+    all_u = []
+    all_v = []
+    all_strf = []
+    for scenario in scenarios:
+        # Temperature, interpolated to 500m
+        temp_3d = read_var('thetao', scenario, 'T')
+        temp = interp_depth(temp_3d, 'T', depth_temp)
+        all_temp.append(apply_mask(temp))
+        # Barotropic velocity, interpolated to tracer grid
+        u = process_var(scenario, 'u')
+        v = process_var(scenario, 'v')
+        all_u.append(apply_mask(u))
+        all_v.append(apply_mask(v))
+        # Barotropic streamfunction, interpolated to tracer grid
+        ds = xr.open_dataset(mean_dir+scenario+'_grid-U.nc').squeeze()
+        ds_domcfg = xr.open_dataset(domain_cfg).squeeze()
+        ds_domcfg = ds_domcfg.isel(y=slice(0, ds.sizes['y']))
+        ds = ds.assign({'e2u':ds_domcfg['e2u']})
+        strf = barotropic_streamfunction(ds)
+        strf = interp_grid(strf, 'u', 't', periodic=True)
+        all_strf.append(apply_mask(strf))
 
-    # Set up grid for plotting
-    ds = xr.open_dataset(mean_dir + scenario + '_grid-T.nc')
-    lon_edges = cfxr.bounds_to_vertices(ds['bounds_lon'], 'nvertex')
-    lat_edges = cfxr.bounds_to_vertices(ds['bounds_lat'], 'nvertex')
-    ocean_mask, ice_mask = calc_geometry(ds)[2:]
-    # Inner function to mask out regions we don't care about so they don't mess up colour scale or lat-lon projection; also mask ice shelf cavities
-    def apply_mask (var):
-        var = var.where((ds['nav_lon']>=lon_bounds[0]-2)*(ds['nav_lon']<=lon_bounds[1]+2)*(ds['nav_lat']>=lat_bounds[0]-2)*(ds['nav_lat']<=lat_bounds[1]+2))
-        var = var.where(np.invert(ice_mask))
-        return var
-    temp = apply_mask(temp)
-    u_t = apply_mask(u_t)
-    v_t = apply_mask(v_t)
-    
     # Plot
-    fig, ax = plt.subplots()
-    img = ax.pcolormesh(lon_edges, lat_edges, temp, cmap='RdBu_r')
-    # Overlay land mask 
-    ax.quiver(ds['nav_lon'].data[::2,::2], ds['nav_lat'].data[::2,::2], u_t.data[::2,::2], v_t.data[::2,::2], scale=0.4)
-    ax.set_xlim(lon_bounds)
-    ax.set_ylim(lat_bounds)
-    ax.set_title(title)
-    plt.colorbar(img)
-    finished_plot(fig, fig_name=fig_name)
+    fig = plt.figure(figsize=(5,7))
+    gs = plt.GridSpec(num_scenarios, 1)
+    gs.update(left=0.05, right=0.95, bottom=0.05, top=0.9, hspace=0.2)
+    cax = fig.add_axes([0.2, 0.04, 0.6, 0.02])
+    cmap, vmin, vmax = set_colours(all_temp[0], ctype='plusminus', vmin=all_temp[0].min(), vmax=all_temp[-1].max())
+    for n in range(num_scenarios):
+        ax = plt.subplot(gs[n,0])
+        # Shade temperature 
+        img = ax.pcolormesh(lon_edges, lat_edges, all_temp[n], cmap=cmap, vmin=vmin, vmax=vmax)
+        # Overlay land+ice mask in grey
+        ax.pcolormesh(lon_edges, lat_edges, mask_plot, cmap=cl.ListedColormap(['DarkGrey']), linewidth=0)
+        # Overlay zero contour of streamfunction in lurid green
+        ax.contour(ds_grid['nav_lon'], ds_grid['nav_lat'], all_strf[n], levels=[0], colors=('Chartreuse'), linewidths=2, linestyles='solid')
+        # Overlay every third velocity vector in black
+        q = ax.quiver(ds_grid['nav_lon'].data[::3,::3], ds_grid['nav_lat'].data[::3,::3], all_u[n].data[::3,::3], all_v[n].data[::3,::3], scale=vel_scale, color='black')
+        ax.set_xlim([xmin, xmax])
+        ax.set_ylim([ymin, ymax])
+        ax.tick_params(direction='in')
+        ax.set_title(scenario_titles[n], fontsize=12)
+        if n == 0:
+            # Nicely formatted lat-lon labels
+            latlon_axes(ax)
+            # Vector key
+            ax.quiverkey(q, 0.9, 0.9, 0.5, '0.5 m/s', labelpos='E', coordinates='axes')
+        else:
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+        if n == -1:
+            plt.colorbar(img, cax=cax, orientation='horizontal')
+    plt.suptitle('Amundsen Sea 500m temperature and barotropic velocity')
+    finished_plot(fig)
     
 
 

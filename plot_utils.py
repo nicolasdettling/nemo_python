@@ -118,6 +118,57 @@ def set_colours (data, ctype='viridis', vmin=None, vmax=None, change_points=None
             return plt.get_cmap(ctype), vmin, vmax
         except(ValueError):
             return cl.ListedColormap([ctype]), vmin, vmax
+
+
+
+
+
+# Round the given number to the given maximum number of decimals, with no unnecessary trailing zeros.
+def round_to_decimals (x, max_decimals):
+    for d in range(max_decimals+1):
+        if round(x,d) == x or d == max_decimals:
+            fmt = '{0:.'+str(d)+'f}'
+            label = fmt.format(round(x,d))
+            break
+    return label
+
+
+# Format the latitude or longitude x as a string, rounded to max_decimals (with no unnecessary trailing zeros), and expressed as a compass direction eg 30 <degrees> W instead of -30.
+def latlon_label (x, suff_minus, suff_plus, max_decimals):
+
+    # Figure out if it's south/west or north/east
+    if x < 0:
+        x = -x
+        suff = suff_minus
+    else:
+        suff = suff_plus
+
+    # Round to the correct number of decimals, with no unnecessary trailing 0s
+    label = round_to_decimals(x, max_decimals)
+    return label + suff
+
+
+def lon_label (x, max_decimals=0):
+    return latlon_label(x, deg_string+'W', deg_string+'E', max_decimals)
+
+
+def lat_label (x, max_decimals=0):
+    return latlon_label(x, deg_string+'S', deg_string+'N', max_decimals)
+
+
+# Now, give the lon and lat axes nice labels.
+def latlon_axes (ax, max_decimals=0):
+
+    lon_ticks = ax.get_xticks()
+    lat_ticks = ax.get_yticks()
+    lon_labels = []
+    for x in lon_ticks:
+        lon_labels.append(lon_label(x, max_decimals=max_decimals))
+    ax.set_xticklabels(lon_labels)
+    lat_labels = []
+    for y in lat_ticks:
+        lat_labels.append(lat_label(y, max_decimals=max_decimals))
+    ax.set_yticklabels(lat_labels)
             
             
 
