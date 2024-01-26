@@ -10,7 +10,7 @@ from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, tim
 from ..utils import moving_average, region_mask, add_months
 from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year
 from ..file_io import read_schmidtko, read_woa
-from ..interpolation import interp_latlon_cf
+from ..interpolation import interp_latlon_cf, interp_grid
 from ..diagnostics import barotropic_streamfunction
 
 # Global dictionaries of suites - update these as more suites become available!
@@ -1191,10 +1191,73 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     plt.colorbar(img, cax=cax, orientation='horizontal')
     plt.text(0.55, 0.02, 'Global warming relative to preindustrial ('+deg_string+'C)', ha='center', va='center', fontsize=12, transform=fig.transFigure)
     finished_plot(fig, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
-    
-                
-            
 
+
+# Warning: velocities not unrotated yet, this is just for an initial look
+def amundsen_temp_velocity_map (scenario, vel='barotropic', base_dir='./', fig_name=None):
+
+    import cf_xarray as cfxr
+
+    mean_dir = base_dir + '/time_averaged/'
+    depth_temp = 500
+    depth_vel = 400
+    lon_bounds = [-140, -75]
+    lat_bounds = [-76, -65]
+    title = scenario + ': 500m temperature and '
+
+    # Inner function to read a variable
+    def read_var (var_name, gtype):
+        ds = xr.open_dataset(mean_dir + scenario + '_grid-' + gtype + '.nc')
+        data = ds[var_name].squeeze()
+        ds.close()
+        return data
+    temp_3d = read_var('thetao', 'T')
+    u_3d = read_var('uo', 'U')
+    v_3d = read_var('vo', 'V')
+
+    # Get 2D versions of what we need
+    # Inner function to interpolate a variable to a given depth
+    def interp_depth (data_3d, gtype, depth0):
+        data_3d = data_3d.where(data_3d!=0)
+        dim = 'depth'+gtype.lower()
+        data_interp = data_3d.interp({dim:depth0})
+        return data_interp    
+    # Interpolate temperature to 500m
+    temp = interp_depth(temp_3d, 'T', depth_temp)
+    if vel == '400m':
+        # Interpolate velocity to 400m
+        u = interp_depth(u_3d, 'U', depth_vel)
+        v = interp_depth(v_3d, 'V', depth_vel)
+        title += '400m velocity'
+    # Inner function to vertically average a velocity component
+    def barotropic (vel, gtype):
+        dz = read_var('thkcello', gtype)
+        mask_3d = xr.where(vel==0, 0, 1)
+        dim = 'depth'+gtype.lower()
+        vel_avg = (vel*mask_3d*dz).sum(dim=dim)/(mask_3d*dz).sum(dim=dim)    
+    if vel == 'barotropic':
+        u = barotropic(u_3d, 'U')
+        v = barotropic(v_3d, 'V')
+        title += 'barotropic velocity'
+    # Now interpolate velocities to tracer grid
+    u_t = interp_grid(u, 'u', 't', periodic=True)
+    v_t = interp_grid(v, 'v', 't', periodic=True)
+
+    # TODO: rotate to geographic (zonal and meridional) velocities
+
+    # Set up grid for plotting
+    ds = xr.open_dataset(mean_dir + scenario + '_grid-T.nc')
+    lon_edges = cfxr.bounds_to_vertices(ds['bounds_lon'], 'nvertex')
+    lat_edges = cfxr.bounds_to_vertices(ds['bounds_lat'], 'nvertex')
+    # Plot
+    fig, ax = plt.subplots()
+    img = ax.pcolormesh(lon_edges, lat_edges, temp, cmap='RdBu_r')
+    ax.quiver(ds['nav_lon'], ds['nav_lat'], u_t, v_t)
+    ax.set_xlim(lon_bounds)
+    ax.set_ylim(lat_bounds)
+    ax.set_title(title, fontsize=16)
+    plt.colorbar(img)
+    
 
 
     

@@ -397,6 +397,50 @@ def interp_latlon_cf_blocks (source, nemo, pster_src=True, periodic_nemo=True, p
             interp = xr.concat([interp, interp_x], dim='y')
 
     return interp
+
+
+# Interpolate an array from one grid type to another. Only supports going between (u or v) and t.
+def interp_grid (A, gtype_in, gtype_out, periodic=True):
+
+    # Allow U or u, V or v, T or t
+    gtype_in = gtype_in.lower()
+    gtype_out = gtype_out.lower()
+
+    # Deep copy of original array because it will be modified
+    A = A.copy()
+    if not np.any(A.isnull()):
+        # Assume zeros are the mask
+        A = A.where(A!=0)
+    nx = A.sizes['x']
+    ny = A.sizes['y']
+    if gtype_in == 'u' and gtype_out == 't':
+        if periodic:
+            A_mid = A.interp(x=np.arange(nx-1)+0.5)
+            A_W = A_mid.isel(x=-2)
+            A_W['x'] = -0.5
+            A_interp = xr.concat([A_W, A_mid], dim='x')
+        else:
+            A_interp = A.interp(x=np.concatenate(([0], np.arange(nx-1)+0.5)))
+    elif gtype_in == 't' and gtype_out == 'u':
+        if periodic:
+            A_mid = A.interp(x=np.arange(nx-1)+0.5)
+            A_E = A_mid.isel(x=1)
+            A_E['x'] = nx - 0.5
+            A_interp = xr.concat([A_mid, A_E], dim='x')
+        else:
+            A_interp = A.interp(x=np.concatenate((np.arange(nx-1)+0.5, [nx-1])))
+    elif gtype_in == 'v' and gtype_out == 't':
+        A_interp = A.interp(y=np.concatenate(([0], np.arange(ny-1)+0.5)))
+    elif gtype_in == 't' and gtype_out == 'v':
+        A_interp = A.interp(y=np.concatenate((np.arange(ny-1)+0.5, [ny-1])))
+    # Overwrite data on original array so that xarray doesn't complain about weird coordinates later.
+    A.data = A_interp.data
+    return A
+        
+
+    
+
+    
             
             
             
