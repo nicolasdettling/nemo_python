@@ -1206,18 +1206,17 @@ def plot_amundsen_temp_velocity (base_dir='./'):
     scenario_titles = ['Preindustrial', '1.5'+deg_string+'C stabilisation', '6'+deg_string+'C stabilisation']
     mean_dir = base_dir + '/time_averaged/'
     depth_temp = 500
-    [xmin, xmax] = [-170, -60]
+    [xmin, xmax] = [-170, -62]
     [ymin, ymax] = [-76, -60]
     vel_scale = 0.4
     domain_cfg = '/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'
+    [vmin, vmax] = [0, 4.5]
 
     # Set up grid for plotting
     ds_grid = xr.open_dataset(mean_dir+scenarios[0]+'_grid-T.nc').squeeze()
     lon_edges = cfxr.bounds_to_vertices(ds_grid['bounds_lon'], 'nvertex')
     lat_edges = cfxr.bounds_to_vertices(ds_grid['bounds_lat'], 'nvertex')
-    ocean_mask, ice_mask = calc_geometry(ds_grid)[2:]
-    mask_plot = ocean_mask*np.invert(ice_mask)
-    mask_plot = mask_plot.where(mask_plot)
+    bathy, draft, ocean_mask, ice_mask = calc_geometry(ds_grid)
 
     # Inner functions
     # Read a variable
@@ -1246,9 +1245,12 @@ def plot_amundsen_temp_velocity (base_dir='./'):
         data_t = interp_grid(data, direction, 't', periodic=True)
         return data_t
     # Mask out anything beyond region of interest, plus ice shelf cavities
-    def apply_mask (data):
+    def apply_mask (data, mask_shallow=False):
         data = data.where((ds_grid['nav_lon']>=xmin-2)*(ds_grid['nav_lon']<=xmax+2)*(ds_grid['nav_lat']>=ymin-2)*(ds_grid['nav_lat']<=ymax+2))
         data = data.where(np.invert(ice_mask))
+        if mask_shallow:
+            # Also mask anything shallower than 500m
+            data = data.where(bathy >= depth_temp)
         return data
 
     # Read all the data
@@ -1273,39 +1275,41 @@ def plot_amundsen_temp_velocity (base_dir='./'):
         ds = ds.assign({'e2u':ds_domcfg['e2u']})
         strf = barotropic_streamfunction(ds)
         strf = interp_grid(strf, 'u', 't', periodic=True)
-        all_strf.append(apply_mask(strf))
+        all_strf.append(apply_mask(strf, mask_shallow=True))
 
     # Plot
-    fig = plt.figure(figsize=(5,7))
+    fig = plt.figure(figsize=(6,8))
     gs = plt.GridSpec(num_scenarios, 1)
-    gs.update(left=0.05, right=0.95, bottom=0.05, top=0.9, hspace=0.2)
+    gs.update(left=0.1, right=0.95, bottom=0.1, top=0.87, hspace=0.3)
     cax = fig.add_axes([0.2, 0.04, 0.6, 0.02])
-    cmap, vmin, vmax = set_colours(all_temp[0], ctype='plusminus', vmin=all_temp[0].min(), vmax=all_temp[-1].max())
+    cmap, vmin, vmax = set_colours(all_temp[0], ctype='RdBu_r', vmin=vmin, vmax=vmax)
+    mask_plot = np.invert(ocean_mask*np.invert(ice_mask))
+    mask_plot = apply_mask(mask_plot)
+    mask_plot = mask_plot.where(mask_plot)
     for n in range(num_scenarios):
         ax = plt.subplot(gs[n,0])
         # Shade temperature 
         img = ax.pcolormesh(lon_edges, lat_edges, all_temp[n], cmap=cmap, vmin=vmin, vmax=vmax)
         # Overlay land+ice mask in grey
         ax.pcolormesh(lon_edges, lat_edges, mask_plot, cmap=cl.ListedColormap(['DarkGrey']), linewidth=0)
-        # Overlay zero contour of streamfunction in lurid green
-        ax.contour(ds_grid['nav_lon'], ds_grid['nav_lat'], all_strf[n], levels=[0], colors=('Chartreuse'), linewidths=2, linestyles='solid')
+        # Overlay zero contour of streamfunction
+        ax.contour(ds_grid['nav_lon'], ds_grid['nav_lat'], all_strf[n], levels=[0], colors=('magenta'), linewidths=2, linestyles='solid')
         # Overlay every third velocity vector in black
-        q = ax.quiver(ds_grid['nav_lon'].data[::3,::3], ds_grid['nav_lat'].data[::3,::3], all_u[n].data[::3,::3], all_v[n].data[::3,::3], scale=vel_scale, color='black')
+        q = ax.quiver(ds_grid['nav_lon'].data[::4,::4], ds_grid['nav_lat'].data[::4,::4], all_u[n].data[::4,::4], all_v[n].data[::4,::4], scale=vel_scale, color='black')
         ax.set_xlim([xmin, xmax])
         ax.set_ylim([ymin, ymax])
         ax.tick_params(direction='in')
-        ax.set_title(scenario_titles[n], fontsize=12)
+        ax.set_title(scenario_titles[n], fontsize=14)
         if n == 0:
-            # Nicely formatted lat-lon labels
             latlon_axes(ax)
-            # Vector key
-            ax.quiverkey(q, 0.9, 0.9, 0.5, '0.5 m/s', labelpos='E', coordinates='axes')
         else:
             ax.set_xticklabels([])
             ax.set_yticklabels([])
-        if n == -1:
-            plt.colorbar(img, cax=cax, orientation='horizontal')
-    plt.suptitle('Amundsen Sea 500m temperature and barotropic velocity')
+        if n == num_scenarios-1:
+            plt.colorbar(img, cax=cax, orientation='horizontal', extend='max')
+            plt.text(0.18, 0.04, deg_string+'C', fontsize=12, ha='right', va='bottom', transform=fig.transFigure)
+            ax.quiverkey(q, 0.9, 0.05, 0.01, '1 cm/s', labelpos='E', coordinates='figure')
+    plt.suptitle('West Antarctic ocean temperature (500m)\nand barotropic velocity', fontsize=15)
     finished_plot(fig)
     
 
