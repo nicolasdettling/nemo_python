@@ -1194,9 +1194,9 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     finished_plot(fig, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
 
 
-def plot_amundsen_temp_velocity (base_dir='./', fig_name=None):
+def plot_amundsen_temp_velocity (base_dir='./'):
 
-    # TODO: rotate velocities
+    # TODO: rotate velocities; also apply to streamfunction calculation (new dy as well?)
 
     import cf_xarray as cfxr
     import matplotlib.colors as cl
@@ -1212,7 +1212,7 @@ def plot_amundsen_temp_velocity (base_dir='./', fig_name=None):
     domain_cfg = '/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'
 
     # Set up grid for plotting
-    ds_grid = xr.open_dataset(mean_dir+scenario+'_grid-T.nc').squeeze()
+    ds_grid = xr.open_dataset(mean_dir+scenarios[0]+'_grid-T.nc').squeeze()
     lon_edges = cfxr.bounds_to_vertices(ds_grid['bounds_lon'], 'nvertex')
     lat_edges = cfxr.bounds_to_vertices(ds_grid['bounds_lat'], 'nvertex')
     ocean_mask, ice_mask = calc_geometry(ds_grid)[2:]
@@ -1234,7 +1234,7 @@ def plot_amundsen_temp_velocity (base_dir='./', fig_name=None):
         return data_interp
     # Vertically average a velocity component
     def barotropic (vel, gtype):
-        dz = read_var('thkcello', gtype)
+        dz = read_var('thkcello', scenario, gtype)
         mask_3d = xr.where(vel==0, 0, 1)
         dim = 'depth'+gtype.lower()
         vel_avg = (vel*mask_3d*dz).sum(dim=dim)/(mask_3d*dz).sum(dim=dim)
@@ -1244,6 +1244,7 @@ def plot_amundsen_temp_velocity (base_dir='./', fig_name=None):
         data_3d = read_var(direction+'o', scenario, direction.upper())
         data = barotropic(data_3d, direction.upper())
         data_t = interp_grid(data, direction, 't', periodic=True)
+        return data_t
     # Mask out anything beyond region of interest, plus ice shelf cavities
     def apply_mask (data):
         data = data.where((ds_grid['nav_lon']>=xmin-2)*(ds_grid['nav_lon']<=xmax+2)*(ds_grid['nav_lat']>=ymin-2)*(ds_grid['nav_lat']<=ymax+2))
@@ -1261,8 +1262,8 @@ def plot_amundsen_temp_velocity (base_dir='./', fig_name=None):
         temp = interp_depth(temp_3d, 'T', depth_temp)
         all_temp.append(apply_mask(temp))
         # Barotropic velocity, interpolated to tracer grid
-        u = process_var(scenario, 'u')
-        v = process_var(scenario, 'v')
+        u = process_vel(scenario, 'u')
+        v = process_vel(scenario, 'v')
         all_u.append(apply_mask(u))
         all_v.append(apply_mask(v))
         # Barotropic streamfunction, interpolated to tracer grid

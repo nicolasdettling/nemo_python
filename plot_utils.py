@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 
+from ..constants import deg_string
+
 # Helper functions for colourmaps
 
 def truncate_colourmap (cmap, minval=0.0, maxval=1.0, n=-1):
