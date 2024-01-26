@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 
-from ..constants import deg_string
+from .constants import deg_string
 
 # Helper functions for colourmaps
 
