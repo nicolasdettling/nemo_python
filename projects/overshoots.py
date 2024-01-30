@@ -1271,6 +1271,7 @@ def plot_amundsen_temp_velocity (base_dir='./'):
         all_u.append(apply_mask(ug))
         all_v.append(apply_mask(vg))
         # Barotropic streamfunction, interpolated to tracer grid
+        # TODO use rotated velocities for this too
         ds = xr.open_dataset(mean_dir+scenario+'_grid-U.nc').squeeze()
         ds_domcfg = xr.open_dataset(domain_cfg).squeeze()
         ds_domcfg = ds_domcfg.isel(y=slice(0, ds.sizes['y']))

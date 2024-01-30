@@ -591,6 +591,10 @@ def month_convert (date_code):
 # ug, vg: xarray DataArrays containing the zonal and meridional components of the vector in geographic space
 def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True):
 
+    # Repeat all necessary import statements within here so the function is self-contained (someone can just copy and paste the whole thing if wanted)
+    import xarray as xr
+    import numpy as np
+
     if isinstance(domcfg, str):
         domcfg = xr.open_dataset(domcfg)
     if domcfg.sizes['y'] != u.sizes['y']:
