@@ -578,6 +578,122 @@ def month_convert (date_code):
     else:
         raise Exception('Invalid month')
 
+
+# Rotate a vector from the local x-y space to geographic space (with true zonal and meridional components). Follows subroutines "angle" and "rot_rep" in nemo/src/OCE/SBC/geo2ocean.F90.
+# Warning, this might not handle the north pole correctly, so use with caution if you are plotting a global grid and care about the north pole.
+# Inputs:
+# u, v: xarray DataArrays containing the u and v components of the vector in local x-y space (eg velocities from NEMO output).
+# domcfg: either the path to the domain_cfg file, or an xarray Dataset containing glamt, gphit, glamu, etc.
+# gtype: grid type: 'T', 'U', 'V', or 'F'. In practice you will interpolate both velocities to the T-grid and then call this with gtype='T' (default).
+# periodic: whether the grid is periodic
+# halo: whether the halo is included in the arrays (generally true for NEMO3.6, false for NEMO4.2). Only matters if periodic=True.
+# Outputs:
+# ug, vg: xarray DataArrays containing the zonal and meridional components of the vector in geographic space
+def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True):
+
+    if isinstance(domcfg, str):
+        domcfg = xr.open_dataset(domcfg)
+    if domcfg.sizes['y'] != u.sizes['y']:
+        print('Warning (rotate_vector): trimming domain_cfg to select only the southernmost part, to align with input vectors - is this what you want?')
+        domcfg = domcfg.isel(y=slice(0, u.sizes['y']))
+
+    # Get lon and lat on this grid
+    lon = domcfg['glam'+gtype.lower()]
+    lat = domcfg['gphi'+gtype.lower()]
+
+    # Calculate, at each point, the x and y components and the squared-norm of the vector between the point and the North Pole
+    vec_NP_x = -2*np.cos(lon*deg2rad)*np.tan(np.pi/4 - lat*deg2rad/2)
+    vec_NP_y = -2*np.sin(lon*deg2rad)*np.tan(np.pi/4 - lat*deg2rad/2)
+    vec_NP_norm2 = vec_NP_x**2 + vec_NP_y**2
+
+    # Inner function to get adjacent points on an alternate grid.
+    def grid_edges (var_name, shift):
+        edge1 = domcfg[var_name]
+        if shift == 'j-1':
+            edge2 = edge1.shift(y=1)
+            # Extrapolate southern boundary
+            edge2.isel(y=0).data = 2*edge1.isel(y=1).data - edge1.isel(y=0).data
+        elif shift == 'j+1':
+            edge2 = edge1.shift(y=-1)
+            # Extrapolate northern boundary
+            edge2.isel(y=-1).data = 2*edge1.isel(y=-2).data - edge1.isel(y=-1).data
+        elif shift == 'i-1':
+            edge2 = edge1.shift(x=1)
+            if periodic:
+                # Western boundary already exists on the other side
+                if halo:
+                    edge2.isel(x=0) = edge1.isel(x=-3)
+                else:
+                    edge2.isel(x=0) = edge2.isel(x=-1)
+            else:
+                # Extrapolate western boundary
+                edge2.isel(x=0).data = 2*edge1.isel(x=1).data - edge1.isel(x=0).data        
+        return edge1, edge2
+    # Call this function for both lon and lat on the given grid.
+    def lonlat_edges (gtype2, shift):
+        lon_edge1, lon_edge2 = grid_edges('glam'+gtype2.lower(), shift)
+        lat_edge1, lat_edge2 = grid_edges('gphi'+gtype2.lower(), shift)
+        return lon_edge1, lat_edge1, lon_edge2, lat_edge2            
+
+    # Calculate, at each point, the x and y components and the norm of the vector between adjacent points on an alternate grid.
+    if gtype in ['T', 't']:
+        # v-points above and below the given t-point
+        lon_edge1, lon_edge2, lat_edge1, lat_edge2 = lonlat_edges('v', 'j-1')
+    elif gtype in ['U', 'u']:
+        # f-points above and below the given u-point
+        lon_edge1, lon_edge2, lat_edge1, lat_edge2 = lonlat_edges('f', 'j-1')
+    elif gtype in ['V', 'v']:
+        # f-points left and right of the given v-point
+        lon_edge1, lon_edge2, lat_edge1, lat_edge2 = lonlat_edges('f', 'i-1')
+    elif gtype in ['F', 'f']:
+        # u-points above and below the given f-point
+        lon_edge1, lon_edge2, lat_edge1, lat_edge2 = lonlat_edges('u', 'j+1')
+    vec_pts_x = 2*np.cos(lon_edge1*deg2rad)*np.tan(np.pi/4 - lat_edge1*deg2rad/2) - 2*np.cos(lon_edge2*deg2rad)*np.tan(np.pi/4 - lat_edge2*deg2rad/2)
+    vec_pts_y = 2*np.sin(lon_edge1*deg2rad)*np.tan(np.pi/4 - lat_edge1*deg2rad/2) - 2*np.sin(lon_edge2*deg2rad)*np.tan(np.pi/4 - lat_edge2*deg2rad/2)
+    vec_pts_norm = max(np.sqrt(vec_NP_norm2*(vec_pts_x**2 + vec_pts_y**2)), 1e-14)
+
+    # Now get sin and cos of the angles of the given grid
+    if gtype in ['V', 'v']:
+        sin_grid = (vec_NP_x*vec_pts_x + vec_NP_y*vec_pts_y)/vec_pts_norm
+        cos_grid = -(vec_NP_x*vec_pts_y - vec_NP_y*vec_pts_x)/vec_pts_norm
+    else:
+        sin_grid = (vec_NP_x*vec_pts_y - vec_NP_y*vec_pts_x)/vec_pts_norm
+        cos_grid = (vec_NP_x*vec_pts_x + vec_NP_y*vec_pts_y)/vec_pts_norm
+
+    # Identify places where the adjacent grid cells are essentially equal (can happen with weird patched-together grids etc filling parts of Antarctic land mask with constant values) - no rotation needed here
+    eps = 1e-8
+    if gtype in ['T', 't']:
+        lon_edge1, lon_edge2 = grid_edges('glamv', 'j-1')        
+    elif gtype in ['U', 'u']:
+        lon_edge1, lon_edge2 = grid_egdes('glamf', 'j-1')
+    elif gtype in ['V', 'v']:
+        lat_edge1, lat_edge2 = grid_edges('gphif', 'i-1')
+    elif gtype in ['F', 'f']:
+        lon_edge1, lon_edge2 = grid_edges('glamu', 'j+1')
+    if gtype in ['V', 'v']:
+        index = np.abs(lat_edge1-lat_edge2) < eps
+    else:
+        index = np.abs(np.mod(lon_edge1-lon_edge2, 360)) < eps
+    sin_grid = xr.where(index, 0, sin_grid)
+    cos_grid = xr.where(index, 1, cos_grid)
+
+    # Finally, rotate!
+    ug = u*cos_grid - v*sin_grid
+    vg = v*cos_grid + u*sin_grid
+
+    return ug, vg
+    
+    
+    
+            
+
+    
+
+    
+
+
+
+
     
             
         
