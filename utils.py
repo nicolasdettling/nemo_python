@@ -594,8 +594,19 @@ def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True):
     if isinstance(domcfg, str):
         domcfg = xr.open_dataset(domcfg)
     if domcfg.sizes['y'] != u.sizes['y']:
+        # The TerraFIRMA overshoot output was trimmed to only cover the Southern Ocean when I pulled it from MASS, while domain_cfg remains global. Assume this is the reason for the mismatch but print a warning.
         print('Warning (rotate_vector): trimming domain_cfg to select only the southernmost part, to align with input vectors - is this what you want?')
         domcfg = domcfg.isel(y=slice(0, u.sizes['y']))
+    domcfg = domcfg.squeeze()
+
+    if u.dims != v.dims:
+        # Dimensions don't match. Usually this is because 3D velocities have retained 'depthu' and 'depthv' dimensions even though they've been interpolated to the T-grid.
+        if gtype in ['T', 't'] and 'depthu' in u.dims and 'depthv' in v.dims:
+            u = u.rename({'depthu':'deptht'})
+            v = v.rename({'depthv':'deptht'})
+        # Check again
+        if u.dims != v.dims:
+            raise Exception('Mismatch in dimensions')
 
     # Get lon and lat on this grid
     lon = domcfg['glam'+gtype.lower()]
@@ -622,9 +633,9 @@ def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True):
             if periodic:
                 # Western boundary already exists on the other side
                 if halo:
-                    edge2.isel(x=0) = edge1.isel(x=-3)
+                    edge2.isel(x=0).data = edge1.isel(x=-3).data
                 else:
-                    edge2.isel(x=0) = edge2.isel(x=-1)
+                    edge2.isel(x=0).data = edge2.isel(x=-1).data
             else:
                 # Extrapolate western boundary
                 edge2.isel(x=0).data = 2*edge1.isel(x=1).data - edge1.isel(x=0).data        
@@ -650,7 +661,7 @@ def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True):
         lon_edge1, lon_edge2, lat_edge1, lat_edge2 = lonlat_edges('u', 'j+1')
     vec_pts_x = 2*np.cos(lon_edge1*deg2rad)*np.tan(np.pi/4 - lat_edge1*deg2rad/2) - 2*np.cos(lon_edge2*deg2rad)*np.tan(np.pi/4 - lat_edge2*deg2rad/2)
     vec_pts_y = 2*np.sin(lon_edge1*deg2rad)*np.tan(np.pi/4 - lat_edge1*deg2rad/2) - 2*np.sin(lon_edge2*deg2rad)*np.tan(np.pi/4 - lat_edge2*deg2rad/2)
-    vec_pts_norm = max(np.sqrt(vec_NP_norm2*(vec_pts_x**2 + vec_pts_y**2)), 1e-14)
+    vec_pts_norm = np.maximum(np.sqrt(vec_NP_norm2*(vec_pts_x**2 + vec_pts_y**2)), 1e-14)
 
     # Now get sin and cos of the angles of the given grid
     if gtype in ['V', 'v']:

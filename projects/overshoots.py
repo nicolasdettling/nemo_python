@@ -7,7 +7,7 @@ import numpy as np
 
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
 from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, timeseries_plot, circumpolar_plot
-from ..utils import moving_average, region_mask, add_months, calc_geometry
+from ..utils import moving_average, region_mask, add_months, calc_geometry, rotate_vector
 from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year
 from ..file_io import read_schmidtko, read_woa
 from ..interpolation import interp_latlon_cf, interp_grid
@@ -1266,8 +1266,10 @@ def plot_amundsen_temp_velocity (base_dir='./'):
         # Barotropic velocity, interpolated to tracer grid
         u = process_vel(scenario, 'u')
         v = process_vel(scenario, 'v')
-        all_u.append(apply_mask(u))
-        all_v.append(apply_mask(v))
+        # Rotate to geographic components
+        ug, vg = rotate_vector(u, v, domain_cfg, periodic=True, halo=True)
+        all_u.append(apply_mask(ug))
+        all_v.append(apply_mask(vg))
         # Barotropic streamfunction, interpolated to tracer grid
         ds = xr.open_dataset(mean_dir+scenario+'_grid-U.nc').squeeze()
         ds_domcfg = xr.open_dataset(domain_cfg).squeeze()
