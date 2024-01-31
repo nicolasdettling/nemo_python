@@ -919,7 +919,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     timeseries_file = 'timeseries.nc'
     smooth = 5*months_per_year
     sim_names, colours, sim_dirs = minimal_expt_list()
-    sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'
+    sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks
     ds = xr.open_dataset(sample_file).squeeze()
 
     for v in range(num_var):
@@ -941,7 +941,9 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
             if v==0:
                 # Inset panel in top left showing region
                 mask = region_mask(regions[n], ds, option='all')[0]
-                
+                ax2 = inset_axes(ax, "25%", "30%", loc='upper left')
+                ax2.axis('equal')
+                circumpolar_plot(mask, ds, ax=ax2, make_cbar=False, ctype='IndianRed', lat_max=-63, shade_land=True)
         plt.suptitle(var_titles[v], fontsize=16)
         ax.legend(loc='center left', bbox_to_anchor=(-0.6,-0.32), fontsize=11, ncol=3)
         finished_plot(fig, fig_name='figures/'+var_names[v]+'_by_gw_panels.png', dpi=300)

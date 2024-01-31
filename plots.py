@@ -86,14 +86,19 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
 
     if shade_land:
         ocean_mask = build_ocean_mask(grid)[0]
-        mask_plot = np.invert(ocean_mask)
-        mask_plot = mask_plot.where(mask_plot)
+        ocean_mask = ocean_mask.where(ocean_mask)
+        x_bg, y_bg = np.meshgrid(np.linspace(x_edges.min(), x_edges.max()), np.linspace(y_edges.min(), y_edges.max()))
+        mask_bg = np.ones(x_bg.shape)  
 
     if new_fig:
         fig, ax = plt.subplots()
-    img = ax.pcolormesh(x_edges, y_edges, data, cmap=cmap, vmin=vmin, vmax=vmax)
     if shade_land:
-        ax.pcolormesh(x_edges, y_edges, mask_plot, cmap=cl.ListedColormap(['DarkGrey']), linewidth=0)
+        # Shade background in grey
+        ax.pcolormesh(x_bg, y_bg, mask_bg, cmap=cl.ListedColormap(['DarkGrey']))
+        # Clear ocean back to white
+        ax.pcolormesh(x_edges, y_edges, ocean_mask, cmap=cl.ListedColormap(['white']))
+    # Now plot the data
+    img = ax.pcolormesh(x_edges, y_edges, data, cmap=cmap, vmin=vmin, vmax=vmax)
     if contour is not None:
         x, y = polar_stereo(grid[lon_name], grid[lat_name])
         ax.contour(x, y, data, levels=contour, colors=('black'), linewidths=1, linestyles='solid')
