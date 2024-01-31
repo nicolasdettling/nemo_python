@@ -587,13 +587,16 @@ def month_convert (date_code):
 # gtype: grid type: 'T', 'U', 'V', or 'F'. In practice you will interpolate both velocities to the T-grid and then call this with gtype='T' (default).
 # periodic: whether the grid is periodic
 # halo: whether the halo is included in the arrays (generally true for NEMO3.6, false for NEMO4.2). Only matters if periodic=True.
+# return_angles: whether to return cos_grid and sin_grid
 # Outputs:
 # ug, vg: xarray DataArrays containing the zonal and meridional components of the vector in geographic space
-def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True):
+# cos_grid, sin_grid (only if return_angles=True): cos and sin of the angle between the grid and east
+def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True, return_angles=False):
 
     # Repeat all necessary import statements within here so the function is self-contained (someone can just copy and paste the whole thing if wanted)
     import xarray as xr
     import numpy as np
+    deg2rad = np.pi/180.
 
     if isinstance(domcfg, str):
         domcfg = xr.open_dataset(domcfg)
@@ -697,7 +700,10 @@ def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True):
     ug = u*cos_grid - v*sin_grid
     vg = v*cos_grid + u*sin_grid
 
-    return ug, vg
+    if return_angles:
+        return ug, vg, cos_grid, sin_grid
+    else:
+        return ug, vg
     
     
     

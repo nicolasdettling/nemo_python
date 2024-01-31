@@ -1196,8 +1196,6 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
 
 def plot_amundsen_temp_velocity (base_dir='./'):
 
-    # TODO: rotate velocities; also apply to streamfunction calculation (new dy as well?)
-
     import cf_xarray as cfxr
     import matplotlib.colors as cl
 
@@ -1217,6 +1215,8 @@ def plot_amundsen_temp_velocity (base_dir='./'):
     lon_edges = cfxr.bounds_to_vertices(ds_grid['bounds_lon'], 'nvertex')
     lat_edges = cfxr.bounds_to_vertices(ds_grid['bounds_lat'], 'nvertex')
     bathy, draft, ocean_mask, ice_mask = calc_geometry(ds_grid)
+    ds_domcfg = xr.open_dataset(domain_cfg).squeeze()
+    ds_domcfg = ds_domcfg.isel(y=slice(0, ds_grid.sizes['y']))
 
     # Inner functions
     # Read a variable
@@ -1271,13 +1271,9 @@ def plot_amundsen_temp_velocity (base_dir='./'):
         all_u.append(apply_mask(ug))
         all_v.append(apply_mask(vg))
         # Barotropic streamfunction, interpolated to tracer grid
-        # TODO use rotated velocities for this too
-        ds = xr.open_dataset(mean_dir+scenario+'_grid-U.nc').squeeze()
-        ds_domcfg = xr.open_dataset(domain_cfg).squeeze()
-        ds_domcfg = ds_domcfg.isel(y=slice(0, ds.sizes['y']))
-        ds = ds.assign({'e2u':ds_domcfg['e2u']})
-        strf = barotropic_streamfunction(ds)
-        strf = interp_grid(strf, 'u', 't', periodic=True)
+        ds_u = xr.open_dataset(mean_dir+scenario+'_grid-U.nc').squeeze()
+        ds_v = xr.open_dataset(mean_dir+scenario+'_grid-V.nc').squeeze()
+        strf = barotropic_streamfunction(ds_u, ds_v, ds_domcfg, periodic=True, halo=True)
         all_strf.append(apply_mask(strf, mask_shallow=True))
 
     # Plot

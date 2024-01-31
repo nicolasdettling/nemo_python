@@ -1,7 +1,8 @@
 import xarray as xr
 
-from .utils import closest_point, remove_disconnected
+from .utils import closest_point, remove_disconnected, rotate_vector
 from .constants import ross_gyre_point0
+from .interpolation import interp_grid
 
 # Calculate zonal or meridional transport across the given section. The code will choose a constant slice in x or y corresponding to a constant value of latitude or longitude - so maybe not appropriate in highly rotated regions.
 # For zonal transport, set lon0 and lat_bounds, and make sure the dataset includes uo, thkcello, and e2u (can get from domain_cfg).
@@ -37,14 +38,21 @@ def transport (ds, lon0=None, lat0=None, lon_bounds=None, lat_bounds=None):
         return integrand.sum(dim={'depthv', 'x'})*1e-6
 
 
-# Calculate the barotropic streamfunction. The dataset ds must include the variables uo, thkcello, and e2u (grab it from domain_cfg).
-# WARNING, this is in x-y space, might need to rotate to proper zonal velocities - but then would also need rotated dy integrand - is it equivalent?
-def barotropic_streamfunction (ds):
+# Calculate the barotropic streamfunction. 
+def barotropic_streamfunction (ds_u, ds_v, ds_domcfg, periodic=True, halo=True):
 
     # Definite integral over depth (thkcello is dz)
-    udz = (ds['uo']*ds['thkcello']).sum(dim='depthu')
-    # Indefinite integral from south to north (e2u is dy) and convert to Sv
-    return (udz*ds['e2u']).cumsum(dim='y')*1e-6
+    udz = (ds_u['uo']*ds_u['thkcello']).sum(dim='depthu')
+    vdz = (ds_v['vo']*ds_v['thkcello']).sum(dim='depthv')
+    # Interpolate to t-grid
+    udz_t = interp_grid(udz, 'u', 't', periodic=periodic, halo=halo)
+    vdz_t = interp_grid(vdz, 'v', 't', periodic=periodic, halo=halo)
+    # Rotate to get geographic velocity components, and save cos and sin of angles
+    udz_tg, vdz_tg, cos_grid, sin_grid = rotate_vector(udz_t, vdz_t, ds_domcfg, gtype='T', periodic=periodic, halo=halo, return_angles=True)
+    # Get integrand: dy in north-south direction, based on angle of grid
+    dy = ds_domcfg['e2t']*cos_grid    
+    # Indefinite integral from south to north, and convert to Sv
+    return (udz_tg*dy).cumsum(dim='y')*1e-6
 
 
 # Calculate the easternmost extent of the Ross Gyre: first find the 0 Sv contour of barotropic streamfunction which contains the point (160E, 70S), and then find the easternmost point within this contour.
