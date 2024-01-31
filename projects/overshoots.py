@@ -1195,6 +1195,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     finished_plot(fig, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
 
 
+# Plot Amundsen Sea 500m temperature, barotropic velocity, and zero contour of barotropic streamfunction, averaged over 3 scenarios: (1) piControl, (2) 1.5K stabilisation, (3) 6K stabilisation.
 def plot_amundsen_temp_velocity (base_dir='./'):
 
     import cf_xarray as cfxr
@@ -1310,7 +1311,7 @@ def plot_amundsen_temp_velocity (base_dir='./'):
             plt.text(0.18, 0.04, deg_string+'C', fontsize=12, ha='right', va='bottom', transform=fig.transFigure)
             ax.quiverkey(q, 0.9, 0.05, 0.01, '1 cm/s', labelpos='E', coordinates='figure')
     plt.suptitle('West Antarctic ocean temperature (500m)\nand barotropic velocity', fontsize=15)
-    finished_plot(fig)
+    finished_plot(fig, fig_name='figures/amundsen_temp_velocity.png', dpi=300)
     
 
 
