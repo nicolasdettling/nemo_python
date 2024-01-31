@@ -3,7 +3,7 @@ import os
 
 from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year, deg_string, gkg_string, drake_passage_lon0, drake_passage_lat_bounds
 from .utils import single_cavity_mask, region_mask, add_months, closest_point, month_convert, calc_geometry
-from .diagnostics import transport, ross_gyre_eastern_extent
+from .diagnostics import transport
 
 # Calculate a timeseries of the given preset variable from an xarray Dataset of NEMO output (must have halo removed). Returns DataArrays of the timeseries data, the associated time values, and the variable title. Specify whether there is a halo (true for periodic boundaries in NEMO 3.6).
 # Preset variables include:
@@ -13,7 +13,6 @@ from .diagnostics import transport, ross_gyre_eastern_extent
 # <region>_temp, <region>_salt: volume-averaged temperature or salinity from the given region or cavity
 # <region>_temp_btw_xxx_yyy_m, <region>_salt_btw_xxx_yyy_m: volume-averaged temperature or salinity from the given region or cavity, between xxx and yyy metres (positive integers, shallowest first)
 # drake_passage_transport: zonal transport across Drake Passage (need to pass path to domain_cfg)
-# ross_gyre_eastern_extent: easternmost point in the Ross Gyre (need to pass path to domain_cfg)
 def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc', halo=True):
     
     # Parse variable name
@@ -86,12 +85,8 @@ def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/i
         option = 'transport'
         units = 'Sv'
         title = 'Drake Passage Transport'
-    elif var == 'ross_gyre_eastern_extent':
-        option = 'ross_gyre_eastern_extent'
-        units = 'degrees east'
-        title = 'Easternmost extent of the Ross Gyre'
 
-    if var in ['drake_passage_transport', 'ross_gyre_eastern_extent'] and 'e2u' not in ds_nemo:
+    if var == 'drake_passage_transport' and 'e2u' not in ds_nemo:
         # Need to add e2u from domain_cfg
         ds_domcfg = xr.open_dataset(domain_cfg).squeeze()
         if ds_nemo.sizes['y'] < ds_domcfg.sizes['y']:
@@ -150,8 +145,6 @@ def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/i
     elif option == 'transport':
         # Calculate zonal or meridional transport
         data = transport(ds_nemo, lon0=lon0, lat0=lat0, lon_bounds=lon_bounds, lat_bounds=lat_bounds)
-    elif option == 'ross_gyre_eastern_extent':
-        data = ross_gyre_eastern_extent(ds_nemo)
         
     data *= factor
     data = data.assign_attrs(long_name=title, units=units)

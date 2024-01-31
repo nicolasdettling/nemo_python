@@ -655,6 +655,7 @@ def plot_stabilisation_maps (var_name, fig_name=None):
     if var_name == 'barotropic_streamfunction':
         title = 'Barotropic streamfunction (Sv)'
         file_type = 'grid-U'
+        file_type_2 = 'grid-V'
         contour = [-15, 0]
         vmin = -60
         vmax = 60
@@ -697,9 +698,9 @@ def plot_stabilisation_maps (var_name, fig_name=None):
                 # Grab e2u from domain_cfg
                 ds_domcfg = xr.open_dataset(domain_cfg).squeeze()
                 ds_domcfg = ds_domcfg.isel(y=slice(0, ds.sizes['y']))
-            ds = ds.assign({'e2u':ds_domcfg['e2u']})
+            ds_v = xr.open_dataset(in_dir+scenarios[n]+'_'+file_type_2+'.nc').squeeze()
         if var_name == 'barotropic_streamfunction':
-            data_plot = barotropic_streamfunction(ds)
+            data_plot = barotropic_streamfunction(ds, ds_v, ds_domcfg, periodic=True, halo=True)
         elif var_name == 'temp500m':
             data_3d = ds['thetao'].where(ds['thetao']!=0)
             data_plot = data_3d.interp(deptht=500)

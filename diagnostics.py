@@ -57,10 +57,10 @@ def barotropic_streamfunction (ds_u, ds_v, ds_domcfg, periodic=True, halo=True):
 
 # Calculate the easternmost extent of the Ross Gyre: first find the 0 Sv contour of barotropic streamfunction which contains the point (160E, 70S), and then find the easternmost point within this contour.
 # The dataset ds must include the variables uo, thkcello, e2u, nav_lon, nav_lat.
-def ross_gyre_eastern_extent (ds):
+def ross_gyre_eastern_extent (ds_u, ds_v, ds_domcfg, periodic=True, halo=True):
 
     # Find all points where the barotropic streamfunction is negative
-    strf = barotropic_streamfunction(ds)    
+    strf = barotropic_streamfunction(ds_u, ds_v, ds_domcfg, periodic=periodic, halo=halo)    
     gyre_mask = strf < 0
     # Now only keep the ones connected to the known Ross Gyre point
     connected = gyre_mask.data
@@ -68,7 +68,7 @@ def ross_gyre_eastern_extent (ds):
         connected[t,:] = remove_disconnected(gyre_mask.isel(time_counter=t), closest_point(ds, ross_gyre_point0))
     gyre_mask.data = connected
     # Find all longitudes within this mask which are also in the western hemisphere
-    gyre_lon = ds['nav_lon'].where((gyre_mask==1)*(ds['nav_lon']<0))
+    gyre_lon = ds_domcfg['nav_lon'].where((gyre_mask==1)*(ds_domcfg['nav_lon']<0))
     # Return the easternmost point
     return gyre_lon.max(dim={'x','y'})
 
