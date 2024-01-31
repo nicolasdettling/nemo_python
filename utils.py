@@ -639,7 +639,7 @@ def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True):
                 if halo:
                     edge2.isel(x=0).data = edge1.isel(x=-3).data
                 else:
-                    edge2.isel(x=0).data = edge2.isel(x=-1).data
+                    edge2.isel(x=0).data = edge1.isel(x=-1).data
             else:
                 # Extrapolate western boundary
                 edge2.isel(x=0).data = 2*edge1.isel(x=1).data - edge1.isel(x=0).data        
@@ -662,7 +662,8 @@ def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True):
         lon_edge1, lat_edge1, lon_edge2, lat_edge2 = lonlat_edges('f', 'i-1')
     elif gtype in ['F', 'f']:
         # u-points above and below the given f-point
-        lon_edge1, lat_edge2, lon_edge2, lat_edge2 = lonlat_edges('u', 'j+1')
+        # Note reversed order of how we save the outputs
+        lon_edge2, lat_edge2, lon_edge1, lat_edge1 = lonlat_edges('u', 'j+1')
     vec_pts_x = 2*np.cos(lon_edge1*deg2rad)*np.tan(np.pi/4 - lat_edge1*deg2rad/2) - 2*np.cos(lon_edge2*deg2rad)*np.tan(np.pi/4 - lat_edge2*deg2rad/2)
     vec_pts_y = 2*np.sin(lon_edge1*deg2rad)*np.tan(np.pi/4 - lat_edge1*deg2rad/2) - 2*np.sin(lon_edge2*deg2rad)*np.tan(np.pi/4 - lat_edge2*deg2rad/2)
     vec_pts_norm = np.maximum(np.sqrt(vec_NP_norm2*(vec_pts_x**2 + vec_pts_y**2)), 1e-14)
@@ -680,7 +681,7 @@ def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True):
     if gtype in ['T', 't']:
         lon_edge1, lon_edge2 = grid_edges('glamv', 'j-1')        
     elif gtype in ['U', 'u']:
-        lon_edge1, lon_edge2 = grid_egdes('glamf', 'j-1')
+        lon_edge1, lon_edge2 = grid_edges('glamf', 'j-1')
     elif gtype in ['V', 'v']:
         lat_edge1, lat_edge2 = grid_edges('gphif', 'i-1')
     elif gtype in ['F', 'f']:
