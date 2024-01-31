@@ -1,8 +1,9 @@
 import matplotlib.pyplot as plt
+import matplotlib.colors as cl
 import xarray as xr
 import socket
 import numpy as np
-from .utils import polar_stereo, extend_grid_edges, moving_average
+from .utils import polar_stereo, extend_grid_edges, moving_average, build_ocean_mask
 from .plot_utils import set_colours
 from .constants import line_colours, region_names
 
@@ -32,9 +33,10 @@ def finished_plot (fig, fig_name=None, dpi=None):
 # ctype: colourmap type (see set_colours in plot_utils.py)
 # change_points: arguments to ismr colourmap (see above)
 # contour: list of levels to contour in black
+# shade_land: whether to shade the land mask in grey
 
-# TODO colour maps, contour ice front, shade land in grey
-def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None, periodic=True, lat_max=None, contour=None):
+# TODO contour ice front
+def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None, periodic=True, lat_max=None, contour=None, shade_land=True):
 
     new_fig = ax is None
     if title is None:
@@ -82,9 +84,16 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
     # Set up colour map
     cmap, vmin, vmax = set_colours(data, ctype=ctype, vmin=vmin, vmax=vmax, change_points=change_points)
 
+    if shade_land:
+        ocean_mask = build_ocean_mask(grid)[0]
+        mask_plot = np.invert(ocean_mask)
+        mask_plot = mask_plot.where(mask_plot)
+
     if new_fig:
         fig, ax = plt.subplots()
     img = ax.pcolormesh(x_edges, y_edges, data, cmap=cmap, vmin=vmin, vmax=vmax)
+    if shade_land:
+        ax.pcolormesh(x_edges, y_edges, mask_plot, cmap=cl.ListedColormap(['DarkGrey']), linewidth=0)
     if contour is not None:
         x, y = polar_stereo(grid[lon_name], grid[lat_name])
         ax.contour(x, y, data, levels=contour, colors=('black'), linewidths=1, linestyles='solid')

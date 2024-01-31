@@ -218,6 +218,21 @@ def build_ice_mask (ds):
     return ice_mask, ds
 
 
+# As above, select the ocean mask
+def build_ocean_mask (ds):
+
+    if 'ocean_mask' in ds:
+        return ds['ocean_mask'], ds
+    if 'tmaskutil' in ds:
+        ocean_mask = ds['tmaskutil'].squeeze()
+    elif 'bottom_level' in ds:
+        ocean_mask = xr.where(ds['bottom_level']>0, 1, 0).squeeze()
+    else:
+        ocean_mask = calc_geometry(ds)[2]
+    ds = ds.assign({'ocean_mask':ocean_mask})
+    return ocean_mask, ds
+
+
 # Select the continental shelf and ice shelf cavities. Pass it the path to an xarray Dataset which contains one of the following combinations:
 # 1. nav_lon, nav_lat, bathy, tmaskutil (NEMO3.6 mesh_mask)
 # 2. nav_lon, nav_lat, bathy_metry, bottom_level (NEMO4.2 domain_cfg)

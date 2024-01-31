@@ -919,6 +919,8 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     timeseries_file = 'timeseries.nc'
     smooth = 5*months_per_year
     sim_names, colours, sim_dirs = minimal_expt_list()
+    sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'
+    ds = xr.open_dataset(sample_file).squeeze()
 
     for v in range(num_var):
         fig = plt.figure(figsize=(10,7))
@@ -936,6 +938,10 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
                 ax.set_xlabel('Global warming relative to preindustrial ('+deg_string+'C)', fontsize=12)
             else:
                 ax.set_xlabel('')
+            if v==0:
+                # Inset panel in top left showing region
+                mask = region_mask(regions[n], ds, option='all')[0]
+                
         plt.suptitle(var_titles[v], fontsize=16)
         ax.legend(loc='center left', bbox_to_anchor=(-0.6,-0.32), fontsize=11, ncol=3)
         finished_plot(fig, fig_name='figures/'+var_names[v]+'_by_gw_panels.png', dpi=300)
@@ -1294,7 +1300,7 @@ def plot_amundsen_temp_velocity (base_dir='./'):
         # Overlay land+ice mask in grey
         ax.pcolormesh(lon_edges, lat_edges, mask_plot, cmap=cl.ListedColormap(['DarkGrey']), linewidth=0)
         # Overlay zero contour of streamfunction
-        ax.contour(ds_grid['nav_lon'], ds_grid['nav_lat'], all_strf[n], levels=[0], colors=('magenta'), linewidths=2, linestyles='solid')
+        cs = ax.contour(ds_grid['nav_lon'], ds_grid['nav_lat'], all_strf[n], levels=[0], colors=('magenta'), linewidths=2, linestyles='solid')
         # Overlay every third velocity vector in black
         q = ax.quiver(ds_grid['nav_lon'].data[::4,::4], ds_grid['nav_lat'].data[::4,::4], all_u[n].data[::4,::4], all_v[n].data[::4,::4], scale=vel_scale, color='black')
         ax.set_xlim([xmin, xmax])
@@ -1303,13 +1309,14 @@ def plot_amundsen_temp_velocity (base_dir='./'):
         ax.set_title(scenario_titles[n], fontsize=14)
         if n == 0:
             latlon_axes(ax)
+            ax.clabel(cs, cs.levels, inline=True, fmt={0:'0 Sv'}, fontsize=10)
         else:
             ax.set_xticklabels([])
             ax.set_yticklabels([])
         if n == num_scenarios-1:
             plt.colorbar(img, cax=cax, orientation='horizontal', extend='max')
             plt.text(0.18, 0.04, deg_string+'C', fontsize=12, ha='right', va='bottom', transform=fig.transFigure)
-            ax.quiverkey(q, 0.9, 0.05, 0.01, '1 cm/s', labelpos='E', coordinates='figure')
+            ax.quiverkey(q, 0.9, 0.05, 0.01, '1 cm/s', labelpos='E', coordinates='figure')            
     plt.suptitle('West Antarctic ocean temperature (500m)\nand barotropic velocity', fontsize=15)
     finished_plot(fig, fig_name='figures/amundsen_temp_velocity.png', dpi=300)
     
