@@ -400,7 +400,7 @@ def interp_latlon_cf_blocks (source, nemo, pster_src=True, periodic_nemo=True, p
 
 
 # Interpolate an array from one grid type to another. Only supports going between (u or v) and t.
-def interp_grid (A, gtype_in, gtype_out, periodic=True):
+def interp_grid (A, gtype_in, gtype_out, periodic=True, halo=True):
 
     # Allow U or u, V or v, T or t
     gtype_in = gtype_in.lower()
@@ -416,7 +416,10 @@ def interp_grid (A, gtype_in, gtype_out, periodic=True):
     if gtype_in == 'u' and gtype_out == 't':
         if periodic:
             A_mid = A.interp(x=np.arange(nx-1)+0.5)
-            A_W = A_mid.isel(x=-2)
+            if halo:
+                A_W = A_mid.isel(x=-2)
+            else:
+                A_W = 0.5*(A.isel(x=0)+A.isel(x=-1))
             A_W['x'] = -0.5
             A_interp = xr.concat([A_W, A_mid], dim='x')
         else:
@@ -424,7 +427,10 @@ def interp_grid (A, gtype_in, gtype_out, periodic=True):
     elif gtype_in == 't' and gtype_out == 'u':
         if periodic:
             A_mid = A.interp(x=np.arange(nx-1)+0.5)
-            A_E = A_mid.isel(x=1)
+            if halo:
+                A_E = A_mid.isel(x=1)
+            else:
+                A_E = 0.5*(A.isel(x=0)+A.isel(x=-1))
             A_E['x'] = nx - 0.5
             A_interp = xr.concat([A_mid, A_E], dim='x')
         else:

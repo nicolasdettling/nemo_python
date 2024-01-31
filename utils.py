@@ -653,16 +653,16 @@ def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True):
     # Calculate, at each point, the x and y components and the norm of the vector between adjacent points on an alternate grid.
     if gtype in ['T', 't']:
         # v-points above and below the given t-point
-        lon_edge1, lon_edge2, lat_edge1, lat_edge2 = lonlat_edges('v', 'j-1')
+        lon_edge1, lat_edge1, lon_edge2, lat_edge2 = lonlat_edges('v', 'j-1')
     elif gtype in ['U', 'u']:
         # f-points above and below the given u-point
-        lon_edge1, lon_edge2, lat_edge1, lat_edge2 = lonlat_edges('f', 'j-1')
+        lon_edge1, lat_edge1, lon_edge2, lat_edge2 = lonlat_edges('f', 'j-1')
     elif gtype in ['V', 'v']:
         # f-points left and right of the given v-point
-        lon_edge1, lon_edge2, lat_edge1, lat_edge2 = lonlat_edges('f', 'i-1')
+        lon_edge1, lat_edge1, lon_edge2, lat_edge2 = lonlat_edges('f', 'i-1')
     elif gtype in ['F', 'f']:
         # u-points above and below the given f-point
-        lon_edge1, lon_edge2, lat_edge1, lat_edge2 = lonlat_edges('u', 'j+1')
+        lon_edge1, lat_edge2, lon_edge2, lat_edge2 = lonlat_edges('u', 'j+1')
     vec_pts_x = 2*np.cos(lon_edge1*deg2rad)*np.tan(np.pi/4 - lat_edge1*deg2rad/2) - 2*np.cos(lon_edge2*deg2rad)*np.tan(np.pi/4 - lat_edge2*deg2rad/2)
     vec_pts_y = 2*np.sin(lon_edge1*deg2rad)*np.tan(np.pi/4 - lat_edge1*deg2rad/2) - 2*np.sin(lon_edge2*deg2rad)*np.tan(np.pi/4 - lat_edge2*deg2rad/2)
     vec_pts_norm = np.maximum(np.sqrt(vec_NP_norm2*(vec_pts_x**2 + vec_pts_y**2)), 1e-14)

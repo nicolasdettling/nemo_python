@@ -1242,7 +1242,7 @@ def plot_amundsen_temp_velocity (base_dir='./'):
     def process_vel (scenario, direction):
         data_3d = read_var(direction+'o', scenario, direction.upper())
         data = barotropic(data_3d, direction.upper())
-        data_t = interp_grid(data, direction, 't', periodic=True)
+        data_t = interp_grid(data, direction, 't', periodic=True, halo=True)
         return data_t
     # Mask out anything beyond region of interest, plus ice shelf cavities
     def apply_mask (data, mask_shallow=False):
