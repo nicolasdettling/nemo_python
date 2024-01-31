@@ -910,6 +910,8 @@ def cold_cavity_hysteresis_stats (base_dir='./'):
 # Final plots for paper: (1) bottom temperature on continental shelf and in cavities, and (2) ice shelf basal mass loss as a function of global warming level, for 4 different regions, showing ramp-up, stabilise, and ramp-down in different colours
 def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
 
+    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
     pi_suite = 'cs568'
     regions = ['ross', 'filchner_ronne', 'west_antarctica', 'east_antarctica']
     var_names = ['bwtemp', 'massloss']
@@ -941,9 +943,12 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
             if v==0:
                 # Inset panel in top left showing region
                 mask = region_mask(regions[n], ds, option='all')[0]
-                ax2 = inset_axes(ax, "25%", "30%", loc='upper left')
-                ax2.axis('equal')
-                circumpolar_plot(mask, ds, ax=ax2, make_cbar=False, ctype='IndianRed', lat_max=-63, shade_land=True)
+                ax2 = inset_axes(ax, "25%", "40%", loc='upper left')
+                ax2.axis('equal')                
+                circumpolar_plot(mask, ds, ax=ax2, make_cbar=False, ctype='IndianRed', lat_max=-66, shade_land=True)
+                ax2.axis('on')
+                ax2.set_xticks([])
+                ax2.set_yticks([])
         plt.suptitle(var_titles[v], fontsize=16)
         ax.legend(loc='center left', bbox_to_anchor=(-0.6,-0.32), fontsize=11, ncol=3)
         finished_plot(fig, fig_name='figures/'+var_names[v]+'_by_gw_panels.png', dpi=300)
