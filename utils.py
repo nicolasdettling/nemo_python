@@ -1,6 +1,7 @@
 import numpy as np
 import xarray as xr
-from .constants import deg2rad, shelf_lat, shelf_depth, shelf_point0, rho_fw, sec_per_hour, temp_C2K, Rdry, Rvap, vap_pres_c1, vap_pres_c3, vap_pres_c4, region_edges, region_edges_flag, region_names, region_points, months_per_year
+import gsw
+from .constants import deg2rad, shelf_lat, shelf_depth, shelf_point0, rho_fw, sec_per_hour, temp_C2K, Rdry, Rvap, vap_pres_c1, vap_pres_c3, vap_pres_c4, region_edges, region_edges_flag, region_names, region_points, months_per_year, rEarth
 
 # Given an array containing longitude, make sure it's in the range (max_lon-360, max_lon). Default is (-180, 180). If max_lon is None, nothing will be done to the array.
 def fix_lon_range (lon, max_lon=180):
@@ -170,6 +171,18 @@ def closest_point (ds, target):
     point0 = dist.argmin(dim=('y','x'))
     return (int(point0['y'].data), int(point0['x'].data))
 
+# Helper function to calculate the Cartesian distance between two longitude and latitude points
+# This also works if one of point0, point1 is a 2D array.
+def distance_btw_points (point0, point1):
+    
+    [lon0, lat0] = point0
+    [lon1, lat1] = point1
+    
+    dx = rEarth*np.cos((lat0+lat1)/2*deg2rad)*(lon1-lon0)*deg2rad
+    dy = rEarth*(lat1-lat0)*deg2rad
+    
+    return np.sqrt(dx**2 + dy**2)
+    
 
 # Helper function to calculate a bunch of grid variables (bathymetry, draft, ocean mask, ice shelf mask) from a NEMO output file, only using thkcello and the mask on a 3D data variable (current options are to look for thetao and so).
 # This varies a little if the sea surface height changes, so not perfect, but it does take partial cells into account.
@@ -719,8 +732,42 @@ def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True, return_ang
         return ug, vg, cos_grid, sin_grid
     else:
         return ug, vg
+
+
+# Helper function to convert an xarray dataset with 3D T and S to TEOS10 (absolute salinity and conservative temperature)
+# Inputs: 
+# dataset: xarray dataset containing variables lon, lat, depth, and THETA (potential temperature) or SALT (practical salinity)
+# var:     string of variable name to convert: THETA or SALT
+def convert_to_teos10(dataset, var='SALT'):
+    # Convert to TEOS10
+    # Need 3D lat, lon, pressure at every point, so if 1D or 2D, broadcast to 3D
+    if dataset.lon.values.ndim <= 2:
+        lon   = xr.broadcast(dataset['lon'], dataset[var])[0]
+    if dataset.lat.values.ndim <= 2:
+        lat   = xr.broadcast(dataset['lat'], dataset[var])[0]
+    if dataset.depth.values.ndim <= 2:
+        # Need pressure in dbar at every 3D point: approx depth in m
+        press = np.abs(xr.broadcast(dataset['depth'], dataset[var])[0])
+    else:
+        press = np.abs(dataset['depth'])
     
-    
+    if var=='SALT':
+        # Get absolute salinity from practical salinity
+        absS  = gsw.SA_from_SP(dataset[var], press, lon, lat)
+
+        return absS
+    elif var=='THETA':    
+        if 'SALT' in list(dataset.keys()):
+            # Get absolute salinity from practical salinity
+            absS  = gsw.SA_from_SP(dataset['SALT'], press, lon, lat)
+            # Get conservative temperature from potential temperature
+            consT  = gsw.CT_from_t(absS, dataset[var], press)
+        else:
+            raise Exception('Must include practical salinity (SALT) variable in dataset when converting potential temperature')
+        
+        return consT
+    else:
+        raise Exception('Variable options are SALT or THETA')    
     
             
 
