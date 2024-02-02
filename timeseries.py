@@ -2,7 +2,8 @@ import xarray as xr
 import os
 
 from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year, deg_string, gkg_string, drake_passage_lon0, drake_passage_lat_bounds
-from .utils import single_cavity_mask, region_mask, add_months, closest_point, month_convert, calc_geometry
+from .utils import add_months, closest_point, month_convert
+from .grid import single_cavity_mask, region_mask, calc_geometry
 from .diagnostics import transport
 
 # Calculate a timeseries of the given preset variable from an xarray Dataset of NEMO output (must have halo removed). Returns DataArrays of the timeseries data, the associated time values, and the variable title. Specify whether there is a halo (true for periodic boundaries in NEMO 3.6).

@@ -3,7 +3,8 @@ import matplotlib.colors as cl
 import xarray as xr
 import socket
 import numpy as np
-from .utils import polar_stereo, extend_grid_edges, moving_average, build_ocean_mask
+from .utils import polar_stereo, extend_grid_edges, moving_average
+from .grid import build_ocean_mask
 from .plot_utils import set_colours
 from .constants import line_colours, region_names
 
