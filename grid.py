@@ -7,7 +7,7 @@ import numpy as np
 import xarray as xr
 from .interpolation import neighbours
 from .constants import region_edges, region_edges_flag, region_names, region_points, shelf_lat, shelf_depth, shelf_point0
-
+from .utils import remove_disconnected, closest_point
 
 # Helper function to calculate a bunch of grid variables (bathymetry, draft, ocean mask, ice shelf mask) from a NEMO output file, only using thkcello and the mask on a 3D data variable (current options are to look for thetao and so).
 # This varies a little if the sea surface height changes, so not perfect, but it does take partial cells into account.
