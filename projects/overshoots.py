@@ -251,7 +251,7 @@ def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 
 
 
 # Calculate the integrated global warming relative to preindustrial mean, in Kelvin-years, for the given suite (starting from the beginning of the relevant ramp-up simulation). Returns a timeseries over the given experiment, with the first value being the sum of all branched-from experiments before then.
-def integrated_gw (suite, pi_suite='cs568', timeseries_file_um='timeseries_um.nc', base_dir='./'):
+def integrated_gw (suite, pi_suite='cs495', timeseries_file_um='timeseries_um.nc', base_dir='./'):
 
     # Inner function to read global mean SAT
     def global_mean_sat (suite):
@@ -286,7 +286,7 @@ def integrated_gw (suite, pi_suite='cs568', timeseries_file_um='timeseries_um.nc
 
 
 # Plot timeseries of integrated global warming in every experiment.
-def plot_integrated_gw (base_dir='./', timeseries_file_um='timeseries_um.nc', pi_suite='cs568', fig_name=None):
+def plot_integrated_gw (base_dir='./', timeseries_file_um='timeseries_um.nc', pi_suite='cs495', fig_name=None):
 
     sim_names, colours, sim_dirs = set_expt_list(separate_stages=True)
     datas = []
@@ -321,7 +321,7 @@ def align_timeseries (data1, data2):
 
 # Plot the timeseries of one or more experiments/ensembles (expts can be a string, a list of strings, or a list of lists of string) and one variable against global warming level (relative to preindustrial mean in the given PI suite).
 # If integrate=True, plot as a function of integrated global warming level (i.e. degree-years above preindustrial).
-def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None, integrate=False):
+def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None, integrate=False):
 
     new_ax = ax is None
 
@@ -408,7 +408,7 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs568', base_dir='./', fig_name
 
 
 # Plot timeseries by global warming level for all variables in all experiments.
-def plot_all_by_gw_level (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'draft', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None, pi_suite='cs568', integrate=False):
+def plot_all_by_gw_level (base_dir='./', regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], var_names=['massloss', 'draft', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt', 'temp_btw_200_700m', 'salt_btw_200_700m', 'drake_passage_transport'], timeseries_file='timeseries.nc', timeseries_file_u='timeseries_u.nc', timeseries_file_um='timeseries_um.nc', smooth=24, fig_dir=None, pi_suite='cs495', integrate=False):
 
     sim_names, colours, sim_dirs = set_expt_list(separate_stages=True)
     
@@ -437,7 +437,7 @@ def plot_all_by_gw_level (base_dir='./', regions=['all', 'amundsen_sea', 'bellin
 
 
 # Synthesise all this into a set of 5-panel plots for 3 different variables showing timeseries by GW level.
-def gw_level_panel_plots (base_dir='./', pi_suite='cs568', fig_dir=None, integrate=False):
+def gw_level_panel_plots (base_dir='./', pi_suite='cs495', fig_dir=None, integrate=False):
 
     regions = ['ross', 'filchner_ronne', 'west_antarctica', 'east_antarctica', 'all']
     var_names = ['bwtemp', 'bwsalt', 'massloss']
@@ -832,7 +832,7 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
 def cold_cavity_hysteresis_stats (base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
-    pi_suite = 'cs568'
+    pi_suite = 'cs495'
     timeseries_file_um = 'timeseries_um.nc'
     smooth = 5*months_per_year
     tipping_threshold = -1.9  # If cavity mean temp is warmer than surface freezing point, it's tipped
@@ -912,8 +912,9 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
 
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-    pi_suite = 'cs568'
+    pi_suite = 'cs495'
     regions = ['ross', 'filchner_ronne', 'west_antarctica', 'east_antarctica']
+    title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ', r'$\bf{c}$. ', r'$\bf{d}$. ']
     var_names = ['bwtemp', 'massloss']
     var_titles = ['Bottom temperature on continental shelf and in ice shelf cavities', 'Basal mass loss beneath ice shelves']
     var_units = [deg_string+'C', 'Gt/y']
@@ -931,7 +932,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
         for n in range(len(regions)):
             ax = plt.subplot(gs[n//2, n%2])
             plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=0.75, ax=ax)
-            ax.set_title(region_names[regions[n]], fontsize=14)
+            ax.set_title(title_prefix[n]+region_names[regions[n]], fontsize=14)
             if n == 0:
                 ax.set_ylabel(var_units[v], fontsize=12)
             else:
@@ -959,7 +960,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
 def calc_salinity_bias (base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
-    pi_suite = 'cs568'  # Preindustrial, static cavities
+    pi_suite = 'cs495'  # Preindustrial, static cavities
     hist_suite = 'cy691'  # Historical, static cavities: to get UKESM's idea of warming relative to preindustrial
     timeseries_file_um = 'timeseries_um.nc'
     num_years = 10
@@ -1062,7 +1063,7 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
 
     from scipy.stats import linregress
 
-    pi_suite = 'cs568'
+    pi_suite = 'cs495'
     max_warming_regions = [3, 5]
     smooth = 5*months_per_year
     timeseries_file = 'timeseries.nc'
@@ -1120,13 +1121,14 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     from matplotlib.collections import LineCollection
 
     regions = ['ross', 'filchner_ronne']
+    title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ']
     bwsalt_bias = [-0.14493934, -0.1254287] # Recalculate these when cy691 single copy unavailable errors are gone and warming timeseries has been recalculated
     bias_print_x = [34.3, 34]
     bias_print_y = -1
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
     smooth = 5*months_per_year
-    pi_suite = 'cs568'
+    pi_suite = 'cs495'
     cmap = 'viridis'
 
     # Inner function to read global mean SAT from precomputed timeseries
@@ -1192,7 +1194,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
             #ax.plot(all_bwsalt[n][m], all_cavity_temp[n][m], '-', linewidth=1)
         ax.grid(linestyle='dotted')
         ax.axhline(-1.9, color='black', linestyle='dashed')
-        ax.set_title(region_names[regions[n]], fontsize=16)
+        ax.set_title(title_prefix[n]+region_names[regions[n]], fontsize=16)
         if n==0:
             ax.set_xlabel('Bottom salinity on continental shelf (psu)', fontsize=12)
             ax.set_ylabel('Temperature in ice shelf cavity ('+deg_string+'C)', fontsize=12)
@@ -1216,6 +1218,7 @@ def plot_amundsen_temp_velocity (base_dir='./'):
 
     scenarios = ['piControl', '1.5K', '6K']
     num_scenarios = len(scenarios)
+    title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ', r'$\bf{c}$. ']
     scenario_titles = ['Preindustrial', '1.5'+deg_string+'C stabilisation', '6'+deg_string+'C stabilisation']
     mean_dir = base_dir + '/time_averaged/'
     depth_temp = 500
@@ -1313,7 +1316,7 @@ def plot_amundsen_temp_velocity (base_dir='./'):
         ax.set_xlim([xmin, xmax])
         ax.set_ylim([ymin, ymax])
         ax.tick_params(direction='in')
-        ax.set_title(scenario_titles[n], fontsize=14)
+        ax.set_title(title_prefix[n]+scenario_titles[n], fontsize=14)
         if n == 0:
             latlon_axes(ax)
             ax.clabel(cs, cs.levels, inline=True, fmt={0:'0 Sv'}, fontsize=10)
