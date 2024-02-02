@@ -25,6 +25,9 @@ Rvap = 461.5250
 
 # Degrees to radians conversion factor
 deg2rad = np.pi/180.0
+rad2deg = 1./deg2rad
+# Radius of Earth (m)
+rEarth = 6.371e6
 # Degrees formatted nicely in a string
 deg_string = r'$^{\circ}$'
 # 10^-3 formatted nicely in a string (for absolute salinity)
