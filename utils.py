@@ -1,6 +1,5 @@
 import numpy as np
 import xarray as xr
-import gsw
 from .constants import deg2rad, shelf_lat, shelf_depth, shelf_point0, rho_fw, sec_per_hour, temp_C2K, Rdry, Rvap, vap_pres_c1, vap_pres_c3, vap_pres_c4, region_edges, region_edges_flag, region_names, region_points, months_per_year, rEarth
 
 # Given an array containing longitude, make sure it's in the range (max_lon-360, max_lon). Default is (-180, 180). If max_lon is None, nothing will be done to the array.
@@ -739,6 +738,7 @@ def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True, return_ang
 # dataset: xarray dataset containing variables lon, lat, depth, and THETA (potential temperature) or SALT (practical salinity)
 # var:     string of variable name to convert: THETA or SALT
 def convert_to_teos10(dataset, var='SALT'):
+    import gsw
     # Convert to TEOS10
     # Need 3D lat, lon, pressure at every point, so if 1D or 2D, broadcast to 3D
     if dataset.lon.values.ndim <= 2:
