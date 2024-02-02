@@ -1122,7 +1122,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
     title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ']
-    bwsalt_bias = [-0.14493934, -0.1254287] # Recalculate these when cy691 single copy unavailable errors are gone and warming timeseries has been recalculated
+    bwsalt_bias = [-0.13443893, -0.11137423]
     bias_print_x = [34.3, 34]
     bias_print_y = -1
     timeseries_file = 'timeseries.nc'
