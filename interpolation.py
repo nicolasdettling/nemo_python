@@ -443,6 +443,66 @@ def interp_grid (A, gtype_in, gtype_out, periodic=True, halo=True):
     A.data = A_interp.data
     return A
         
+# Finds the value of the given array to the west, east, south, north of every point, as well as which neighbours are non-missing, and how many neighbours are non-missing.
+# Can also do 1D arrays (so just neighbours to the left and right) if you pass use_1d=True.
+def neighbours (data, missing_val=-9999, use_1d=False):
+
+    # Find the value to the west, east, south, north of every point
+    # Just copy the boundaries
+    data_w          = np.empty(data.shape)
+    data_w[...,1:]  = data[...,:-1]
+    data_w[...,0]   = data[...,0]
+    data_e          = np.empty(data.shape)
+    data_e[...,:-1] = data[...,1:]
+    data_e[...,-1]  = data[...,-1]
+    if not use_1d:
+        data_s            = np.empty(data.shape)
+        data_s[...,1:,:]  = data[...,:-1,:]
+        data_s[...,0,:]   = data[...,0,:]
+        data_n            = np.empty(data.shape)
+        data_n[...,:-1,:] = data[...,1:,:]
+        data_n[...,-1,:]  = data[...,-1,:]
+
+    # Arrays of 1s and 0s indicating whether these neighbours are non-missing
+    valid_w = ((data_w != missing_val)*~np.isnan(data_w)).astype(float)
+    valid_e = ((data_e != missing_val)*~np.isnan(data_e)).astype(float)
+    data_w[np.isnan(data_w)] = 10000 # because 0*NaN = NaN
+    data_e[np.isnan(data_e)] = 10000
+    if use_1d:
+        # Number of valid neighoburs of each point
+        num_valid_neighbours = valid_w + valid_e
+        # Finished
+        return data_w, data_e, valid_w, valid_e, num_valid_neighbours
+
+    valid_s = ((data_s != missing_val)*~np.isnan(data_s)).astype(float)
+    valid_n = ((data_n != missing_val)*~np.isnan(data_n)).astype(float)
+    data_s[np.isnan(data_s)] = 10000
+    data_n[np.isnan(data_n)] = 10000
+
+    num_valid_neighbours = valid_w + valid_e + valid_s + valid_n
+
+    return data_w, data_e, data_s, data_n, valid_w, valid_e, valid_s, valid_n, num_valid_neighbours
+
+# Like the neighbours function, but in the vertical dimension: neighbours above and below
+def neighbours_z (data, missing_val=-9999):
+
+    data_u              = np.empty(data.shape)
+    data_u[...,1:,:,:]  = data[...,:-1,:,:]
+    data_u[...,0,:,:]   = data[...,0,:,:]
+
+    data_d              = np.empty(data.shape)
+    data_d[...,:-1,:,:] = data[...,1:,:,:]
+    data_d[...,-1,:,:]  = data[...,-1,:,:]
+
+    # Land has NaN values in this case, so ignore those points, should probably have a more eloquent solution normally
+    valid_u = ((data_u  != missing_val)*~np.isnan(data_u)).astype(float)
+    valid_d = ((data_d  != missing_val)*~np.isnan(data_d)).astype(float)
+    data_d[np.isnan(data_d)] = 10000 # because 0*NaN = NaN
+    data_u[np.isnan(data_u)] = 10000
+
+    num_valid_neighbours_z = valid_u + valid_d
+
+    return data_u, data_d, valid_u, valid_d, num_valid_neighbours_z
 
     
 
