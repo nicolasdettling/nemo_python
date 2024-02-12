@@ -1,6 +1,5 @@
 import xarray as xr
 import os
-
 from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year, deg_string, gkg_string, drake_passage_lon0, drake_passage_lat_bounds
 from .utils import add_months, closest_point, month_convert
 from .grid import single_cavity_mask, region_mask, calc_geometry
@@ -14,12 +13,23 @@ from .diagnostics import transport
 # <region>_temp, <region>_salt: volume-averaged temperature or salinity from the given region or cavity
 # <region>_temp_btw_xxx_yyy_m, <region>_salt_btw_xxx_yyy_m: volume-averaged temperature or salinity from the given region or cavity, between xxx and yyy metres (positive integers, shallowest first)
 # drake_passage_transport: zonal transport across Drake Passage (need to pass path to domain_cfg)
-def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc', halo=True):
+# Inputs:
+# name_remapping: optional dictionary of dimensions and variable names that need to be remapped to match the code below (depends on the runset)
+# nemo_mesh: optional string of the location of a bathymetry meshmask file for calculating the region masks (otherwise calculates it from ds_nemo)
+def calc_timeseries (var, ds_nemo, name_remapping='', nemo_mesh='', 
+                     domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc', halo=True):
+
+    # Remap NetCDF variable names to match the generalized case:
+    if name_remapping:
+        try:
+            ds_nemo = ds_nemo.rename(name_remapping)
+        except: # if it doesn't seem to need to be renamed, continue looping through
+            pass
     
     # Parse variable name
     factor = 1
     region_type = None
-    region = None
+    region = None    
     if var.endswith('_massloss'):
         option = 'area_int'
         region = var[:var.index('_massloss')]
@@ -110,11 +120,20 @@ def calc_timeseries (var, ds_nemo, domain_cfg='/gws/nopw/j04/terrafirma/kaight/i
                 region_type = 'all'
         if region in region_points and region_type == 'cavity':
             # Single ice shelf
-            mask, ds_nemo, region_name = single_cavity_mask(region, ds_nemo, return_name=True)
+            if nemo_mesh:
+                nemo_file = xr.open_dataset(nemo_mesh)
+                mask, _, region_name = single_cavity_mask(region, nemo_file, return_name=True)
+            else:
+                mask, ds_nemo, region_name = single_cavity_mask(region, ds_nemo, return_name=True)
         else:
-            mask, ds_nemo, region_name = region_mask(region, ds_nemo, option=region_type, return_name=True)
+            if nemo_mesh:
+                nemo_file = xr.open_dataset(nemo_mesh)
+                mask, _, region_name = region_mask(region, nemo_file, option=region_type, return_name=True)
+            else:
+                mask, ds_nemo, region_name = region_mask(region, ds_nemo, option=region_type, return_name=True)
+      
         title += ' for '+region_name    
-        
+
     if option == 'area_int':
         # Area integral
         dA = ds_nemo['area']*mask
@@ -192,7 +211,9 @@ def calc_timeseries_um (var, file_path):
 
 
 # Precompute the given list of timeseries from the given xarray Dataset of NEMO output (or PP file if pp=True). Save in a NetCDF file which concatenates after each call to the function.
-def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True, domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc', pp=False):
+def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True, 
+                           domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc',
+                           name_remapping='', nemo_mesh='', pp=False):
 
     if halo and not pp:
         # Remove the halo
@@ -204,7 +225,8 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
         if pp:
             data = calc_timeseries_um(var, ds_nemo)
         else:
-            data, ds_nemo = calc_timeseries(var, ds_nemo, domain_cfg=domain_cfg, halo=halo)
+            data, ds_nemo = calc_timeseries(var, ds_nemo, domain_cfg=domain_cfg, halo=halo, 
+                                            name_remapping=name_remapping, nemo_mesh=nemo_mesh)
         if ds_new is None:            
             ds_new = xr.Dataset({var:data})
         else:
@@ -227,39 +249,50 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
 
 
 # Precompute timeseries from the given simulation, either from the beginning (timeseries_file does not exist) or picking up where it left off (timeseries_file does exist). Considers all NEMO output files stamped with suite_id in the given directory sim_dir on the given grid (gtype='T', 'U', etc), and assumes the timeseries file is in that directory too.
-def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='timeseries.nc', sim_dir='./', freq='m', halo=True, gtype='T', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
+def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='timeseries.nc', config='', 
+                                  sim_dir='./', freq='m', halo=True, gtype='T', name_remapping='', nemo_mesh='',
+                                  domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
 
     update = os.path.isfile(sim_dir+timeseries_file)
     if update:
         # Timeseries file already exists
         # Get last time index
         ds_ts = xr.open_dataset(sim_dir+timeseries_file)
-        time_last = ds_ts['time_centered'].data[-1]
-        year_last = time_last.year
+        time_last  = ds_ts['time_centered'][-1].dt
+        year_last  = time_last.year
         month_last = time_last.month
         ds_ts.close()
 
     # Identify NEMO output files in the given directory, constructed as wildcard strings for each date code
     nemo_files = []
-    file_tail = '-'+gtype+'.nc'
+    if config=='eANT025':
+        file_tail = f'_{gtype}.nc'
+    else:
+        file_tail = f'-{gtype}.nc'
+        
     for f in os.listdir(sim_dir):
-        if os.path.isdir(sim_dir+'/'+f):
-            # Skip directories
-            continue
-        if not f.endswith(file_tail):
-            # Not a NEMO output file on this grid; skip it
-            continue
-        if f.startswith('nemo_'+suite_id+'o_1'+freq+'_'):
-            # UKESM file naming conventions
-            file_head = 'nemo_'+suite_id+'o_1'+freq+'_'
-        elif f.startswith(suite_id+'_1'+freq+'_'):
-            # Standalone NEMO file naming conventions
-            file_head = suite_id+'_1'+freq+'_'
+        if os.path.isdir(f'{sim_dir}/{f}'): continue # skip directories
+        if not f.endswith(file_tail): continue    # Not a NEMO output file on this grid; skip it
+
+        if config=='eANT025':
+            if f.startswith(f'{config}.{suite_id}_1{freq}_'):
+                # file naming conventions
+                file_head = f'{config}.{suite_id}_1{freq}_' 
+            else:
+                # Something else; skip it
+                continue
         else:
-            # Something else; skip it
-            continue
+            if f.startswith('nemo_'+suite_id+'o_1'+freq+'_'):
+                # UKESM file naming conventions
+                file_head = 'nemo_'+suite_id+'o_1'+freq+'_'
+            elif f.startswith(suite_id+'_1'+freq+'_'):
+                # Standalone NEMO file naming conventions
+                file_head = suite_id+'_1'+freq+'_'
+            else:
+                # Something else; skip it
+                continue
         # Extract date code (yyyymmdd_yyyymmdd)
-        date_code = f[len(file_head):len(file_head)+17]
+        date_code = f"{(f.split(f'{file_head}')[1]).split('_')[0]}_{(f.split(f'{file_head}')[1]).split('_')[1]}"
         if update:
             # Need to check if date code has already been processed
             year = int(date_code[:4])
@@ -268,7 +301,7 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
                 # Skip it
                 continue
         # Now construct wildcard string and add to list if it's not already there
-        file_pattern = file_head + date_code + '*' + file_tail
+        file_pattern = f'{file_head}{date_code}*{file_tail}'
         if file_pattern not in nemo_files:
             nemo_files.append(file_pattern)        
     # Now sort alphabetically - i.e. by ascending date code
@@ -277,12 +310,13 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
     # Loop through each date code and process
     for file_pattern in nemo_files:
         print('Processing '+file_pattern)
-        if os.path.isfile(sim_dir+'/'+file_pattern.replace('*','_isf')) and not os.path.isfile(sim_dir+'/'+file_pattern.replace('*','_grid')):
+        if os.path.isfile(f"{sim_dir}/{file_pattern.replace('*','_isf')}") and not os.path.isfile(f"{sim_dir}/{file_pattern.replace('*','_grid')}"):
             print('Warning: isf-T file exists with no matching grid-T file. Probably reached the end of complete months pulled from MASS. Stopping')
             break
-        ds_nemo = xr.open_mfdataset(sim_dir+'/'+file_pattern)
+        ds_nemo = xr.open_mfdataset(f'{sim_dir}/{file_pattern}')
         ds_nemo.load()
-        precompute_timeseries(ds_nemo, timeseries_types, sim_dir+'/'+timeseries_file, halo=halo, domain_cfg=domain_cfg)
+        precompute_timeseries(ds_nemo, timeseries_types, f'{sim_dir}/{timeseries_file}', halo=halo, domain_cfg=domain_cfg,
+                              name_remapping=name_remapping, nemo_mesh=nemo_mesh)
         ds_nemo.close()
 
 
