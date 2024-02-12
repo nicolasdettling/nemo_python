@@ -1,6 +1,7 @@
 import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import netCDF4 as nc
 
 from ..grid import region_mask
@@ -46,7 +47,8 @@ def find_cgrid_issues (grid_file='/gws/nopw/j04/terrafirma/kaight/input_data/gri
     fig.savefig('misaligned_cells.png')
 
 
-def plot_region_map (file_path='/gws/nopw/j04/terrafirma/kaight/input_data/grids/mesh_mask_UKESM1.1_ice.nc', option='all', fig_name=None, halo=True):
+def plot_region_map (file_path='/gws/nopw/j04/terrafirma/kaight/input_data/grids/mesh_mask_UKESM1.1_ice.nc', option='all', 
+                     legend=False, fig_name=None, halo=True):
 
     regions = ['amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross']
     colours = ['IndianRed', 'SandyBrown', 'LightGreen', 'MediumTurquoise', 'SteelBlue', 'Plum', 'Pink']
@@ -66,6 +68,11 @@ def plot_region_map (file_path='/gws/nopw/j04/terrafirma/kaight/input_data/grids
         else:
             circumpolar_plot(mask, grid, ax=ax, make_cbar=False, ctype=colours[n], lat_max=lat_max, shade_land=False)
 
+    if legend:
+        custom_lines=[]
+        for colour in colours:
+            custom_lines = custom_lines + [Line2D([0], [0], color=colour, lw=3)]
+        ax.legend(custom_lines, regions, frameon=False, loc=(1.05, 0.5))
     finished_plot(fig, fig_name=fig_name)
 
 
