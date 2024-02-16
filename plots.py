@@ -254,6 +254,20 @@ def timeseries_by_expt (var_name, sim_dirs, sim_names=None, colours=None, timese
                 units = ds[var_name].units
 
     timeseries_plot(datas, labels=labels, colours=colours_plot, title=title, units=units, fig_name=fig_name, linewidth=linewidth)
-        
+
+
+# Function to create mp4 animation from image files (jpg or png)
+# Input:
+# filenames: list of strings of image file names (in sorted order)
+# out_file: string of name and path for animation
+def create_animation (filenames, out_file='test.mp4'):
+    import imageio
+    
+    # filenames is a list of the names/locations of image files to combine into animation (mp4 in this case)
+    with imageio.get_writer(f'{out_file}', fps=2, mode='I') as writer: 
+        for filename in filenames:  
+            image = imageio.imread(filename)  
+            writer.append_data(image)
+    return
 
     
