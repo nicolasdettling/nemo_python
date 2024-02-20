@@ -204,7 +204,7 @@ def process_topo (in_file='eORCA025_BedMachine3_IBCSO_AIS.nc', coordinates_file=
         #circumpolar_plot(y-topo['y2d'].where(topo['omask']==1), nemo, title='Error in y-coordinate (m)', ctype='plusminus', masked=True)
         #circumpolar_plot(topo['num_points'].where(topo['omask']==1), nemo, title='num_points', masked=True)
         for var in ['Bathymetry', 'Bathymetry_isf', 'isf_draft']:
-            circumpolar_plot(output[var], nemo, title=var, masked=True)
+            circumpolar_plot(output[var], nemo, title=var, masked=True, shade_land=False)
 
 
 # Helper function to add grounded icebergs to Bear Ridge.
