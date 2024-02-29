@@ -280,13 +280,17 @@ def create_animation (filenames, out_file='test.mp4'):
 # cmap : colormap
 # Output: jpg figures in temp/ directory within the run directory and an animation within an animations/ sub-directory
 def animate_2D_circumpolar(run_folder, var, stub, nemo_mesh=nemo_mesh, vlim=(0,100), cmap='viridis'):
+    
+    import glob 
+    import os
+    from tqdm import tqdm
 
     files = glob.glob(f'{run_folder}eANT025.L121_1m_????0101_????1231_{stub}.nc')
     try: os.mkdir(f'{run_folder}temp/') # create temporary runs directory
     except: pass
 
     # loop over the file list to create the animation
-    for file in tqdm.tqdm(files):
+    for file in tqdm(files):
         with xr.open_dataset(file) as ds:
             for t, time in enumerate(ds.time_counter):
                 fig, ax = plt.subplots(1,1, figsize=(10,8))
