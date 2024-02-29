@@ -9,10 +9,10 @@ from .plot_utils import set_colours
 from .constants import line_colours, region_names
 
 # If a figure name is defined, save the figure to that file. Otherwise, display the figure on screen.
-def finished_plot (fig, fig_name=None, dpi=None):
+def finished_plot (fig, fig_name=None, dpi=None, print_out=True):
 
     if fig_name is not None:
-        print(('Saving ' + fig_name))
+        if print_out: print(('Saving ' + fig_name))
         fig.savefig(fig_name, dpi=dpi)
     else:
         fig.show()
