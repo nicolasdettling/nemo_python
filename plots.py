@@ -270,4 +270,39 @@ def create_animation (filenames, out_file='test.mp4'):
             writer.append_data(image)
     return
 
+### Function that produces an animation of a 2D circumpolar field
+# Inputs:
+# run_folder : string of run directory path
+# var : string of the variable name to visualize from the NetCDF files 
+# stub : string of the end of name of run file (for ex: grid_T, icemod etc.)
+# nemo_mesh : xarray dataset of NEMO mesh mask file for grid
+# vlim : colorbar lower and upper limits
+# cmap : colormap
+# Output: jpg figures in temp/ directory within the run directory and an animation within an animations/ sub-directory
+def animate_2D_circumpolar(run_folder, var, stub, nemo_mesh=nemo_mesh, vlim=(0,100), cmap='viridis'):
+
+    files = glob.glob(f'{run_folder}eANT025.L121_1m_????0101_????1231_{stub}.nc')
+    try: os.mkdir(f'{run_folder}temp/') # create temporary runs directory
+    except: pass
+
+    # loop over the file list to create the animation
+    for file in tqdm.tqdm(files):
+        with xr.open_dataset(file) as ds:
+            for t, time in enumerate(ds.time_counter):
+                fig, ax = plt.subplots(1,1, figsize=(10,8))
+                circumpolar_plot(ds[var].isel(time_counter=t), nemo_mesh, ax=ax, make_cbar=True, 
+                                 return_fig=False, ctype=cmap, lat_max=-50, vmin=vlim[0], vmax=vlim[1],
+                                 title=f'{ds[var].long_name} \n {time.dt.year.values}-{time.dt.month.values:02}-{time.dt.day.values:02}')
+                fig.tight_layout()
+                finished_plot(fig, print_out=False,
+                              fig_name=f'{run_folder}temp/{var}-y{time.dt.year.values}m{time.dt.month.values:02}d{time.dt.day.values:02}.jpg')
+                plt.close()
+
+    try: os.mkdir(f'{run_folder}animations/') # create temporary runs directory
+    except: pass
+    
+    filenames =np.sort(glob.glob(f'{run_folder}temp/{var}-y????m??d??.jpg'))
+    create_animation(filenames, out_file=f'{run_folder}animations/animation_{var}.mp4')
+
+    return
     
