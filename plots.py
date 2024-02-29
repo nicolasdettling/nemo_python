@@ -279,7 +279,7 @@ def create_animation (filenames, out_file='test.mp4'):
 # vlim : colorbar lower and upper limits
 # cmap : colormap
 # Output: jpg figures in temp/ directory within the run directory and an animation within an animations/ sub-directory
-def animate_2D_circumpolar(run_folder, var, stub, nemo_mesh=nemo_mesh, vlim=(0,100), cmap='viridis'):
+def animate_2D_circumpolar(run_folder, var, stub, nemo_mesh, vlim=(0,100), cmap='viridis'):
     
     import glob 
     import os
