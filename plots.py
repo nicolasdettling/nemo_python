@@ -37,7 +37,7 @@ def finished_plot (fig, fig_name=None, dpi=None, print_out=True):
 # shade_land: whether to shade the land mask in grey
 
 # TODO contour ice front
-def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None, periodic=True, lat_max=None, contour=None, shade_land=True):
+def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None, periodic=True, lat_max=None, contour=None, shade_land=True, cbar_kwags={}):
 
     new_fig = ax is None
     if title is None:
@@ -108,7 +108,7 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
     ax.axis('off')
     ax.set_title(title, fontsize=titlesize)
     if make_cbar:
-        plt.colorbar(img)
+        plt.colorbar(img, **cbar_kwags)
     if return_fig:
         return fig, ax
     elif fig_name is not None:
@@ -258,8 +258,8 @@ def timeseries_by_expt (var_name, sim_dirs, sim_names=None, colours=None, timese
 
 # Function to create mp4 animation from image files (jpg or png)
 # Input:
-# filenames: list of strings of image file names (in sorted order)
-# out_file: string of name and path for animation
+# filenames : list of strings of image file names (in sorted order)
+# out_file  : (optional) string of name and path for animation
 def create_animation (filenames, out_file='test.mp4'):
     import imageio
     
@@ -273,40 +273,67 @@ def create_animation (filenames, out_file='test.mp4'):
 ### Function that produces an animation of a 2D circumpolar field
 # Inputs:
 # run_folder : string of run directory path
-# var : string of the variable name to visualize from the NetCDF files 
-# stub : string of the end of name of run file (for ex: grid_T, icemod etc.)
-# nemo_mesh : xarray dataset of NEMO mesh mask file for grid
-# vlim : colorbar lower and upper limits
-# cmap : colormap
-# Output: jpg figures in temp/ directory within the run directory and an animation within an animations/ sub-directory
-def animate_2D_circumpolar(run_folder, var, stub, nemo_mesh, vlim=(0,100), cmap='viridis'):
+# var        : string of the variable name to visualize from the NetCDF files 
+# stub       : string of the end of name of run file (for ex: grid_T, icemod etc.)
+# vlim       : (optional) colorbar lower and upper limits
+# cmap       : (optional) colormap
+# nemo_mesh  : (optional) string of location of NEMO mesh mask file for grid
+# Output: jpg figures in animations/ directory within the run directory and an animation within an animations/ sub-directory
+def animate_2D_circumpolar(run_folder, var, stub, vlim=(0,100), cmap='viridis',
+                           nemo_mesh='/gws/nopw/j04/terrafirma/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
+    import glob
+
+    # Load necessary NetCDF files:
+    nemo_mesh_ds  = xr.open_dataset(nemo_mesh).isel(time_counter=0)
+    file_list     = glob.glob(f'{run_folder}*{stub}*.nc')
+    animate_ds    = xr.open_mfdataset(file_list)
+
+    # Create figure for each timestep:
+    for t, time in enumerate(animate_ds.time_counter):
+        fig, ax = plt.subplots(1,1, figsize=(10,8))
+        circumpolar_plot(animate_ds[var].isel(time_counter=t), nemo_mesh_ds, ax=ax, make_cbar=True, 
+                         return_fig=False, ctype=cmap, lat_max=-50, vmin=vlim[0], vmax=vlim[1],
+                         title=f'{animate_ds[var].long_name} \n {time.dt.year.values}-{time.dt.month.values:02}-{time.dt.day.values:02}')
+        fig.tight_layout()
+        finished_plot(fig, print_out=False,
+                      fig_name=f'{run_folder}animations/frames/{var}-y{time.dt.year.values}m{time.dt.month.values:02}d{time.dt.day.values:02}.jpg')
+        plt.close()
     
-    import glob 
-    import os
-    from tqdm import tqdm
-
-    files = glob.glob(f'{run_folder}eANT025.L121_1m_????0101_????1231_{stub}.nc')
-    try: os.mkdir(f'{run_folder}temp/') # create temporary runs directory
-    except: pass
-
-    # loop over the file list to create the animation
-    for file in tqdm(files):
-        with xr.open_dataset(file) as ds:
-            for t, time in enumerate(ds.time_counter):
-                fig, ax = plt.subplots(1,1, figsize=(10,8))
-                circumpolar_plot(ds[var].isel(time_counter=t), nemo_mesh, ax=ax, make_cbar=True, 
-                                 return_fig=False, ctype=cmap, lat_max=-50, vmin=vlim[0], vmax=vlim[1],
-                                 title=f'{ds[var].long_name} \n {time.dt.year.values}-{time.dt.month.values:02}-{time.dt.day.values:02}')
-                fig.tight_layout()
-                finished_plot(fig, print_out=False,
-                              fig_name=f'{run_folder}temp/{var}-y{time.dt.year.values}m{time.dt.month.values:02}d{time.dt.day.values:02}.jpg')
-                plt.close()
-
-    try: os.mkdir(f'{run_folder}animations/') # create temporary runs directory
-    except: pass
-    
-    filenames =np.sort(glob.glob(f'{run_folder}temp/{var}-y????m??d??.jpg'))
+    # Create animation from frames:
+    filenames =np.sort(glob.glob(f'{run_folder}animations/frames/{var}-y????m??d??.jpg'))
     create_animation(filenames, out_file=f'{run_folder}animations/animation_{var}.mp4')
 
     return
     
+### Function that produces a hovmoeller plot of the specified xarray datarray
+# Inputs:
+# datarray   : xarray dataarray of the variable to create the Hovmoeller plot from (with time_centered and deptht coordinates)
+# varname    : (optional) string of the variable name to add as colorbar label
+# title      : (optional) string of title for plot
+# fig_size   : (optional) tuple dimensions of figure
+# return_fig : (optional) boolean to return the figure and axis
+# fig_name   : (optional) string of the name to save the figure as
+# ylim       : (optional) tuple of the limits of the y-axis
+# cmap       : (optional) colormap
+# dpi        : (optional) resolution for saved figure
+# vlim       : (optional) colorbar lower and upper limits
+# Output: jpg figures in animations/ directory within the run directory and an animation within an animations/ sub-directory
+def plot_hovmoeller(datarray, varname='', title=None, fig_size=(8,5), return_fig=False, fig_name=None, ylim=(5500,0), 
+                    cmap='viridis', dpi=None, vlim=(-1.5,0.8)):
+
+    fig, ax = plt.subplots(1,1, figsize=fig_size)
+    cm1 = ax.pcolormesh(datarray.time_centered.values, datarray.deptht.values, datarray.values,
+                        rasterized=True, cmap=cmap, vmin=vlim[0], vmax=vlim[1])
+    fig.colorbar(cm1, ax=ax, label=varname, extend='both')
+    ax.invert_yaxis()
+    ax.set_ylabel('Depth (m)')
+    ax.set_ylim(ylim[0],ylim[1])
+
+    if title is not None:
+        fig.suptitle(title)
+    if fig_name is not None:
+        finished_plot(fig, fig_name=fig_name, dpi=dpi)
+    if return_fig:
+        return fig, ax
+    else:
+        return
