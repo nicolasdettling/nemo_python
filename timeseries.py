@@ -1,5 +1,7 @@
 import xarray as xr
+import numpy as np
 import os
+import glob
 from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year, deg_string, gkg_string, drake_passage_lon0, drake_passage_lat_bounds
 from .utils import add_months, closest_point, month_convert
 from .grid import single_cavity_mask, region_mask, calc_geometry
@@ -365,7 +367,22 @@ def update_simulation_timeseries_um (suite_id, timeseries_types, timeseries_file
         print('Processing '+fname)
         precompute_timeseries(fname, timeseries_types, sim_dir+'/'+timeseries_file, pp=True)
         
+def calc_hovmoeller_region(var, region,
+                           run_folder='/gws/nopw/j04/terrafirma/birgal/NEMO_AIS/output/reference-4.2.2/',
+                           nemo_mesh='/gws/nopw/j04/terrafirma/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
+    
+    # Load gridT files into dataset:
+    gridT_files = glob.glob(f'{run_folder}/*grid_T*')
+    nemo_ds     = xr.open_mfdataset(gridT_files).isel(x_grid_T=region['x'], y_grid_T=region['y']) # load all the gridT files in the run folder
 
+    nemo_mesh_ds     = xr.open_dataset(f'{nemo_mesh}')
+    nemo_mesh_subset = nemo_mesh_ds.rename({'x':'x_grid_T','y':'y_grid_T','nav_lev':'deptht'}).isel(x_grid_T=region['x'], y_grid_T=region['y'], time_counter=0)
+    
+    var_ocean  = xr.where(nemo_mesh_subset.tmask==0, np.nan, nemo_ds[var]) 
+    area_ocean = xr.where(nemo_mesh_subset.tmask==0, np.nan, nemo_ds['area_grid_T']) 
+    region_var = (var_ocean*area_ocean).sum(dim=['x_grid_T','y_grid_T'])/(area_ocean.sum(dim=['x_grid_T','y_grid_T']))
+
+    return region_var
     
                                 
 
