@@ -8,7 +8,9 @@ from ..interpolation import interp_latlon_cf
 from ..file_io import read_schmidtko, read_woa
 
 # Compare the bottom temperature and salinity in NEMO (time-averaged over the given xarray Dataset) to observations: Schmidtko on the continental shelf, World Ocean Atlas 2018 in the deep ocean.
-def bottom_TS_vs_obs (nemo, schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/schmidtko_TS.txt', woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_decav_*00_04.nc', fig_name=None):
+def bottom_TS_vs_obs (nemo, time_ave=True,
+                      schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/schmidtko_TS.txt', 
+                      woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_decav_*00_04.nc', fig_name=None):
 
     obs = read_schmidtko(schmidtko_file=schmidtko_file, eos='teos10')
     woa = read_woa(woa_files=woa_files, eos='teos10')
@@ -20,7 +22,10 @@ def bottom_TS_vs_obs (nemo, schmidtko_file='/gws/nopw/j04/terrafirma/kaight/inpu
     obs_plot = xr.where(obs_interp.isnull(), woa_interp, obs_interp)
 
     # Select the NEMO variables we need and time-average
-    nemo_plot = xr.Dataset({'temp':nemo['sbt'], 'salt':nemo['sbs']}).mean(dim='time_counter')
+    if time_ave:
+        nemo_plot = xr.Dataset({'temp':nemo['sbt'], 'salt':nemo['sbs']}).mean(dim='time_counter')
+    else:
+        nemo_plot = xr.Dataset({'temp':nemo['sbt'], 'salt':nemo['sbs']})
     nemo_plot = nemo_plot.rename({'x_grid_T_inner':'x', 'y_grid_T_inner':'y'})
     # Apply NEMO land mask to both
     nemo_plot = nemo_plot.where(nemo_plot['temp']!=0)
@@ -38,18 +43,22 @@ def bottom_TS_vs_obs (nemo, schmidtko_file='/gws/nopw/j04/terrafirma/kaight/inpu
     var_plot = ['temp', 'salt']
     var_titles = ['Bottom temperature ('+deg_string+'C)', 'Bottom salinity ('+gkg_string+')']
     alt_titles = [None, 'Observations', 'Model bias']
-    vmin = [-2, 34.5]
-    vmax = [2, 35]
+    vmin = [-2, -2, -0.5, 34.5, 34.5, -0.2]
+    vmax = [2, 2, 0.5, 35, 35, 0.2]
     ctype = ['RdBu_r', 'RdBu_r', 'plusminus']
+    i=0
     for v in range(2):
         for n in range(3):
             ax = plt.subplot(gs[v,n])
             ax.axis('equal')
-            img = circumpolar_plot(data_plot[n][var_plot[v]], nemo, ax=ax, masked=True, make_cbar=False, title=(var_titles[v] if n==0 else alt_titles[n]), vmin=(vmin[v] if n<2 else None), vmax=(vmax[v] if n<2 else None), ctype=ctype[n])
+            img = circumpolar_plot(data_plot[n][var_plot[v]], nemo, ax=ax, masked=True, make_cbar=False, 
+                                   title=(var_titles[v] if n==0 else alt_titles[n]), 
+                                   vmin=vmin[i], vmax=vmax[i], ctype=ctype[n], shade_land=False)
+            i+=1
             if n != 1:
                 cax = fig.add_axes([0.01+0.46*n, 0.58-0.48*v, 0.02, 0.3])
                 plt.colorbar(img, cax=cax, extend='both' if n==0 else 'neither')
-    finished_plot(fig, fig_name=fig_name)
+    finished_plot(fig, fig_name=fig_name, dpi=350)
                 
             
     
