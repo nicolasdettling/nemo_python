@@ -1,5 +1,5 @@
 import numpy as np
-
+ 
 # Acceleration due to gravity (m/s^2)
 gravity = 9.81
 # Density of freshwater (kg/m^3)
