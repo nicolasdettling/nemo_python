@@ -3,6 +3,7 @@
 import xarray as xr
 import matplotlib.pyplot as plt
 import glob
+import numpy as np
 
 from ..plots import finished_plot, plot_hovmoeller, animate_2D_circumpolar
 from ..timeseries import calc_hovmoeller_region
@@ -21,9 +22,9 @@ def plot_SSH_trend(run_folder, fig_name, dpi=None):
 
     # Visualize:
     fig, ax = plt.subplots(3,1, figsize=(12,10))
-    SSH_ave.plot(ax=ax[0], xlim=(SSH_ave.time_counter[0], SSH_ave.time_counter[-1]))
-    SSH_max.plot(ax=ax[1], xlim=(SSH_max.time_counter[0], SSH_max.time_counter[-1]))
-    SSH_min.plot(ax=ax[2], xlim=(SSH_min.time_counter[0], SSH_min.time_counter[-1]))
+    SSH_ave.plot(ax=ax[0], xlim=(SSH_ave.time_counter[0], SSH_ave.time_counter[-1] + np.timedelta64(30,'D')))
+    SSH_max.plot(ax=ax[1], xlim=(SSH_max.time_counter[0], SSH_max.time_counter[-1] + np.timedelta64(30,'D')))
+    SSH_min.plot(ax=ax[2], xlim=(SSH_min.time_counter[0], SSH_min.time_counter[-1] + np.timedelta64(30,'D')))
     # horizontal reference lines:
     ax[0].hlines(y=SSH_ave[0], xmin=SSH_ave.time_counter[0], xmax=SSH_ave.time_counter[-1], color='k', linestyle='--')
     ax[1].hlines(y=SSH_max[0], xmin=SSH_max.time_counter[0], xmax=SSH_max.time_counter[-1], color='k', linestyle='--')
@@ -40,7 +41,7 @@ def plot_SSH_trend(run_folder, fig_name, dpi=None):
     return
 
 # Evaluate bottom temperature and salinity with WOA output (two plots: (1) average over time series (2) end state of timeseries)
-def plot_WOA_eval(run_folder, figname1, figname2):
+def plot_WOA_eval(run_folder, figname1, figname2, figname3, nemo_mesh='/gws/nopw/j04/terrafirma/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
 
     # Load gridT files into dataset:
     gridT_files = glob.glob(f'{run_folder}/*grid_T*')
@@ -53,8 +54,9 @@ def plot_WOA_eval(run_folder, figname1, figname2):
     
     # Average full time series:
     bottom_TS_vs_obs(nemo_ds.mean(dim='time_counter'), time_ave=False, fig_name=figname1)
+    bottom_TS_vs_obs(nemo_ds.mean(dim='time_counter'), time_ave=False, nemo_mesh=nemo_mesh, amundsen=True, fig_name=figname2)
     # End state (last year of run):
-    bottom_TS_vs_obs(nemo_ds.isel(time_counter=slice(-12,None)).mean(dim='time_counter'), time_ave=False, fig_name=figname2)
+    bottom_TS_vs_obs(nemo_ds.isel(time_counter=slice(-12,None)).mean(dim='time_counter'), time_ave=False, fig_name=figname3)
     return
 
 # Visualize the timeseries of variable averaged over a region to see convection
@@ -69,7 +71,7 @@ def plot_hovmoeller_convect(run_folder, region, figname1, figname2, title='', tl
     return
 
 # Create animations of some standard variables that are useful to look at
-def animate_vars(run_folder):
+def animate_vars(run_folder, nemo_mesh='/gws/nopw/j04/terrafirma/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
     import cmocean 
 
     var   = ['mldr10_1', 'siconc', 'zos', 'sbt', 'sbs', 'sosst', 'sosss']
@@ -78,6 +80,8 @@ def animate_vars(run_folder):
     cmaps = ['viridis', 'viridis', cmocean.cm.balance, cmocean.cm.balance, cmocean.cm.haline, cmocean.cm.balance, cmocean.cm.haline]
 
     for v in range(len(var)):
-        animate_2D_circumpolar(run_folder, var[v], stub[v], vlim=vlims[v], cmap=cmaps[v])
+        animate_2D_circumpolar(run_folder, var[v], stub[v], vlim=vlims[v], cmap=cmaps[v], nemo_mesh=nemo_mesh)
 
     return
+
+
