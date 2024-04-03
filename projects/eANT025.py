@@ -11,30 +11,52 @@ from ..projects.evaluation import bottom_TS_vs_obs
 
 
 # Calculate and plot domain-wide sea surface height time series:
-def plot_SSH_trend(run_folder, fig_name, dpi=None):
+def plot_SSH_trend(run_folder, fig_name, style='lineplot', dpi=None, nemo_mesh='/gws/nopw/j04/terrafirma/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
+    # Load meshmask
+    mesh_ds    = xr.open_dataset(nemo_mesh)
 
     # Load SSH into dataset and calculate domain-wide average, minimum, maximum:
     gridT_files = glob.glob(f'{run_folder}/*grid_T*')
-    SSH_ds  = xr.open_mfdataset(gridT_files) # load all the gridT files in the run folder
-    SSH_ave = ((SSH_ds.zos*SSH_ds.area_grid_T).sum(dim=('x_grid_T', 'y_grid_T')) / SSH_ds.area_grid_T.sum(dim=('x_grid_T', 'y_grid_T')))
+    SSH_ds      = xr.open_mfdataset(gridT_files) # load all the gridT files in the run folder
+    ocean_area  = xr.where(mesh_ds.tmask.isel(time_counter=0, nav_lev=0).values==0, 0, SSH_ds.area_grid_T)
+
+    SSH_ave = ((SSH_ds.zos*ocean_area).sum(dim=('x_grid_T', 'y_grid_T')) / ocean_area.sum(dim=('x_grid_T', 'y_grid_T')))
     SSH_max = SSH_ds.zos.max(dim=('x_grid_T','y_grid_T'))
     SSH_min = SSH_ds.zos.min(dim=('x_grid_T','y_grid_T'))
 
-    # Visualize:
-    fig, ax = plt.subplots(3,1, figsize=(12,10))
-    SSH_ave.plot(ax=ax[0], xlim=(SSH_ave.time_counter[0], SSH_ave.time_counter[-1] + np.timedelta64(30,'D')))
-    SSH_max.plot(ax=ax[1], xlim=(SSH_max.time_counter[0], SSH_max.time_counter[-1] + np.timedelta64(30,'D')))
-    SSH_min.plot(ax=ax[2], xlim=(SSH_min.time_counter[0], SSH_min.time_counter[-1] + np.timedelta64(30,'D')))
-    # horizontal reference lines:
-    ax[0].hlines(y=SSH_ave[0], xmin=SSH_ave.time_counter[0], xmax=SSH_ave.time_counter[-1], color='k', linestyle='--')
-    ax[1].hlines(y=SSH_max[0], xmin=SSH_max.time_counter[0], xmax=SSH_max.time_counter[-1], color='k', linestyle='--')
-    ax[2].hlines(y=SSH_min[0], xmin=SSH_min.time_counter[0], xmax=SSH_min.time_counter[-1], color='k', linestyle='--')
-    # labels:
-    ax[0].set_ylabel('Domain average SSH')
-    ax[1].set_ylabel('Domain maximum SSH')
-    ax[2].set_ylabel('Domain minimum SSH')
-    for axis in ax.ravel():
-        axis.set_xlabel('')
+    if style=='lineplot':
+        # Visualize:
+        fig, ax = plt.subplots(3,1, figsize=(12,10))
+        SSH_ave.plot(ax=ax[0], xlim=(SSH_ave.time_counter[0], SSH_ave.time_counter[-1] + np.timedelta64(30,'D')))
+        SSH_max.plot(ax=ax[1], xlim=(SSH_max.time_counter[0], SSH_max.time_counter[-1] + np.timedelta64(30,'D')))
+        SSH_min.plot(ax=ax[2], xlim=(SSH_min.time_counter[0], SSH_min.time_counter[-1] + np.timedelta64(30,'D')))
+        # horizontal reference lines:
+        ax[0].hlines(y=SSH_ave[0], xmin=SSH_ave.time_counter[0], xmax=SSH_ave.time_counter[-1], color='k', linestyle='--')
+        ax[1].hlines(y=SSH_max[0], xmin=SSH_max.time_counter[0], xmax=SSH_max.time_counter[-1], color='k', linestyle='--')
+        ax[2].hlines(y=SSH_min[0], xmin=SSH_min.time_counter[0], xmax=SSH_min.time_counter[-1], color='k', linestyle='--')
+        # labels:
+        ax[0].set_ylabel('Domain average SSH')
+        ax[1].set_ylabel('Domain maximum SSH')
+        ax[2].set_ylabel('Domain minimum SSH')
+        for axis in ax.ravel():
+            axis.set_xlabel('')
+    elif style=='histogram':
+        import seaborn as sns
+        import cmocean
+        time  = np.repeat(SSH_ds.time_counter.values, SSH_ds.dims['x_grid_T']*SSH_ds.dims['y_grid_T'])
+        SSH   = SSH_ds.zos.stack(cells=['x_grid_T','y_grid_T']).values.flatten()
+        timem = np.delete(time,(SSH==0) | (np.isnan(SSH)))
+        SSHm  = np.delete(SSH, (SSH==0) | (np.isnan(SSH)))
+        aream = np.delete(ocean_area.values, (SSH==0) | (np.isnan(SSH)))
+
+        fig, ax = plt.subplots(1,1, figsize=(12,6))
+        sns.histplot(x=timem, y=SSHm, ax=ax, bins=(SSH_ds.dims['time_counter'], 40), weights=aream, \
+                     cmap=cmocean.cm.matter,cbar=True, cbar_kws=dict(shrink=.75))
+        SSH_ave.plot(ax=ax, c='k')
+        ax.set_ylim(-2, 0.5)
+
+    else:
+        raise Exception('Style can be either lineplot or histogram')
 
     finished_plot(fig, fig_name=fig_name, dpi=dpi)
     
