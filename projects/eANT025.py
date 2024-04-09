@@ -6,11 +6,51 @@ import glob
 import numpy as np
 
 from ..plots import finished_plot, plot_hovmoeller, animate_2D_circumpolar
+from ..utils import moving_average
 from ..timeseries import calc_hovmoeller_region
 from ..projects.evaluation import bottom_TS_vs_obs
-
+from ..constants import region_names
 
 # Calculate and plot domain-wide sea surface height time series:
+# Function plots two timeseries as one extended timeseries figure (ds1, then ds2)
+# Inputs:
+# path_ts1 : string of path to timeseries1 (for example, dataset of spin up timeseries)
+# path_ts2 : string of path to timeseries2 (for example, dataset of results timeseries)
+# var      : string name of variable to plot
+# regions  : list of strings of regions to visualize
+# smooth   : length of window for moving average
+def plot_extended_timeseries(path_ts1, path_ts2, var, fig_name, title='',
+                             regions=['amundsen_sea','bellingshausen_sea','larsen','filchner_ronne','ross', 'amery', 'all'],
+                             colours=['IndianRed', 'SandyBrown', 'LightGreen', 'MediumTurquoise', 'Plum', 'Pink', 'gray'], dpi=None, smooth=0):
+    # load timeseries datasets
+    ds1 = xr.open_dataset(f'{path_ts1}')
+    ds2 = xr.open_dataset(f'{path_ts2}')
+
+    fig, (ax, ax2) = plt.subplots(1,2, figsize=(12,7), sharey=True, facecolor='w')
+    plt.subplots_adjust(wspace=0)
+    
+    # plot the same data on both axes
+    for region, colour in zip(regions, colours):    
+        ds1_plot = moving_average(ds1[f'{region}_{var}'], smooth)
+        ds2_plot = moving_average(ds2[f'{region}_{var}'], smooth)
+        ax.plot(ds1['time_centered'][0:-smooth], ds1_plot, c=colour)
+        ax2.plot(ds2['time_centered'][0:-smooth], ds2_plot, c=colour, label=region_names[region])
+    
+    # hide the spines between ax and ax2
+    ax.spines['right'].set_visible(False)
+    ax2.spines['left'].set_visible(False)
+    ax.yaxis.tick_left()
+    ax2.yaxis.tick_right()
+    ax2.legend()
+    # print(ds1[f'{region}_{var}'].long_name.split(f'for {region_names[region]}')[0])
+    ylabel = f"{ds1[f'{region}_{var}'].long_name.split('for')[0]} ({ds1[f'{region}_{var}'].units})"
+    ax.set_ylabel(ylabel)
+    fig.suptitle(title)
+    
+    finished_plot(fig, fig_name=fig_name, dpi=dpi)
+    
+    return
+
 def plot_SSH_trend(run_folder, fig_name, style='lineplot', dpi=None, nemo_mesh='/gws/nopw/j04/terrafirma/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
     # Load meshmask
     mesh_ds    = xr.open_dataset(nemo_mesh)
@@ -50,7 +90,7 @@ def plot_SSH_trend(run_folder, fig_name, style='lineplot', dpi=None, nemo_mesh='
         aream = np.delete(ocean_area.values, (SSH==0) | (np.isnan(SSH)))
 
         fig, ax = plt.subplots(1,1, figsize=(12,6))
-        sns.histplot(x=timem, y=SSHm, ax=ax, bins=(SSH_ds.dims['time_counter'], 40), weights=aream, \
+        sns.histplot(x=timem, y=SSHm, ax=ax, bins=(SSH_ds.dims['time_counter'], 50), weights=aream, \
                      cmap=cmocean.cm.matter,cbar=True, cbar_kws=dict(shrink=.75))
         SSH_ave.plot(ax=ax, c='k')
         ax.set_ylim(-2, 0.5)
