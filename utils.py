@@ -476,7 +476,7 @@ def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True, return_ang
 # Inputs: 
 # dataset: xarray dataset containing variables lon, lat, depth, and THETA (potential temperature) or SALT (practical salinity)
 # var:     string of variable name to convert: THETA or SALT
-def convert_to_teos10(dataset, var='SALT'):
+def convert_to_teos10(dataset, var='SP'):
     import gsw
     # Convert to TEOS10
     # Check if dataset contains pressure, otherwise use depth:
@@ -495,23 +495,33 @@ def convert_to_teos10(dataset, var='SALT'):
     else:
         press = np.abs(dataset[var_press])
     
-    if var=='SALT':
+    if var=='SP':
         # Get absolute salinity from practical salinity
         absS  = gsw.SA_from_SP(dataset[var], press, lon, lat)
 
         return absS
-    elif var=='THETA':    
-        if 'SALT' in list(dataset.keys()):
+    elif var=='T':    
+        if 'SP' in list(dataset.keys()):
             # Get absolute salinity from practical salinity
-            absS  = gsw.SA_from_SP(dataset['SALT'], press, lon, lat)
+            absS  = gsw.SA_from_SP(dataset['SP'], press, lon, lat)
             # Get conservative temperature from potential temperature
             consT  = gsw.CT_from_t(absS, dataset[var], press)
         else:
-            raise Exception('Must include practical salinity (SALT) variable in dataset when converting potential temperature')
+            raise Exception('Must include practical salinity (SP) variable in dataset when converting in-situ temperature')
+        
+        return consT
+    elif var=='PT': # potential temperature    
+        if 'SP' in list(dataset.keys()):
+            # Get absolute salinity from practical salinity
+            absS  = gsw.SA_from_SP(dataset['SP'], press, lon, lat)
+            # Get conservative temperature from potential temperature
+            consT  = gsw.CT_from_pt(absS.values, dataset[var])
+        else:
+            raise Exception('Must include practical salinity (SP) variable in dataset when converting potential temperature')
         
         return consT
     else:
-        raise Exception('Variable options are SALT or THETA')    
+        raise Exception('Variable options are SP, T, PT')    
     
             
 
