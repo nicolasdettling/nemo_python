@@ -479,16 +479,21 @@ def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True, return_ang
 def convert_to_teos10(dataset, var='SALT'):
     import gsw
     # Convert to TEOS10
-    # Need 3D lat, lon, pressure at every point, so if 1D or 2D, broadcast to 3D
+    # Check if dataset contains pressure, otherwise use depth:
+    if 'pressure' in list(dataset.keys()):
+        var_press = 'pressure'
+    else:
+        var_press = 'depth'
+    # Need 3D lat, lon, pressure at every point, so if 1D or 2D, broadcast to 3D    
     if dataset.lon.values.ndim <= 2:
         lon   = xr.broadcast(dataset['lon'], dataset[var])[0]
     if dataset.lat.values.ndim <= 2:
         lat   = xr.broadcast(dataset['lat'], dataset[var])[0]
-    if dataset.depth.values.ndim <= 2:
+    if dataset[var_press].values.ndim <= 2:
         # Need pressure in dbar at every 3D point: approx depth in m
-        press = np.abs(xr.broadcast(dataset['depth'], dataset[var])[0])
+        press = np.abs(xr.broadcast(dataset[var_press], dataset[var])[0])
     else:
-        press = np.abs(dataset['depth'])
+        press = np.abs(dataset[var_press])
     
     if var=='SALT':
         # Get absolute salinity from practical salinity
