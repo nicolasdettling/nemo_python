@@ -2,7 +2,7 @@ import netCDF4 as nc
 import numpy as np
 import xarray as xr
 
-from .utils import select_bottom
+from .utils import select_bottom, convert_to_teos10
 from .interpolation import interp_latlon_cf
 
 # NEMO 4.2 mesh_mask files are written with 2D variables x and y instead of nav_lon and nav_lat - at the same time as 1D dimensions x and y. This causes all manner of problems with xarray so the best thing is just to create a new file from scratch and copy over the variables one at a time, renaming as needed.
