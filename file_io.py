@@ -113,7 +113,7 @@ def read_dutrieux(fileT='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/observations/p
                 eos='teos10'):
     import gsw 
     # Load observations on Amundsen Shelf from Pierre Dutrieux
-    obs    = xr.open_mfdataset([f'{folder_obs}ASEctd_griddedMean_PT.nc', f'{folder_obs}ASEctd_griddedMean_S.nc'])
+    obs    = xr.open_mfdataset([fileT, fileS])
     obs_ds = obs.rename({'PTmean':'PotTemp', 'Smean':'PracSal', 'longrid':'lon', 'latgrid':'lat', 
                          'pvec':'pressure', 'depthvec':'depth'})
 
