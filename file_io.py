@@ -108,4 +108,24 @@ def read_woa (woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_
     woa = xr.Dataset({'temp':woa_temp, 'salt':woa_salt}).drop_vars('depth').squeeze()
     return woa
 
+def read_dutrieux(fileT='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/observations/pierre-dutrieux/ASEctd_griddedMean_PT.nc',
+                fileS='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/observations/pierre-dutrieux/ASEctd_griddedMean_S.nc', 
+                eos='teos10'):
+    import gsw 
+    # Load observations on Amundsen Shelf from Pierre Dutrieux
+    obs    = xr.open_mfdataset([f'{folder_obs}ASEctd_griddedMean_PT.nc', f'{folder_obs}ASEctd_griddedMean_S.nc'])
+    obs_ds = obs.rename({'PTmean':'PotTemp', 'Smean':'PracSal', 'longrid':'lon', 'latgrid':'lat', 
+                         'pvec':'pressure', 'depthvec':'depth'})
 
+    # Convert units to TEOS10
+    if eos=='teos10':
+        obs_AS   = convert_to_teos10(obs_ds, var='PracSal')
+        obs_CT   = convert_to_teos10(obs_ds, var='PotTemp')
+        obs_conv = xr.Dataset({'ConsTemp':(('lat','lon','depth'), obs_CT.values), 'AbsSal':(('lat','lon','depth'), obs_AS.values)})
+        obs_conv = obs_conv.assign_coords({'lon':obs_ds.lon.isel(indexlat=0).values,
+                                           'lat':obs_ds.lat.isel(indexlon=0).values,
+                                           'depth':obs_ds.depth.values})
+    else:
+        obs_conv = obs_ds.copy()
+        
+    return obs_conv
