@@ -60,6 +60,12 @@ def calc_timeseries (var, ds_nemo, name_remapping='', nemo_mesh='',
         nemo_var = 'sob'
         units = gkg_string
         title = 'Bottom salinity'
+    elif var.endswith('_ssh'):
+        option = 'area_avg'
+        region = var[:var.index('_ssh')]
+        nemo_var = 'zos'
+        units = 'm'
+        title = 'Sea surface height'
     elif var.endswith('_temp'):
         option = 'volume_avg'
         region = var[:var.index('_temp')]
@@ -368,8 +374,8 @@ def update_simulation_timeseries_um (suite_id, timeseries_types, timeseries_file
         precompute_timeseries(fname, timeseries_types, sim_dir+'/'+timeseries_file, pp=True)
         
 def calc_hovmoeller_region(var, region,
-                           run_folder='/gws/nopw/j04/terrafirma/birgal/NEMO_AIS/output/reference-4.2.2/',
-                           nemo_mesh='/gws/nopw/j04/terrafirma/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
+                           run_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/output/reference-4.2.2/',
+                           nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
     
     # Load gridT files into dataset:
     gridT_files = glob.glob(f'{run_folder}/*grid_T*')
