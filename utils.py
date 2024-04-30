@@ -1,7 +1,6 @@
 import numpy as np
 import xarray as xr
 from .constants import deg2rad, rho_fw, sec_per_hour, temp_C2K, Rdry, Rvap, vap_pres_c1, vap_pres_c3, vap_pres_c4, months_per_year, rEarth
-from .timeseries import region_mask
 
 # Given an array containing longitude, make sure it's in the range (max_lon-360, max_lon). Default is (-180, 180). If max_lon is None, nothing will be done to the array.
 def fix_lon_range (lon, max_lon=180):
