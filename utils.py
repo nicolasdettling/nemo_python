@@ -1,6 +1,7 @@
 import numpy as np
 import xarray as xr
 from .constants import deg2rad, rho_fw, sec_per_hour, temp_C2K, Rdry, Rvap, vap_pres_c1, vap_pres_c3, vap_pres_c4, months_per_year, rEarth
+from .timeseries import region_mask
 
 # Given an array containing longitude, make sure it's in the range (max_lon-360, max_lon). Default is (-180, 180). If max_lon is None, nothing will be done to the array.
 def fix_lon_range (lon, max_lon=180):
@@ -476,7 +477,7 @@ def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True, return_ang
 # Inputs: 
 # dataset: xarray dataset containing variables lon, lat, depth, and THETA (potential temperature) or SALT (practical salinity)
 # var:     string of variable name to convert: THETA or SALT
-def convert_to_teos10(dataset, var='SP'):
+def convert_to_teos10(dataset, var='PracSal'):
     import gsw
     # Convert to TEOS10
     # Check if dataset contains pressure, otherwise use depth:
@@ -495,35 +496,55 @@ def convert_to_teos10(dataset, var='SP'):
     else:
         press = np.abs(dataset[var_press])
     
-    if var=='SP':
+    if var=='PracSal':
         # Get absolute salinity from practical salinity
         absS  = gsw.SA_from_SP(dataset[var], press, lon, lat)
 
         return absS
-    elif var=='T':    
-        if 'SP' in list(dataset.keys()):
+    elif var=='InsituTemp':    
+        if 'PracSal' in list(dataset.keys()):
             # Get absolute salinity from practical salinity
-            absS  = gsw.SA_from_SP(dataset['SP'], press, lon, lat)
+            absS  = gsw.SA_from_SP(dataset['PracSal'], press, lon, lat)
             # Get conservative temperature from potential temperature
             consT  = gsw.CT_from_t(absS, dataset[var], press)
         else:
-            raise Exception('Must include practical salinity (SP) variable in dataset when converting in-situ temperature')
+            raise Exception('Must include practical salinity (PracSal) variable in dataset when converting in-situ temperature')
         
         return consT
-    elif var=='PT': # potential temperature    
-        if 'SP' in list(dataset.keys()):
+    elif var=='PotTemp': # potential temperature    
+        if 'PracSal' in list(dataset.keys()):
             # Get absolute salinity from practical salinity
-            absS  = gsw.SA_from_SP(dataset['SP'], press, lon, lat)
+            absS  = gsw.SA_from_SP(dataset['PracSal'], press, lon, lat)
             # Get conservative temperature from potential temperature
             consT  = gsw.CT_from_pt(absS.values, dataset[var])
         else:
-            raise Exception('Must include practical salinity (SP) variable in dataset when converting potential temperature')
+            raise Exception('Must include practical salinity (PracSal) variable in dataset when converting potential temperature')
         
         return consT
     else:
-        raise Exception('Variable options are SP, T, PT')    
+        raise Exception('Variable options are PracSal, InsituTemp, PotTemp')    
     
-            
+# Function to create a NetCDF file that contains the region masks
+# Inputs:
+# nemo_mesh : string of nemo meshmask file 
+# option    : mask type ('all', 'cavity', or 'shelf')
+# out_file  : string of output file path
+def create_regions_file(nemo_mesh, option, out_file):
+
+    ds = xr.Dataset(
+        coords={'nav_lon':(["y","x"], nemo_mesh.nav_lon.values),
+                'nav_lat':(["y","x"], nemo_mesh.nav_lat.values)})
+    
+    masks={}
+    # later should be for name in region_names
+    for name in ['amundsen_sea','bellingshausen_sea','larsen','filchner_ronne','ross', 'amery', 'all']: 
+        mask, _, region_name = region_mask(name, nemo_mesh, option=option, return_name=True) 
+        masks[name] = mask 
+        ds = ds.assign({f'mask_{name}':(["y","x"], masks[name].values)})   
+    
+    ds.to_netcdf(out_file)
+    
+    return ds         
 
     
 
