@@ -295,3 +295,26 @@ def get_icefront_mask(mask, side='ice'):
         num_ice_shelf_neighbours = neighbours(ice_shelf, missing_val=0)[-1]
         
         return (open_ocean*(num_ice_shelf_neighbours > 0)).astype(bool)
+
+# Function to create a NetCDF file that contains the region masks
+# Inputs:
+# nemo_mesh : string of nemo meshmask file 
+# option    : mask type ('all', 'cavity', or 'shelf')
+# out_file  : string of output file path
+def create_regions_file(nemo_mesh, option, out_file):
+
+    ds = xr.Dataset(
+        coords={'nav_lon':(["y","x"], nemo_mesh.nav_lon.values),
+                'nav_lat':(["y","x"], nemo_mesh.nav_lat.values)})
+
+    masks={}
+    # later should be for name in region_names
+    for name in ['amundsen_sea','bellingshausen_sea','larsen','filchner_ronne','ross', 'amery', 'all']:
+        mask, _, region_name = region_mask(name, nemo_mesh, option=option, return_name=True)
+        masks[name] = mask
+        ds = ds.assign({f'mask_{name}':(["y","x"], masks[name].values)})
+
+    ds.to_netcdf(out_file)
+
+    return ds
+
