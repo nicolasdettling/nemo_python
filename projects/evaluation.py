@@ -1,11 +1,13 @@
 import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
+import glob
 from ..utils import select_bottom
 from ..constants import deg_string, gkg_string
-from ..plots import circumpolar_plot, finished_plot
+from ..plots import circumpolar_plot, finished_plot, plot_ts_distribution
 from ..interpolation import interp_latlon_cf
-from ..file_io import read_schmidtko, read_woa
+from ..file_io import read_schmidtko, read_woa, read_dutrieux
+from ..grid import extract_var_region
 
 # Compare the bottom temperature and salinity in NEMO (time-averaged over the given xarray Dataset) to observations: Schmidtko on the continental shelf, World Ocean Atlas 2018 in the deep ocean.
 def bottom_TS_vs_obs (nemo, time_ave=True,
@@ -58,10 +60,12 @@ def bottom_TS_vs_obs (nemo, time_ave=True,
        vmin = [-2, -2, -1, 34.2, 34.2, -0.4]
        vmax = [2, 2, 1, 35, 35, 0.4]
 
-       fig, ax = plt.subplots(2,3, figsize=(20,8), subplot_kw={'projection': ccrs.Mercator(latitude_true_scale=-70)})
+       # fig, ax = plt.subplots(2,3, figsize=(20,8), subplot_kw={'projection': ccrs.Mercator(latitude_true_scale=-70)})
+       fig, ax = plt.subplots(2,3, figsize=(18,10), subplot_kw={'projection': ccrs.Mercator(latitude_true_scale=-70)})
 
        for axis in ax.ravel():
-          axis.set_extent([-95, -160, -78, -67], ccrs.PlateCarree())
+          axis.set_extent([-95, -135, -76, -68], ccrs.PlateCarree())
+          # axis.set_extent([-95, -160, -78, -67], ccrs.PlateCarree())
           gl = axis.gridlines(draw_labels=True);
           gl.xlines=None; gl.ylines=None; gl.top_labels=None; gl.right_labels=None;
 
@@ -103,7 +107,46 @@ def bottom_TS_vs_obs (nemo, time_ave=True,
        finished_plot(fig, fig_name=fig_name, dpi=dpi)
                 
             
+# Function creates a figure with T-S diagram for simulations and for Pierre's observations in the Amundsen Sea
+# Inputs:
+# run_folder : string path to simulation folder
+# time_slice : (optional) slice to subset time_counter for averaging simulation
+# depth_slice: (optional) slice to subset deptht from simulation
+# fig_name   : (optional) string for path to save figure if you want to save it
+# return_fig : (optional) boolean for returning fig and ax
+def TS_diagrams_Amundsen (run_folder, time_slice=None, depth_slice=None, fig_name=None, return_fig=False):
+    # --- get data ----
     
+    # load observations
+    obs = read_dutrieux(eos='teos10')
+    
+    # load nemo simulations
+    gridT_files  = glob.glob(f'{run_folder}/*grid_T*') # load all the gridT files in the run folder
+    nemo_ds      = xr.open_mfdataset(gridT_files).rename({'x_grid_T':'x','y_grid_T':'y'}) 
+    if time_slice:
+        nemo_average = nemo_ds.isel(time_counter=time_slice).mean(dim='time_counter') 
+    else:
+        nemo_average = nemo_ds.mean(dim='time_counter')
+    # extract specific region
+    amundsen_so = extract_var_region(nemo_average, 'so'    , 'amundsen_sea')
+    amundsen_to = extract_var_region(nemo_average, 'thetao', 'amundsen_sea')
+    if depth_slice:
+        amundsen_so = amundsen_so.isel(deptht=depth_slice)
+        amundsen_to = amundsen_to.isel(deptht=depth_slice)
+
+    # --- plot distributions -----
+    fig, ax = plt.subplots(1,2,figsize=(18,7), dpi=300)
+    ax[0].set_title('Amundsen Sea simulations')
+    plot_ts_distribution(ax[0], amundsen_so.values.flatten(), amundsen_to.values.flatten(), plot_density=True, plot_freeze=True, bins=150)
+    ax[1].set_title('Amundsen Sea observations Pierre')
+    plot_ts_distribution(ax[1], obs.AbsSal.values.flatten(), obs.ConsTemp.values.flatten(), plot_density=True, plot_freeze=True)
+
+    if fig_name:
+        finished_plot(fig, fig_name=fig_name)
+    if return_fig:
+        return fig, ax
+    else:
+        return
     
     
     
