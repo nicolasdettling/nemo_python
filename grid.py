@@ -318,3 +318,32 @@ def create_regions_file(nemo_mesh, option, out_file):
 
     return ds
 
+# Function to extract a variable masked for a specific region
+# Inputs:
+# ds_nemo      : xarray dataset to extract variable from
+# nemo_var     : string of name of variable to extract
+# region       : string of region name
+# region_type  : (optional) mask type ('all', 'cavity', or 'shelf')
+# regions_file : (optional) string path to regions mask definition netcdf file
+# nemo_domain  : (optional) string path to NEMO domain cfg file to create mask from
+def extract_var_region(ds_nemo, nemo_var, region, 
+                       region_type='all', regions_file='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/output/regions_all.nc', nemo_domain=''):
+
+    # Get mask for Amundsen Sea region
+    if not regions_file:
+        nemo_file = xr.open_dataset(nemo_domain)
+        mask, _, region_name = region_mask(region, nemo_file, option=region_type, return_name=True)
+    else: 
+        region_masks = xr.open_dataset(regions_file)
+        mask = region_masks[f'mask_{region}']
+
+    # Make mask 3D if needed
+    if len(ds_nemo[nemo_var].dims) == 3:
+        mask_d = xr.where(ds_nemo[nemo_var]==0, 0, mask)
+    else:
+        mask_d = mask
+
+    # Extract variable for the specific region and place NaN for land values or locations outside of the region
+    region_var = xr.where(mask_d==0, np.nan, ds_nemo[nemo_var]*mask_d)
+
+    return region_var
