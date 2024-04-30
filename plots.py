@@ -337,3 +337,46 @@ def plot_hovmoeller(datarray, varname='', title=None, fig_size=(8,5), return_fig
         return fig, ax
     else:
         return
+
+# Function to plot a 2D histogram of temperature and salinity values on an axis you pass it
+# Inputs:
+# ax           : matplotlib axis
+# salt         : absolute salinity
+# temp         : conservative temperature
+# smin, smax, tmin, tmax : (optional) bounds for the salinity and temperature axes
+# plot_density : (optional) boolean specifying whether to plot dashed lines of constant potential density in the background
+# plot_freeze  : (optional) boolean specifying whether to plot dashed line of surface freezing temperature in the background
+# lognorm      : (optional) boolean specifying whether to log normalize the histogram counts
+# bins         : (optional) number of bins of histogram
+def plot_ts_distribution(ax, salt, temp, smin=30, smax=35.25, tmin=-3, tmax=2.25, plot_density=False, plot_freeze=False, lognorm=True, bins=400):
+
+    import seaborn as sns
+    import gsw
+    import gsw.freezing as fr
+
+    # Plot surface freezing temperature line
+    if plot_freeze:
+        tfreeze_sfc = fr.CT_freezing(np.linspace(smin, smax), 0, 0) # saturation_fraction=0
+        ax.plot(np.linspace(smin, smax), tfreeze_sfc, color='black', linestyle='dashed', zorder=1)
+
+    # Plot contours of potential density
+    if plot_density:
+        salt_2d, temp_2d = np.meshgrid(np.linspace(smin, smax), np.linspace(tmin, tmax))
+        density = gsw.density.sigma0(salt_2d, temp_2d)
+        ax.contour(salt_2d, temp_2d, density, colors='DarkGrey', linestyles='dotted', zorder=2)
+
+    # Choose whether histogram count is logarithmic or normal
+    if lognorm:
+        kwags={'cbar':True,'ax':ax,'bins':bins,'norm':cl.LogNorm(),'vmin':None,'vmax':None,'zorder':3}
+    else:
+        kwags={'cbar':True,'ax':ax,'bins':bins,'zorder':3}
+    
+    # Plot histogram
+    sns.histplot(x=salt, y=temp, **kwags)
+    
+    ax.set_xlim(smin, smax)
+    ax.set_ylim(tmin, tmax)
+    ax.set_xlabel('Absolute Salinity')
+    ax.set_ylabel('Conservative Temperature')
+
+    return 

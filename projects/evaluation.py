@@ -114,7 +114,7 @@ def bottom_TS_vs_obs (nemo, time_ave=True,
 # depth_slice: (optional) slice to subset deptht from simulation
 # fig_name   : (optional) string for path to save figure if you want to save it
 # return_fig : (optional) boolean for returning fig and ax
-def TS_diagrams_Amundsen (run_folder, time_slice=None, depth_slice=None, fig_name=None, return_fig=False):
+def TS_diagrams_Amundsen (run_folder, time_slice=None, depth_slice=None, fig_name=None, return_fig=False, smin=30, smax=35.25, tmin=-3, tmax=2.25):
     # --- get data ----
     
     # load observations
@@ -137,9 +137,9 @@ def TS_diagrams_Amundsen (run_folder, time_slice=None, depth_slice=None, fig_nam
     # --- plot distributions -----
     fig, ax = plt.subplots(1,2,figsize=(18,7), dpi=300)
     ax[0].set_title('Amundsen Sea simulations')
-    plot_ts_distribution(ax[0], amundsen_so.values.flatten(), amundsen_to.values.flatten(), plot_density=True, plot_freeze=True, bins=150)
+    plot_ts_distribution(ax[0], amundsen_so.values.flatten(), amundsen_to.values.flatten(), plot_density=True, plot_freeze=True, bins=150, smin=smin, smax=smax, tmin=tmin, tmax=tmax)
     ax[1].set_title('Amundsen Sea observations Pierre')
-    plot_ts_distribution(ax[1], obs.AbsSal.values.flatten(), obs.ConsTemp.values.flatten(), plot_density=True, plot_freeze=True)
+    plot_ts_distribution(ax[1], obs.AbsSal.values.flatten(), obs.ConsTemp.values.flatten(), plot_density=True, plot_freeze=True, smin=smin, smax=smax, tmin=tmin, tmax=tmax)
 
     if fig_name:
         finished_plot(fig, fig_name=fig_name)
