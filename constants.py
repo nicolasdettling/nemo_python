@@ -60,6 +60,13 @@ ross_gyre_point0 = [-160, -70]
 weddell_convect = {'x':slice(930,1150), 'y':slice(295,360)}
 ross_convect    = {'x':slice(450,580),  'y':slice(220,300)}
 
+# Dictionary of lons and lats describing transect paths.
+transect_amundsen = {
+    'shelf_west':[[-119,-117,-115.6,-115,-116,-120.6], [-74.08,-73.96,-73.78,-73.3,-72.7,-70.78]],
+    'shelf_mid' :[[-112.6,-114.6], [-74.38,-70.48]],
+    'shelf_east':[[-100.6,-104,-106,-106,-104,-102.6,-101.8], [-75.16,-74.68,-74.2,-73.3,-72.4,-71.2,-69.1]],
+} # transect locations chosen to cross most-sampled regions
+
 # Dictionary of lon-lat points bounding given region. Will be used to "cut" the continental shelf mask (build_shelf_mask in utils.py) either north-south or east-west depending on the value of region_edges_flag. The first point and its connected N/S (or E/W) neighbours will be included in the mask, but not the second. The direction of travel is west to east around the coastline.
 region_edges = {
     'amundsen_sea': [[-157.5, -76.5], [-102.75, -72.5]],
