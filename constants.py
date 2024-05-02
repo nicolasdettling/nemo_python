@@ -60,9 +60,9 @@ ross_gyre_point0 = [-160, -70]
 weddell_convect = {'x':slice(930,1150), 'y':slice(295,360)}
 ross_convect    = {'x':slice(450,580),  'y':slice(220,300)}
 
-# Dictionary of lons and lats describing transect paths.
+# Dictionary of lons and lats describing key waypoints for transect paths.
 transect_amundsen = {
-    'shelf_west':[[-119,-117,-115.6,-115,-116,-120.6], [-74.08,-73.96,-73.78,-73.3,-72.7,-70.78]],
+    'shelf_west':[[-115.5, -115, -116, -120.6], [-74.3, -73.5, -72.5, -70.78]],
     'shelf_mid' :[[-112.6,-114.6], [-74.38,-70.48]],
     'shelf_east':[[-100.6,-104,-106,-106,-104,-102.6,-101.8], [-75.16,-74.68,-74.2,-73.3,-72.4,-71.2,-69.1]],
 } # transect locations chosen to cross most-sampled regions
