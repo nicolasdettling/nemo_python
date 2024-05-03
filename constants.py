@@ -110,3 +110,6 @@ region_names = {
 
 # Default colours to use for plotting lines
 line_colours = ['black', 'Crimson', 'blue', 'DarkMagenta', 'DimGrey', 'DarkGreen', 'DeepPink', 'DeepSkyBlue']
+land_colour     = '#9999a3'
+iceshelf_colour = '#d4d5da' 
+
