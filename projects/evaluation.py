@@ -167,7 +167,7 @@ def transects_Amundsen(run_folder, savefig=False, nemo_mesh='/gws/nopw/j04/anthr
     dutrieux_obs = obs.assign({'nav_lon':obs.lon, 'nav_lat':obs.lat}).rename_dims({'lat':'y', 'lon':'x'})
     
     # calculate transects and plot:
-    for transect in ['shelf_west', 'shelf_mid', 'shelf_east']:
+    for transect in ['shelf_west', 'shelf_mid', 'shelf_east', 'shelf_edge']:
         # get coordinates for the transect:
         x_obs, y_obs = transect_coords_from_latlon_waypoints(dutrieux_obs, transect_amundsen[transect], opt_float=False)
         x_sim, y_sim = transect_coords_from_latlon_waypoints(nemo_results, transect_amundsen[transect], opt_float=False)
