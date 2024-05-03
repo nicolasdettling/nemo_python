@@ -4,12 +4,15 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import glob
 import numpy as np
+import cmocean
 
-from ..plots import finished_plot, plot_hovmoeller, animate_2D_circumpolar
-from ..utils import moving_average
+from ..plots import finished_plot, plot_hovmoeller, animate_2D_circumpolar, plot_transect
+from ..utils import moving_average, distance_along_transect
 from ..timeseries import calc_hovmoeller_region
 from ..projects.evaluation import bottom_TS_vs_obs
-from ..constants import region_names
+from ..constants import region_names, transect_amundsen
+from ..file_io import read_dutrieux
+from ..grid import transect_coords_from_latlon_waypoints
 
 # Calculate and plot domain-wide sea surface height time series:
 # Function plots two timeseries as one extended timeseries figure (ds1, then ds2)
@@ -145,5 +148,52 @@ def animate_vars(run_folder, nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS
         animate_2D_circumpolar(run_folder, var[v], stub[v], vlim=vlims[v], cmap=cmaps[v], nemo_mesh=nemo_mesh)
 
     return
+
+def transects_UV_Amundsen(run_folder, savefig=False, nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
+    # load nemo simulations
+    gridU_files  = glob.glob(f'{run_folder}*grid_U*')
+    gridV_files  = glob.glob(f'{run_folder}*grid_V*')
+    nemoU_ds     = xr.open_mfdataset(gridU_files) # load all the grid files in the run folder
+    nemoV_ds     = xr.open_mfdataset(gridV_files)  
+    nemoU_ds     = nemoU_ds.rename({'depthu':'depth'})
+    nemoV_ds     = nemoV_ds.rename({'depthv':'depth'})
+    nemoU_results = nemoU_ds.isel(time_counter=slice(180,None)).mean(dim='time_counter')  # Average time series
+    nemoV_results = nemoV_ds.isel(time_counter=slice(180,None)).mean(dim='time_counter')
+    nemo_mesh_ds  = xr.open_dataset(nemo_mesh).isel(time_counter=0)
+
+    # calculate transects and plot:
+    for transect in ['shelf_west', 'shelf_mid', 'shelf_east', 'shelf_edge']:
+        # get coordinates for the transect:
+        xU_sim, yU_sim = transect_coords_from_latlon_waypoints(nemoU_results, transect_amundsen[transect], opt_float=False)
+        xV_sim, yV_sim = transect_coords_from_latlon_waypoints(nemoV_results, transect_amundsen[transect], opt_float=False)
+
+        # subset the datasets and nemo_mesh to the coordinates of the transect:
+        simU_transect = nemoU_results.isel(x=xr.DataArray(xU_sim, dims='n'), y=xr.DataArray(yU_sim, dims='n'))
+        simV_transect = nemoV_results.isel(x=xr.DataArray(xV_sim, dims='n'), y=xr.DataArray(yV_sim, dims='n'))
+        nemo_mesh_transectU = nemo_mesh_ds.isel(x=xr.DataArray(xU_sim, dims='n'), y=xr.DataArray(yU_sim, dims='n')).rename({'nav_lev':'depth'})
+        nemo_mesh_transectV = nemo_mesh_ds.isel(x=xr.DataArray(xV_sim, dims='n'), y=xr.DataArray(yV_sim, dims='n')).rename({'nav_lev':'depth'})
+
+        # add tmask, iceshelfmask and depths to the simulation dataset
+        simU_transect = simU_transect.assign({'gdept_0':nemo_mesh_transectU.gdept_0, 'tmask':nemo_mesh_transectU.umask, 'isfdraft':nemo_mesh_transectU.isfdraft})
+        simV_transect = simV_transect.assign({'gdept_0':nemo_mesh_transectV.gdept_0, 'tmask':nemo_mesh_transectV.vmask, 'isfdraft':nemo_mesh_transectV.isfdraft})
+
+        # calculate the distance of each point along the transect relative to the start of the transect:
+        simU_distance = distance_along_transect(simU_transect)
+        simV_distance = distance_along_transect(simV_transect)
+
+        # visualize the transect:
+        fig, ax = plt.subplots(2,1, figsize=(8,6), dpi=300)
+        kwagsU    ={'vmin':-0.15,'vmax':0.15,'cmap':cmocean.cm.balance,'label':'U velocity'}
+        kwagsV    ={'vmin':-0.15,'vmax':0.15,'cmap':cmocean.cm.balance,'label':'V velocity'}
+        kwags_mask={'mask_land':True, 'mask_iceshelf':True}
+        plot_transect(ax[0], simU_distance, simU_transect, 'uo', **kwagsU, **kwags_mask)
+        plot_transect(ax[1], simV_distance, simV_transect, 'vo', **kwagsV, **kwags_mask)
+        ax[1].set_xlabel('Distance (km)')
+
+        if savefig:
+            finished_plot(fig, fig_name=f'{run_folder}figures/transect_UV_{transect}.jpg')
+
+    return
+
 
 
