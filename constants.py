@@ -38,6 +38,9 @@ gkg_string = r'10$^{-3}$'
 region_bounds = {
     'bear_ridge_S': [-110.35, -110.35, -74.35, -73.8791],
     'bear_ridge_N': [-112.05, -109.05, -73.8791, -72.7314],
+    'pine_island_bay': [-104, -100.5, -75.2, -74.2],
+    'dotson_bay': [-114, -110.5, -74.3, -73.5],
+    'amundsen_west_shelf_break': [-115, -112, -72, -71]
 }
 # Isobaths restricting some regions
 region_bathy_bounds = {
@@ -65,6 +68,7 @@ transect_amundsen = {
     'shelf_west':[[-115.5, -115, -116, -120.6], [-74.3, -73.5, -72.5, -70.78]],
     'shelf_mid' :[[-112.6,-114.6], [-74.38,-70.48]],
     'shelf_east':[[-100.6,-104,-106,-106,-104,-102.6,-101.8], [-75.16,-74.68,-74.2,-73.3,-72.4,-71.2,-69.1]],
+    'shelf_edge':[[-137,-135,-132,-131,-127.6,-127,-120.6,-118.6,-114,-102,-97,-93], [-73.7,-73.6,-73.3,-73,-72.7,-72.3,-72.5,-71.7,-71.2,-70.9,-70,-70.3]]
 } # transect locations chosen to cross most-sampled regions
 
 # Dictionary of lon-lat points bounding given region. Will be used to "cut" the continental shelf mask (build_shelf_mask in utils.py) either north-south or east-west depending on the value of region_edges_flag. The first point and its connected N/S (or E/W) neighbours will be included in the mask, but not the second. The direction of travel is west to east around the coastline.
@@ -105,6 +109,9 @@ region_names = {
     'ross': 'Ross',
     'abbot': 'Abbot Ice Shelf',
     'brunt': 'Brunt and Riiser-Larsen Ice Shelves',
+    'pine_island_bay': 'Pine Island Bay',
+    'dotson_bay': 'front of Dotson',
+    'amundsen_west_shelf_break': 'Western Amundsen Sea shelf break',
     'all': 'Antarctic',
 }
 
