@@ -2,12 +2,13 @@ import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
 import glob
-from ..utils import select_bottom
-from ..constants import deg_string, gkg_string
-from ..plots import circumpolar_plot, finished_plot, plot_ts_distribution
+import cmocean
+from ..utils import select_bottom, distance_along_transect
+from ..constants import deg_string, gkg_string, transect_amundsen
+from ..plots import circumpolar_plot, finished_plot, plot_ts_distribution, plot_transect
 from ..interpolation import interp_latlon_cf
 from ..file_io import read_schmidtko, read_woa, read_dutrieux
-from ..grid import extract_var_region
+from ..grid import extract_var_region, transect_coords_from_latlon_waypoints
 
 # Compare the bottom temperature and salinity in NEMO (time-averaged over the given xarray Dataset) to observations: Schmidtko on the continental shelf, World Ocean Atlas 2018 in the deep ocean.
 def bottom_TS_vs_obs (nemo, time_ave=True,
@@ -149,6 +150,59 @@ def TS_diagrams_Amundsen (run_folder, time_slice=None, depth_slice=None, fig_nam
         return
     
     
+# Function produces figures of transects of observations on the Amundsen Sea shelf and simulation results    
+# Inputs:
+# run_folder : string path to folder containing NEMO simulations (gridT files)
+# savefig    : (optional) boolean whether to save figure within figures sub-directory in run_folder
+def transects_Amundsen(run_folder, savefig=False, nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
+    # load nemo simulations
+    gridT_files  = glob.glob(f'{run_folder}*grid_T*')
+    nemo_ds      = xr.open_mfdataset(gridT_files) # load all the gridT files in the run folder
+    nemo_ds      = nemo_ds.rename({'x_grid_T':'x', 'y_grid_T':'y', 'nav_lon_grid_T':'nav_lon', 'nav_lat_grid_T':'nav_lat', 'deptht':'depth'}) 
+    nemo_results = nemo_ds.isel(time_counter=slice(180,None)).mean(dim='time_counter')  # Average time series
+    nemo_mesh_ds  = xr.open_dataset(nemo_mesh).isel(time_counter=0)
     
+    # load observations:
+    obs          = read_dutrieux(eos='teos10')
+    dutrieux_obs = obs.assign({'nav_lon':obs.lon, 'nav_lat':obs.lat}).rename_dims({'lat':'y', 'lon':'x'})
+    
+    # calculate transects and plot:
+    for transect in ['shelf_west', 'shelf_mid', 'shelf_east']:
+        # get coordinates for the transect:
+        x_obs, y_obs = transect_coords_from_latlon_waypoints(dutrieux_obs, transect_amundsen[transect], opt_float=False)
+        x_sim, y_sim = transect_coords_from_latlon_waypoints(nemo_results, transect_amundsen[transect], opt_float=False)
+
+        # subset the datasets and nemo_mesh to the coordinates of the transect:
+        obs_transect = dutrieux_obs.isel(x=xr.DataArray(x_obs, dims='n'), y=xr.DataArray(y_obs, dims='n'))
+        sim_transect = nemo_results.isel(x=xr.DataArray(x_sim, dims='n'), y=xr.DataArray(y_sim, dims='n'))
+        nemo_mesh_transect  = nemo_mesh_ds.isel(x=xr.DataArray(x_sim, dims='n'), y=xr.DataArray(y_sim, dims='n')).rename({'nav_lev':'depth'})
+
+        # add tmask, iceshelfmask and depths to the simulation dataset
+        sim_transect = sim_transect.assign({'gdept_0':nemo_mesh_transect.gdept_0, 'tmask':nemo_mesh_transect.tmask, 'isfdraft':nemo_mesh_transect.isfdraft})
+
+        # calculate the distance of each point along the transect relative to the start of the transect:
+        obs_distance = distance_along_transect(obs_transect)
+        sim_distance = distance_along_transect(sim_transect)
+
+        # visualize the transect:
+        fig, ax = plt.subplots(2,2, figsize=(15,6), dpi=300)
+        kwagsT    ={'vmin':-2,'vmax':1,'cmap':cmocean.cm.dense,'label':'Conservative Temp.'}
+        kwagsS    ={'vmin':33,'vmax':35,'cmap':cmocean.cm.haline,'label':'Absolute Salinity'}
+        kwags_mask={'mask_land':True, 'mask_iceshelf':True}
+        ax[0,0].set_title('Observations Dutrieux')
+        ax[0,1].set_title('Observations Dutrieux')
+        ax[1,0].set_title('Model simulations')
+        ax[1,1].set_title('Model simulations')
+        plot_transect(ax[0,0], obs_distance, obs_transect, 'ConsTemp', **kwagsT)
+        plot_transect(ax[1,0], sim_distance, sim_transect, 'thetao', **kwagsT, **kwags_mask) 
+        plot_transect(ax[0,1], obs_distance, obs_transect, 'AbsSal', **kwagsS)
+        plot_transect(ax[1,1], sim_distance, sim_transect, 'so', **kwagsS, **kwags_mask) 
+        ax[1,0].set_xlabel('Distance (km)')
+        ax[1,1].set_xlabel('Distance (km)')
+
+        if savefig:
+            finished_plot(fig, fig_name=f'{run_folder}figures/evaluation_transect_{transect}.jpg')
+
+    return
     
     

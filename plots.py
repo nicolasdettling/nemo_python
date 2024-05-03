@@ -3,10 +3,11 @@ import matplotlib.colors as cl
 import xarray as xr
 import socket
 import numpy as np
+import cmocean
 from .utils import polar_stereo, extend_grid_edges, moving_average
 from .grid import build_ocean_mask
 from .plot_utils import set_colours
-from .constants import line_colours, region_names
+from .constants import line_colours, region_names, land_colour, iceshelf_colour
 
 # If a figure name is defined, save the figure to that file. Otherwise, display the figure on screen.
 def finished_plot (fig, fig_name=None, dpi=None, print_out=True):
@@ -380,3 +381,53 @@ def plot_ts_distribution(ax, salt, temp, smin=30, smax=35.25, tmin=-3, tmax=2.25
     ax.set_ylabel('Conservative Temperature')
 
     return 
+
+# Function plots a transect of a variable
+# Inputs:
+# ax            : axis to plot the transect on
+# distance_vec  : array of distance points along transect (could also be some other x-axis like lons or lats)
+# data_transect : xarray dataset containing the depth and variable of the dataset to visualize
+# var_name      : string name of variable to visualize
+# ylim          : (optional) vertical axis range (as tuple)
+# label         : (optional) string of name of colorbar label, otherwise defaults to the units of the variable
+def plot_transect(ax, distance_vec, data_transect, var_name, ylim=(1600, -20), vmin=33, vmax=34.8, cmap=cmocean.cm.haline, 
+                  label=None, mask_land=False, mask_iceshelf=False):
+    ax.set_ylim(ylim[0], ylim[1])
+    ax.set_ylabel('Depth (m)')
+
+    distance, __ = np.meshgrid(distance_vec, np.abs(data_transect.depth))
+    kwags = {'vmin':vmin, 'vmax':vmax, 'cmap':cmap}
+
+    # either create a meshgrid of depths or read in the depth array from the simulations (contains the partial steps)
+    if 'gdept_0' in list(data_transect.keys()):
+        depth = data_transect.gdept_0
+    else:
+        __, depth = np.meshgrid(distance_vec, np.abs(data_transect.depth))
+
+    # Plot the transects
+    try:
+        cm1 = ax.pcolormesh(distance, depth, data_transect[var_name].values, **kwags)
+    except: # in case the shapes are flipped
+        cm1 = ax.pcolormesh(distance.transpose(), depth.transpose(), data_transect[var_name].values, **kwags)
+
+    # mask land:
+    if mask_land:
+        if 'tmask' not in list(data_transect.keys()):
+            raise Exception('Dataset must contain tmask if you use mask_land')
+        land_mask = xr.where(data_transect.tmask==1, np.nan, data_transect.tmask.values)
+        ax.pcolormesh(distance, depth, land_mask, rasterized=True, cmap=cl.ListedColormap(land_colour), zorder=3)
+
+    # mask iceshelf:
+    if mask_iceshelf:
+        if ('gdept_0' or 'isfdraft') not in list(data_transect.keys()):
+            raise Exception('Dataset must contain gdept_0 and isfdraft if you use mask_iceshelf')
+        iceshelf_mask = xr.where(data_transect.gdept_0 < data_transect.isfdraft, 1, np.nan) 
+        ax.pcolormesh(distance, depth, iceshelf_mask, rasterized=True, cmap=cl.ListedColormap(iceshelf_colour), zorder=4)
+        
+    if label:
+        plt.colorbar(cm1, ax=ax, extend='both', label=label)
+    else:
+        plt.colorbar(cm1, ax=ax, extend='both', label=data_transect[var_name].unit)
+    
+    return
+
