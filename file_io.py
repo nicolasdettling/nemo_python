@@ -129,3 +129,22 @@ def read_dutrieux(fileT='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/observations/p
         obs_conv = obs_ds.copy()
         
     return obs_conv
+
+def read_zhou(fileT='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/observations/shenjie-zhou/SO_CT_monthly/Merge_all_SO_CT_10dbar_monthly_1.nc',
+              fileS='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/observations/shenjie-zhou/SO_SA_monthly/Merge_all_SO_SA_10dbar_monthly_1.nc', 
+              eos='teos10'):
+    
+    import gsw 
+    # Load observations on Amundsen Shelf from Pierre Dutrieux
+    obs    = xr.open_mfdataset([fileT, fileS])
+    obs_ds = obs.rename({'ct':'ConsTemp', 'sa':'AbsSal', 'pres':'pressure', 'NB_X':'x', 'NB_Y':'y', 'NB_LEV':'z'})
+
+    # does not provide depth, so calculate:
+    depth  = gsw.z_from_p(obs_ds.pressure, obs_ds.lat)
+    obs_ds = obs_ds.assign({'depth':depth}).squeeze()
+
+    # Convert units to TEOS10
+    if eos!='teos10':
+        raise Exception('Observations are in TEOS-10 units, will need to convert')
+        
+    return obs_ds
