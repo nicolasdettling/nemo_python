@@ -390,8 +390,10 @@ def plot_ts_distribution(ax, salt, temp, smin=30, smax=35.25, tmin=-3, tmax=2.25
 # var_name      : string name of variable to visualize
 # ylim          : (optional) vertical axis range (as tuple)
 # label         : (optional) string of name of colorbar label, otherwise defaults to the units of the variable
+# contour_var   : (optional) string of name of variable to plot contour levels from
+# clevels       : (optional) integer of number of contour levels or list of specific levels to draw
 def plot_transect(ax, distance_vec, data_transect, var_name, ylim=(1600, -20), vmin=33, vmax=34.8, cmap=cmocean.cm.haline, 
-                  label=None, mask_land=False, mask_iceshelf=False):
+                  label=None, mask_land=False, mask_iceshelf=False, contour_var='', clevels=10):
     ax.set_ylim(ylim[0], ylim[1])
     ax.set_ylabel('Depth (m)')
 
@@ -407,8 +409,14 @@ def plot_transect(ax, distance_vec, data_transect, var_name, ylim=(1600, -20), v
     # Plot the transects
     try:
         cm1 = ax.pcolormesh(distance, depth, data_transect[var_name].values, **kwags)
+        if contour_var:
+            plot_contour = xr.where(data_transect[contour_var].values==0, np.nan, data_transect[contour_var].values)
+            ax.contour(distance, depth, plot_contour, levels=clevels, colors='w', linewidths=0.5)
     except: # in case the shapes are flipped
         cm1 = ax.pcolormesh(distance.transpose(), depth.transpose(), data_transect[var_name].values, **kwags)
+        if contour_var:
+            plot_contour = xr.where(data_transect[contour_var].values==0, np.nan, data_transect[contour_var].values)
+            ax.contour(distance.transpose(), depth.transpose(), plot_contour, levels=clevels, colors='w', linewidths=0.5)
 
     # mask land:
     if mask_land:
