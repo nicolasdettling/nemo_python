@@ -28,6 +28,8 @@ deg2rad = np.pi/180.0
 rad2deg = 1./deg2rad
 # Radius of Earth (m)
 rEarth = 6.371e6
+# Rotation rate of Earth
+omegaEarth = 7.2921e-5 #rad/s
 # Degrees formatted nicely in a string
 deg_string = r'$^{\circ}$'
 # 10^-3 formatted nicely in a string (for absolute salinity)
