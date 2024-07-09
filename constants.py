@@ -79,48 +79,69 @@ transect_amundsen = {
 
 # Dictionary of lon-lat points bounding given region. Will be used to "cut" the continental shelf mask (build_shelf_mask in utils.py) either north-south or east-west depending on the value of region_edges_flag. The first point and its connected N/S (or E/W) neighbours will be included in the mask, but not the second. The direction of travel is west to east around the coastline.
 region_edges = {
-    'amundsen_sea': [[-157.5, -76.5], [-102.75, -72.5]],
+    'abbot'             : [[-103.2, -71.8] , [-83, -72]],
+    'amery'             : [[66.5, -67.5]   , [79.5, -68]],
+    'amundsen_sea'      : [[-157.5, -76.5] , [-102.75, -72.5]],
     'bellingshausen_sea': [[-102.75, -72.5], [-57.25, -62]],
-    'west_antarctica': [[-157.5, -76.5], [-57.25, -62]], # Amundsen and Bellingshausen
-    'larsen': [[-57.25, -62], [-57, -71.5]],
-    'filchner_ronne': [[-57, -71.5], [-26, -75.5]],
-    'east_antarctica': [[-26, -75.5], [169.5, -71]], # includes Amery
-    'amery': [[66.5, -67.5], [79.5, -68]],
-    'ross': [[169.5, -71], [-157.5, -76.5]],
+    'cosgrove'          : [[-104.24, -73.846], [-102.91, -73.2]],
+    'dotson_crosson'    : [[-114.7, -73.8] , [-107.5, -75.3]],
+    'dotson_front'      : [[-112.5, -74.4] , [-110.5, -73.85]], # just shelf
+    'pine_island'       : [[-102.6, -75.1] , [-101.5, -74.2]],
+    'pine_island_bay'   : [[-104.0, -74.8] , [-103, -74.2]], # just shelf
+    'east_antarctica'   : [[-26, -75.5]    , [169.5 , -71]], # includes Amery
+    'filchner_ronne'    : [[-57, -71.5]    , [-26.0 , -75.5]],
+    'getz'              : [[-135, -74.5]   , [-114.7, -73.8]],
+    'larsen'            : [[-57.25, -62]   , [-57, -71.5]],
+    'ross'              : [[169.5, -71]    , [-157.5, -76.5]],
+    'thwaites'          : [[-107.5, -75.3] , [-103.6, -74.5]],
+    'west_antarctica'   : [[-157.5, -76.5] , [-57.25, -62]], # Amundsen and Bellingshausen
 }
 region_edges_flag = {
-    'amundsen_sea': ['NS', 'NS'],
+    'abbot'             : ['NS', 'NS'],
+    'amery'             : ['NS', 'NS'],
+    'amundsen_sea'      : ['NS', 'NS'],
     'bellingshausen_sea': ['NS', 'NS'],
-    'west_antarctica': ['NS', 'NS'],
-    'larsen': ['NS', 'EW'],
-    'filchner_ronne': ['EW', 'NS'],
-    'east_antarctica': ['NS', 'NS'],
-    'amery': ['NS', 'NS'],
-    'ross': ['NS', 'NS'],
+    'cosgrove'          : ['EW', 'EW'],
+    'dotson_crosson'    : ['NS', 'NS'],
+    'dotson_front'      : ['EW', 'EW'],
+    'east_antarctica'   : ['NS', 'NS'],
+    'filchner_ronne'    : ['EW', 'NS'],
+    'getz'              : ['NS', 'NS'],
+    'larsen'            : ['NS', 'EW'],
+    'pine_island'       : ['NS', 'EW'], 
+    'pine_island_bay'   : ['NS', 'EW'],
+    'ross'              : ['NS', 'NS'],
+    'thwaites'          : ['NS', 'EW'],
+    'west_antarctica'   : ['NS', 'NS'],
 }
 # Dictionary of lon-lat points which are definitely in the given region. The region is then defined by connectivity to that point (eg selecting specific ice shelf cavities in single_cavity_mask in utils.py).
 region_points = {
     'abbot': [-95, -73],
     'brunt': [-20, -75],
+    'pine_island': [-101, -75],
 }
 # Names of each region
 region_names = {
-    'amundsen_sea': 'Amundsen Sea',
-    'bellingshausen_sea': 'Bellingshausen Sea',
-    'west_antarctica': 'West Antarctica',
-    'larsen': 'Larsen',
-    'filchner_ronne': 'Filchner-Ronne', 
-    'east_antarctica': 'East Antarctica',
-    'amery': 'Amery',
-    'ross': 'Ross',
-    'abbot': 'Abbot Ice Shelf',
-    'brunt': 'Brunt and Riiser-Larsen Ice Shelves',
-    'pine_island_bay': 'Pine Island Bay',
-    'dotson_bay': 'front of Dotson',
+    'all'               : 'Antarctic',
+    'abbot'             : 'Abbot Ice Shelf',
+    'amery'             : 'Amery',
+    'amundsen_sea'      : 'Amundsen Sea',
     'amundsen_west_shelf_break': 'Western Amundsen Sea shelf break',
-    'all': 'Antarctic',
+    'bellingshausen_sea': 'Bellingshausen Sea',
+    'brunt'             : 'Brunt and Riiser-Larsen Ice Shelves',
+    'cosgrove'          : 'Cosgrove Ice Shelf',
+    'dotson_crosson'    : 'Dotson-Crosson Ice Shelf',
+    'dotson_front'      : 'front of Dotson',
+    'east_antarctica'   : 'East Antarctica',
+    'filchner_ronne'    : 'Filchner-Ronne',
+    'getz'              : 'Getz Ice Shelf',
+    'larsen'            : 'Larsen',
+    'pine_island'       : 'Pine Island Ice Shelf',
+    'pine_island_bay'   : 'Pine Island Bay',
+    'ross'              : 'Ross',
+    'thwaites'          : 'Thwaites Ice Shelf',
+    'west_antarctica'   : 'West Antarctica',
 }
-
 # Default colours to use for plotting lines
 line_colours = ['black', 'Crimson', 'blue', 'DarkMagenta', 'DimGrey', 'DarkGreen', 'DeepPink', 'DeepSkyBlue']
 land_colour     = '#9999a3'

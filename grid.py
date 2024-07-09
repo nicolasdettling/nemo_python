@@ -234,6 +234,9 @@ def region_mask (region, ds, option='all', return_name=False):
     elif region == 'filchner_ronne':
         # Remove bits of Brunt
         mask_excl, ds = single_cavity_mask('brunt', ds)
+    elif region == 'thwaites':
+        # Remove bits of Pine Island 
+        mask_excl, ds = single_cavity_mask('pine_island', ds)
     else:
         mask_excl = None
     if region == 'bellingshausen_sea':
@@ -327,7 +330,8 @@ def create_regions_file(nemo_mesh, option, out_file):
 # regions_file : (optional) string path to regions mask definition netcdf file
 # nemo_domain  : (optional) string path to NEMO domain cfg file to create mask from
 def extract_var_region(ds_nemo, nemo_var, region, 
-                       region_type='all', regions_file='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/output/regions_all.nc', nemo_domain=''):
+                       region_type='all', regions_file='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/output/regions_all.nc', 
+                       nemo_domain='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/domain_cfg-20240305.nc'):
 
     # Get mask for Amundsen Sea region
     if not regions_file:
@@ -335,7 +339,12 @@ def extract_var_region(ds_nemo, nemo_var, region,
         mask, _, region_name = region_mask(region, nemo_file, option=region_type, return_name=True)
     else: 
         region_masks = xr.open_dataset(regions_file)
-        mask = region_masks[f'mask_{region}']
+        if f'mask_{region}' in list(region_masks.keys()): # if the regions_file contains the mask, read it otherwise create it
+            mask = region_masks[f'mask_{region}']
+        else:
+            nemo_file = xr.open_dataset(nemo_domain)
+            mask, _, region_name = region_mask(region, nemo_file, option=region_type, return_name=True)
+
 
     # Make mask 3D if needed
     if len(ds_nemo[nemo_var].dims) == 3:
@@ -347,3 +356,54 @@ def extract_var_region(ds_nemo, nemo_var, region,
     region_var = xr.where(mask_d==0, np.nan, ds_nemo[nemo_var]*mask_d)
 
     return region_var
+
+# Function takes two grid points in coordinates and finds the coordinates of the points connecting a line between pt0 and pt1 
+# Inputs:
+# pt0, pt1  : tuples of x and y coordinates
+# opt_float : (optional) boolean whether to draw a smooth line connecting the points (so with decimals) or floored to integer steps
+def connect_coord_points(pt0, pt1, opt_float=True):
+    
+    dx = pt1[0] - pt0[0]
+    dy = pt1[1] - pt0[1]
+
+    # increment the axis with the most steps by steps of 1, then estimate the coordinates of the other vector
+    if np.abs(dy) > np.abs(dx):
+        vec_y = np.arange(pt0[1], pt1[1] + np.sign(dy), np.sign(dy))
+        if opt_float:
+            vec_x = np.linspace(pt0[0], pt1[0], len(vec_y))
+        else:
+            vec_x = np.floor(np.linspace(pt0[0], pt1[0], len(vec_y)))
+    else:
+        vec_x = np.arange(pt0[0], pt1[0] + np.sign(dx), np.sign(dx))
+        if opt_float:
+            vec_y = np.linspace(pt0[1], pt1[1], len(vec_x))
+        else:
+            vec_y = np.floor(np.linspace(pt0[1], pt1[1], len(vec_x)))
+    
+    return vec_x, vec_y
+
+# Function finds x, y coordinates associated with the specified transect longitude and latitudes
+# Inputs:
+# data      : xarray dataset to calculate transect for
+# waypoints : list of array of longitudes and array of latitudes that are waypoints identifying the route of a transect, 
+#             so the transect consists of lines connecting these coordinates
+# opt_float : boolean option whether you want to get an array of coordinates as integers (floored) or floats
+# Outputs: vector_x, vector_y are coordinates of the dataset that lie along the specified transect route
+def transect_coords_from_latlon_waypoints(data, waypoints, opt_float=True):
+
+    # find the indices associated with the specified corner longitude and latitudes
+    transect_data_coord = [closest_point(data, (waypoints[0][i],waypoints[1][i])) for i in range(0,len(waypoints[0]))]
+    yind = list(zip(*transect_data_coord))[0]
+    xind = list(zip(*transect_data_coord))[1]
+
+    # now, connect the x, y turning points to create a transect connecting these coordinates
+    vector_x = np.array([]); vector_y = np.array([]);
+    for i in range(0,len(xind)-1):
+        vec_x, vec_y = connect_coord_points((xind[i], yind[i]),(xind[i+1], yind[i+1]), opt_float=opt_float)
+        vector_x = np.append(vector_x, vec_x)
+        vector_y = np.append(vector_y, vec_y)
+
+    if opt_float:
+        return vector_x, vector_y
+    else:
+        return vector_x.astype(int), vector_y.astype(int)
