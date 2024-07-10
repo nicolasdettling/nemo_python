@@ -136,7 +136,7 @@ def read_zhou(fileT='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/observations/shenj
     
     import gsw 
     # Load observations on Amundsen Shelf from Pierre Dutrieux
-    obs    = xr.open_mfdataset([fileT, fileS])
+    obs    = xr.open_mfdataset([fileT, fileS], chunks='auto', engine='netcdf4')
     obs_ds = obs.rename({'ct':'ConsTemp', 'sa':'AbsSal', 'pres':'pressure', 'NB_X':'x', 'NB_Y':'y', 'NB_LEV':'z'})
 
     # does not provide depth, so calculate:
@@ -148,3 +148,50 @@ def read_zhou(fileT='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/observations/shenj
         raise Exception('Observations are in TEOS-10 units, will need to convert')
         
     return obs_ds
+
+
+
+# Generate the file name and starting/ending index for a CESM variable for the given experiment, year and ensemble member.
+# for example, expt = 'LE2', ensemble_member='1011.001', domain ='atm', freq = 'daily'
+def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year, 
+                    base_dir='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/'):
+
+    from datetime import datetime
+
+    if expt not in ['LE2']:
+        raise Exception(f'Invalid experiment {expt}')
+
+    if expt == 'LE2':
+        if (year <= 2014) and (year >= 1850):
+            start_stub = 'b.e21.BHISTsmbb.f09_g17.'
+        elif year <= 2100 and (year >=2015):
+            start_stub = 'b.e21.BSSP370smbb.f09_g17.'
+        else:
+            raise Exception('Not a valid year for the specified experiment and ensemble member')
+            
+    if domain == 'atm':
+        if freq == 'monthly':
+            domain_stub = '.cam.h0.'
+        elif freq == 'daily':
+            domain_stub = '.cam.h1.'
+    elif domain in ['oce', 'ocn']:
+        domain_stub = '.pop.h.'
+    elif domain == 'ice':
+        domain_stub = '.cice.h.'
+
+    # find the file that contains the requested year
+    if freq == 'daily':
+        str_format = '%Y%m%d'
+    elif freq == 'monthly':
+        str_format = '%Y%m'
+    file_list = glob.glob(f'{base_dir}{expt}/{start_stub}{expt}-{ensemble_member}{domain_stub}{var_name}*')    
+    for file in file_list:
+        date_range = (file.split(f'.{var_name}.')[1]).split('.nc')[0]
+        start_year = datetime.strptime(date_range.split('-')[0], str_format).year
+        end_year   = datetime.strptime(date_range.split('-')[1], str_format).year
+        if (year <= end_year) and (year >= start_year): # found the file we're looking for
+            break        
+    
+    file_path = f'{base_dir}{expt}/{start_stub}{expt}-{ensemble_member}{domain_stub}{var_name}.{date_range}.nc'
+
+    return file_path 
