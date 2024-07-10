@@ -6,6 +6,7 @@ import numpy as np
 from .utils import distance_btw_points, closest_point
 from .grid import get_coast_mask, get_icefront_mask
 from .ics_obcs import fill_ocean
+from constants import temp_C2K 
 
 # Function subsets global forcing files from the same grid to the new domain, and fills any NaN values with connected 
 # nearest neighbour and then fill_val.
@@ -134,3 +135,52 @@ def create_calving(calving, nemo_mask, calving_var='soicbclv', new_file_path='./
         raise Exception('The total amount of calving in the new file is not equal to the ')
     
     return calv_ice_new
+
+# Process atmospheric forcing from CESM2 scenarios (PPACE, LENS, MENS, LW1.5, LW2.0) for a single variable and single ensemble member.
+# expt='LE2', var='PRECT', ens='1011.001' etc.
+def cesm2_atm_forcing (expt, var, ens, out_dir):
+
+    if expt not in ['LE2']:
+        raise Exception('Invalid experiment {expt}')
+    
+    freq     = 'daily'
+    end_year = 2100
+    for year in range(start_year, end_year+1):
+        print(f'Processing {year}')
+        # read in the data and subset to the specified year
+        file_path = find_cesm2_file(expt, var, 'atm', freq, ens, year)
+        ds        = xr.open_dataset(file_path)
+        data      = ds[var].isel(time=(ds.time.dt.year == year))
+
+        # Unit conversions ### need to check that these are still consistent between CESM1 and CESM2
+        if var in ['FLDS', 'FSDS']:
+            # Swap sign
+            data *= -1
+        elif var == 'TREFHT':
+            # Convert from K to C
+            data -= temp_C2K
+        elif var == 'QBOT':
+            # Convert from mixing ratio to specific humidity
+            data = data/(1.0 + data)
+        # Write data
+        out_file_name = f'{out_dir}{expt}_ens{ens_str}_{var}_{year}.nc'
+        data.to_netcdf(out_file_name)
+     return
+
+# Create CESM atmospheric forcing for the given scenario, for all variables and ensemble members.
+def cesm2_expt_all_atm_forcing (expt, num_ens=None, out_dir=None):
+
+    out_dir_prefix = '/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/'
+    if expt == 'LE2':
+        if out_dir is None:
+            out_dir = f'{out_dir_prefix}LE2/processed/'
+
+    var_names = ['TREFHT', 'QBOT', 'PSL', 'UBOT', 'VBOT', 'PRECT', 'FLDS', 'FSDS']
+
+    for ens in range(1,num_ens+1):
+        print(f'Processing ensemble member {ens}')
+        for var in var_names:
+            print('Processing {var}')
+            cesm2_atm_forcing(expt, var, ens, out_dir)
+
+    return    
