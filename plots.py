@@ -286,7 +286,7 @@ def animate_2D_circumpolar(run_folder, var, stub, vlim=(0,100), cmap='viridis',
 
     # Load necessary NetCDF files:
     nemo_mesh_ds  = xr.open_dataset(nemo_mesh).isel(time_counter=0)
-    file_list     = glob.glob(f'{run_folder}*{stub}*.nc')
+    file_list     = glob.glob(f'{run_folder}files/*{stub}*.nc')
     animate_ds    = xr.open_mfdataset(file_list)
 
     # Create figure for each timestep:
