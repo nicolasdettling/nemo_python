@@ -159,25 +159,24 @@ def cesm2_atm_forcing (expt, var, ens, out_dir):
         elif var == 'TREFHT':
             # Convert from K to C
             data -= temp_C2K
-        elif var == 'QBOT':
-            # Convert from mixing ratio to specific humidity
-            data = data/(1.0 + data)
+
         # Write data
         out_file_name = f'{out_dir}{expt}_ens{ens_str}_{var}_{year}.nc'
         data.to_netcdf(out_file_name)
-     return
+    return
 
 # Create CESM atmospheric forcing for the given scenario, for all variables and ensemble members.
-def cesm2_expt_all_atm_forcing (expt, num_ens=None, out_dir=None):
+# ens_strs : list of strings of ensemble member names
+def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None):
 
     out_dir_prefix = '/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/'
     if expt == 'LE2':
         if out_dir is None:
             out_dir = f'{out_dir_prefix}LE2/processed/'
 
-    var_names = ['TREFHT', 'QBOT', 'PSL', 'UBOT', 'VBOT', 'PRECT', 'FLDS', 'FSDS']
+    var_names = ['TREFHT', 'QREFHT', 'PSL', 'UBOT', 'VBOT', 'PRECT', 'FLDS', 'FSDS']
 
-    for ens in range(1,num_ens+1):
+    for ens in ens_strs:
         print(f'Processing ensemble member {ens}')
         for var in var_names:
             print('Processing {var}')
