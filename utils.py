@@ -181,6 +181,19 @@ def distance_btw_points (point0, point1):
     dy = rEarth*(lat1-lat0)*deg2rad
     
     return np.sqrt(dx**2 + dy**2)
+
+# Function calculates distances (km) from each point in a transect to the first point based on lats and lons
+def distance_along_transect(data_transect):
+
+    # calculate distance from each point in the transect to the first point in the transect:
+    transect_distance = np.array([distance_btw_points((data_transect.nav_lon.values[0], data_transect.nav_lat.values[0]),
+                                                      (data_transect.nav_lon.values[i+1], data_transect.nav_lat.values[i+1])) for i in range(0, data_transect.n.size-1)])
+    # prepend 0 for the first distance point
+    transect_distance = np.insert(transect_distance, 0, 0) 
+    # convert from meters to km
+    transect_distance = transect_distance/1000
+    
+    return transect_distance
     
 
 # Function to convert the units of shortwave and longwave radiation to the units expected by NEMO (W m-2)
@@ -516,6 +529,8 @@ def convert_to_teos10(dataset, var='PracSal'):
             absS  = gsw.SA_from_SP(dataset['PracSal'], press, lon, lat)
             # Get conservative temperature from potential temperature
             consT  = gsw.CT_from_pt(absS.values, dataset[var])
+        elif 'AbsSal' in list(dataset.keys()):
+            consT = gsw.CT_from_pt(dataset['AbsSal'].values, dataset[var])
         else:
             raise Exception('Must include practical salinity (PracSal) variable in dataset when converting potential temperature')
         
