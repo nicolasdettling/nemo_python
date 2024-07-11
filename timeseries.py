@@ -378,7 +378,7 @@ def calc_hovmoeller_region(var, region,
                            nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
     
     # Load gridT files into dataset:
-    gridT_files = glob.glob(f'{run_folder}/*grid_T*')
+    gridT_files = glob.glob(f'{run_folder}files/*grid_T*')
     nemo_ds     = xr.open_mfdataset(gridT_files).isel(x_grid_T=region['x'], y_grid_T=region['y']) # load all the gridT files in the run folder
 
     nemo_mesh_ds     = xr.open_dataset(f'{nemo_mesh}')
