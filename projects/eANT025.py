@@ -54,12 +54,12 @@ def plot_extended_timeseries(path_ts1, path_ts2, var, fig_name, title='',
     
     return
 
-def plot_SSH_trend(run_folder, fig_name, style='lineplot', dpi=None, nemo_mesh='/gws/nopw/j04/terrafirma/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
+def plot_SSH_trend(run_folder, fig_name, style='lineplot', dpi=None, nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
     # Load meshmask
     mesh_ds    = xr.open_dataset(nemo_mesh)
 
     # Load SSH into dataset and calculate domain-wide average, minimum, maximum:
-    gridT_files = glob.glob(f'{run_folder}/*grid_T*')
+    gridT_files = glob.glob(f'{run_folder}files/*grid_T*')
     SSH_ds      = xr.open_mfdataset(gridT_files) # load all the gridT files in the run folder
     ocean_area  = xr.where(mesh_ds.tmask.isel(time_counter=0, nav_lev=0).values==0, 0, SSH_ds.area_grid_T)
 
@@ -109,7 +109,7 @@ def plot_SSH_trend(run_folder, fig_name, style='lineplot', dpi=None, nemo_mesh='
 def plot_WOA_eval(run_folder, figname1, figname2, figname3, nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc', dpi=None):
 
     # Load gridT files into dataset:
-    gridT_files = glob.glob(f'{run_folder}/*grid_T*')
+    gridT_files = glob.glob(f'{run_folder}files/*grid_T*')
     nemo_ds     = xr.open_mfdataset(gridT_files) # load all the gridT files in the run folder
 
     nemo_ds = nemo_ds.rename({'e3t':'thkcello', 'x_grid_T':'x', 'y_grid_T':'y', 'area_grid_T':'area', 'e3t':'thkcello',
@@ -149,6 +149,7 @@ def animate_vars(run_folder, nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS
 
     return
 
+# transections of U and V velocities, but still need to be rotated from the grid to universal (!!)
 def transects_UV_Amundsen(run_folder, savefig=False, nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
     # load nemo simulations
     gridU_files  = glob.glob(f'{run_folder}*grid_U*')
@@ -195,5 +196,69 @@ def transects_UV_Amundsen(run_folder, savefig=False, nemo_mesh='/gws/nopw/j04/an
 
     return
 
+def plot_Amundsen_2d_slices(nemo_ds, var_name='thetao', vlim=(-1.5, 0.5), savefig=False, figname='', region=''):
 
+    import cartopy.crs as ccrs
+
+    # add a line to mark location of shelf west transect
+    obs               = read_dutrieux(eos='teos10')
+    dutrieux_obs      = obs.assign({'nav_lon':obs.lon, 'nav_lat':obs.lat}).rename_dims({'lat':'y', 'lon':'x'})
+    x_obs, y_obs      = transect_coords_from_latlon_waypoints(dutrieux_obs, transect_amundsen['shelf_west'], opt_float=False)    
+    obs_transect_west = dutrieux_obs.isel(x=xr.DataArray(x_obs, dims='n'), y=xr.DataArray(y_obs, dims='n'))
+
+    if region=='crosson':
+        fig, ax     = plt.subplots(2,2, figsize=(12,7), subplot_kw={'projection': ccrs.Mercator(latitude_true_scale=-70)}, dpi=150)
+        depthind    = [32, 39, 50, 62]
+        axis_extent = [-110, -127, -75.1, -72.5]
+        cax         = fig.add_axes([0.00, 0.52, 0.02, 0.35])
+    else:
+        fig, ax     = plt.subplots(3,3, figsize=(12,10), subplot_kw={'projection': ccrs.Mercator(latitude_true_scale=-70)}, dpi=150)
+        depthind    = [30,35,40,45,50,55,60,65,68]
+        axis_extent = [-95, -125, -75.5, -70]
+        cax         = fig.add_axes([0.00, 0.67, 0.02, 0.2])
+
+    # plot each depth slice
+    for n, axis in enumerate(ax.ravel()):
+        axis.set_extent(axis_extent, ccrs.PlateCarree())
+        gl = axis.gridlines(draw_labels=True);
+        gl.xlines=None; gl.ylines=None; gl.top_labels=None; gl.right_labels=None;
+
+        var_plot = np.ma.masked_where(nemo_ds[var_name].isel(depth=depthind[n]).values == 0, 
+                                      nemo_ds[var_name].isel(depth=depthind[n]).values)
+        img1 = axis.pcolormesh(nemo_ds.nav_lon.values, nemo_ds.nav_lat.values, 
+                               var_plot, transform=ccrs.PlateCarree(),rasterized=True,
+                               cmap=cmocean.cm.dense, vmin=vlim[0], vmax=vlim[1], zorder=1)
+    
+        axis.plot(obs_transect_west.nav_lon.values, obs_transect_west.nav_lat.values, '--r', linewidth=0.8,
+                  transform=ccrs.PlateCarree(), zorder=3)
+        axis.set_title(f'Depth: {nemo_ds.depth.isel(depth=depthind[n]).values:.0f} m')
+    
+    fig.colorbar(img1, cax=cax, extend='both', label='Conservative Temperature')
+    fig.suptitle(figname.split('T_')[1].split('.jpg')[0])
+
+    plt.close()
+    if savefig:
+        finished_plot(fig, fig_name=figname)
+        
+    return
+
+
+def frames_Amundsen_shelf_T_slices(run_folder, region='', savefig=True, vlim=(-1.5, 0.5)):
+    
+    gridT_files  = glob.glob(f'{run_folder}files/*grid_T*')
+    nemo_ds      = xr.open_mfdataset(gridT_files, engine='netcdf4')
+    nemo_ds      = nemo_ds.rename({'x_grid_T':'x', 'y_grid_T':'y', 'nav_lon_grid_T':'nav_lon', 'nav_lat_grid_T':'nav_lat', 'deptht':'depth'})
+    if region=='crosson':
+        nemo_ds  = nemo_ds.isel(x=slice(520,750), y=slice(160,280))
+    else:
+        nemo_ds  = nemo_ds.isel(x=slice(500,880), y=slice(150,300)) # subset region to speed up the plotting
+    
+    for time in nemo_ds.time_counter:
+        year  = time.dt.year.values
+        month = time.dt.month.values
+        day   = time.dt.day.values
+        plot_Amundsen_2d_slices(nemo_ds.sel(time_counter=time), var_name='thetao', vlim=vlim, savefig=savefig, region=region,
+                                figname=f'{run_folder}animations/frames/amundsen_{region}_T_y{year}m{month:02}d{day:02}.jpg')
+    
+    return
 
