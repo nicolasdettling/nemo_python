@@ -504,7 +504,77 @@ def neighbours_z (data, missing_val=-9999):
 
     return data_u, data_d, valid_u, valid_d, num_valid_neighbours_z
 
-    
+# Given an array with missing values, extend the data into the mask by setting missing values to the average of their non-missing neighbours, and repeating as many times as the user wants.
+# If "data" is a regular array with specific missing values, set missing_val (default -9999). If "data" is a MaskedArray, set masked=True instead.
+# Setting use_3d=True indicates this is a 3D array, and where there are no valid neighbours on the 2D plane, neighbours above and below should be used.
+# Setting preference='vertical' (instead of default 'horizontal') indicates that if use_3d=True, vertical neighbours should be preferenced over horizontal ones.
+# Setting use_1d=True indicates this is a 1D array, use_2d=True, indicates it's a 2D array (x,y)
+def extend_into_mask (data, missing_val=-9999, fill_val=np.nan, masked=False, use_1d=False, use_2d=False, use_3d=False, preference='horizontal', num_iters=1):
+
+    import tqdm
+
+    if missing_val != -9999 and masked:
+        raise Exception("Can't set a missing value for a masked array")
+    if (use_1d + use_2d + use_3d) != 1 :
+        raise Exception("Can't have use_1d, use_2d, and/or use_3d at the same time")
+    if use_3d and preference not in ['horizontal', 'vertical']:
+        raise Exception(f'invalid preference {preference}')
+
+    if masked:
+        # MaskedArrays will mess up the extending
+        # Unmask the array and fill the mask with missing values
+        data_unmasked = data.data
+        data_unmasked[data.mask] = missing_val
+        data = data_unmasked
+
+    for iter in tqdm.tqdm(range(num_iters)):
+        sum_missing = np.sum(data==missing_val)
+        if np.sum(data==missing_val) == 0: # stop looping if all missing values have been filled
+            print('Completed filling missing values')
+            break
+        else:
+            # Find the neighbours of each point, whether or not they are missing, and how many non-missing neighbours there are.
+            # Then choose the points that can be filled.
+            # Then set them to the average of their non-missing neighbours.
+            if use_1d:
+                # Just consider horizontal neighbours in one direction
+                data_w, data_e, valid_w, valid_e, num_valid_neighbours = neighbours(data, missing_val=missing_val, use_1d=True)
+                index = (data == missing_val)*(num_valid_neighbours > 0)
+                data[index] = (data_w[index]*valid_w[index] + data_e[index]*valid_e[index])/num_valid_neighbours[index]
+            elif use_3d and preference == 'vertical':
+                # Consider vertical neighbours
+                data_d, data_u, valid_d, valid_u, num_valid_neighbours = neighbours_z(data, missing_val=missing_val)
+                index = (data == missing_val)*(num_valid_neighbours > 0)
+                data[index] = (data_u[index]*valid_u[index] + data_d[index]*valid_d[index])/num_valid_neighbours[index]
+            else:
+                # Consider horizontal neighbours in both directions
+                data_w, data_e, data_s, data_n, valid_w, valid_e, valid_s, valid_n, num_valid_neighbours = neighbours(data, missing_val=missing_val)
+                index = (data == missing_val)*(num_valid_neighbours > 0)
+                data[index] = (data_w[index]*valid_w[index] + data_e[index]*valid_e[index] + \
+                               data_s[index]*valid_s[index] + data_n[index]*valid_n[index])/num_valid_neighbours[index]
+            if use_3d:
+                # Consider the other dimension(s). Find the points that haven't already been filled based on the first dimension(s) we checked, but could be filled now.
+                if preference == 'vertical':
+                    # Look for horizontal neighbours
+                    data_w, data_e, data_s, data_n, valid_w, valid_e, valid_s, valid_n, num_valid_neighbours_new = neighbours(data, missing_val=missing_val)
+                    index = (data == missing_val)*(num_valid_neighbours == 0)*(num_valid_neighbours_new > 0)
+                    data[index] = (data_w[index]*valid_w[index] + data_e[index]*valid_e[index] + \
+                                   data_s[index]*valid_s[index] + data_n[index]*valid_n[index])/num_valid_neighbours_new[index]
+                elif preference == 'horizontal':
+                    # Look for vertical neighbours
+                    data_d, data_u, valid_d, valid_u, num_valid_neighbours_new = neighbours_z(data, missing_val=missing_val)
+                    index = (data == missing_val)*(num_valid_neighbours == 0)*(num_valid_neighbours_new > 0)
+                    data[index] = (data_u[index]*valid_u[index] + data_d[index]*valid_d[index])/num_valid_neighbours_new[index]
+            if (iter > 1) & (np.sum(data==missing_val) == sum_missing):
+                print('Previous loop was unable to fill more missing values, so filled with constant', fill_val)
+                print('location of missing vals:', np.argwhere(data==missing_val))
+                data[data==missing_val] = fill_val
+
+    if masked:
+        # Remask the MaskedArray
+        data = ma.masked_where(data==missing_val, data)
+
+    return data    
 
     
             
