@@ -136,6 +136,45 @@ def create_calving(calving, nemo_mask, calving_var='soicbclv', new_file_path='./
     
     return calv_ice_new
 
+# Process ocean conditions from CESM2 scenarios for a single variable and single ensemble member (for initial and boundary conditions).
+def process_cesm2_ocn_conditions (expt, var, ens, out_dir):
+
+    from .utils import convert_to_teos10
+
+    if expt not in ['LE2']:
+        raise Exception('Invalid experiment {expt}')
+
+    freq     = 'monthly'
+    end_year = 2100
+    for year in range(start_year, end_year+1):
+        print(f'Processing {year}')
+        # read in the data and subset to the specified year
+        file_path = find_cesm2_file(expt, var, 'ocn', freq, ens, year)
+        ds        = xr.open_dataset(file_path)
+        data      = ds[var].isel(time=(ds.time.dt.year == year))
+
+        # Unit conversions ### need to check that these are still consistent between CESM1 and CESM2
+        if var in ['SSH','UVEL','VVEL']:
+            # convert length units from cm to m
+            data *= 0.01
+        elif var == 'TEMP':
+            # Convert from potential temperature to conservative temperature
+            # need to load absolute salinity from file
+            salt_path = find_cesm2_file(expt, 'SALT', 'ocn', freq, ens, year)
+            salt_ds   = xr.open_dataset(salt_path)
+            salt_data = salt_ds['SALT'].isel(time=(salt_ds.time.dt.year == year))
+
+            ds = xr.Dataset({'PotTemp':data, 'AbsSal':salt_data, 'depth':data.z_t, 'lon':data.TLON, 'lat':data.TLAT})
+            ds = convert_to_teos10(ds, var='PotTemp')
+            data = ds['ConsTemp']
+
+        # Write data
+        out_file_name = f'{out_dir}{expt}_ens{ens_str}_{var}_{year}.nc'
+        data.to_netcdf(out_file_name)
+
+    return
+
+
 # Process atmospheric forcing from CESM2 scenarios (PPACE, LENS, MENS, LW1.5, LW2.0) for a single variable and single ensemble member.
 # expt='LE2', var='PRECT', ens='1011.001' etc.
 def cesm2_atm_forcing (expt, var, ens, out_dir):
