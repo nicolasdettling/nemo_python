@@ -30,8 +30,11 @@ def vertical_edges(mesh, mtype='nemo'):
         
         z_centres = z_centres.values
         dz        = dz.values
+    elif mytpe=='CESM2': 
+        z_centres = mesh #!!! add the right variables here
+        dz = mesh
     else:
-        print('Only mesh types included are nemo and SOSE')
+        print('Only mesh types included are nemo, SOSE, CESM2')
 
     assert (z_centres >= 0.0).all(), 'There is at least one negative depth value (all depths should be positive)'
     
@@ -167,6 +170,8 @@ def vertical_interp(interp_info, in_file, out_file, ln_obcs=False, bdy_ind=-2):
         
     if interp_info['source']=='SOSE':
        source_coord   = hinterp_var.assign(drF=(['z'], source_coord_file.drF.values))
+    elif interp_info['source']=='CESM2':
+       source_coord   = hinterp_var.assign() ### add the coorect variable
 
     nemo_edges        = vertical_edges(nemo_mask_file, mtype='nemo')
     source_edges      = vertical_edges(source_coord, mtype=interp_info['source'])   
@@ -367,7 +372,7 @@ def create_bcs(variable, in_file, out_file,
                grid_type   = 'T'):
 
     print(f'---- Creating NEMO boundary conditions for variable {variable} from {source} ----')
-    if source!='SOSE': raise Exception('Functions only set up for SOSE currently')
+    if source not in ['SOSE', 'CESM2']: raise Exception('Functions only set up for SOSE and CESM2 currently')
 
     # Check number of dimensions of variable (2D or 3D):
     dimension = f"{len(xr.open_dataset(f'{in_file}')[variable].dims)}D"
@@ -382,6 +387,12 @@ def create_bcs(variable, in_file, out_file,
         else:
             if dimension=='2D':   name_remapping = {'XC':'lon', 'YC':'lat'}
             elif dimension=='3D': name_remapping = {'XC':'lon', 'YC':'lat', 'Z':'depth'}
+    elif source=='CESM2':
+        if variable in ['UVEL', 'VVEL']:
+            if dimension=='3D': name_remapping = {'XG':'ULONG', 'YC':'ULAT', 'z_t':'depth'}
+        else:
+            if dimension=='2D':   name_remapping = {'TLONG':'lon', 'TLAT':'lat'}
+            elif dimension=='3D': name_remapping = {'TLONG':'lon', 'TLAT':'lat', 'z_t':'depth'}
         
     # Dictionary specifying file names and locations for subsequent functions:
     interp_info = {'source': source,
@@ -404,35 +415,33 @@ def create_bcs(variable, in_file, out_file,
        # Vertically interpolate the above horizontally interpolated dataset to NEMO grid:
        vertical_interp(interp_info, f'{folder}temp/{source}-{variable}-BC-horizontal-interp.nc', \
                        f'{folder}temp/{source}-{variable}-BC-vertical-interp.nc', ln_obcs=True, bdy_ind=bdy_ind)
-       SOSE_interp   = xr.open_dataset(f'{folder}temp/{source}-{variable}-BC-vertical-interp.nc')
+       source_interp = xr.open_dataset(f'{folder}temp/{source}-{variable}-BC-vertical-interp.nc')
     elif dimension=='2D':
        # Fill areas that are masked in source dataset but not in NEMO with nearest neighbours:
-       SOSE_interp   = xr.open_dataset(f'{folder}temp/{source}-{variable}-BC-horizontal-interp.nc').isel(y=1)
+       source_interp = xr.open_dataset(f'{folder}temp/{source}-{variable}-BC-horizontal-interp.nc').isel(y=1)
 
     # Fill areas that are masked in source dataset but not in NEMO with nearest neighbours:
-    SOSE_extended = fill_ocean(SOSE_interp, variable, nemo_mask_ds, dim=dimension, niter=100, fill_val=fill_value, grid=grid_type)
-    #SOSE_extended[variable] = xr.where(SOSE_extended[variable] != 10000, 0.05, 0.05)
+    source_extended = fill_ocean(source_interp, variable, nemo_mask_ds, dim=dimension, niter=100, fill_val=fill_value, grid=grid_type)
     if grid_type=='T': gridmask=nemo_mask_ds.tmask
     elif grid_type=='U': gridmask=nemo_mask_ds.umask
     elif grid_type=='V': gridmask=nemo_mask_ds.vmask
     else: print('Must specify grid as type T, U, or V')
-    #SOSE_extended[variable] = xr.where((gridmask.isel(time_counter=0).values == 0), 0.1, SOSE_extended[variable])
-    SOSE_extended[variable] = SOSE_extended[variable].roll(x=-1)
+    source_extended[variable] = source_extended[variable].roll(x=-1)
 
     # Final processing (fill NaNs with a real value and shift very deepest grid cell value):
     if ~np.isnan(land_value):
-        SOSE_extended[variable] = xr.where(np.isnan(SOSE_extended[variable]), land_value, SOSE_extended[variable])
-        #SOSE_extended[variable] = xr.where(np.abs(SOSE_extended[variable]) < 1e-4, land_value, SOSE_extended[variable]) # for sea ice masking
+        source_extended[variable] = xr.where(np.isnan(source_extended[variable]), land_value, source_extended[variable])
+        #source_extended[variable] = xr.where(np.abs(source_extended[variable]) < 1e-4, land_value, source_extended[variable]) # for sea ice masking
     else:
-        SOSE_extended[variable] = xr.where(np.isnan(SOSE_extended[variable]), 9999, SOSE_extended[variable])
+        source_extended[variable] = xr.where(np.isnan(source_extended[variable]), 9999, source_extended[variable])
     if dimension=='3D':
-        SOSE_extended[variable] = xr.where(SOSE_extended.z == SOSE_extended.z[-1], SOSE_extended[variable].isel(z=-2), SOSE_extended[variable])
-        SOSE_extended[variable] = ('time_counter','deptht','y','x'), SOSE_extended[variable].values[np.newaxis, ...]
+        source_extended[variable] = xr.where(source_extended.z == source_extended.z[-1], source_extended[variable].isel(z=-2), source_extended[variable])
+        source_extended[variable] = ('time_counter','deptht','y','x'), source_extended[variable].values[np.newaxis, ...]
     elif dimension=='2D':
-        SOSE_extended[variable] = ('time_counter','y','x'), SOSE_extended[variable].values[np.newaxis, ...]
+        source_extended[variable] = ('time_counter','y','x'), source_extended[variable].values[np.newaxis, ...]
 
     # Write output to file:
     # TO DO: replace x, y with normal index values and add nav_lon, nav_lat of boundary to dataset as variables
-    SOSE_extended.assign_coords(x=nemo_mask_ds.nav_lon.isel(y=0).values, y=[nemo_mask_ds.nav_lat.isel(x=0,y=0).values]).to_netcdf(f'{out_file}', \
+    source_extended.assign_coords(x=nemo_mask_ds.nav_lon.isel(y=0).values, y=[nemo_mask_ds.nav_lat.isel(x=0,y=0).values]).to_netcdf(f'{out_file}', \
                                                                                                                                   unlimited_dims='time_counter')
     return
