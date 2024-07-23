@@ -6,7 +6,8 @@ import numpy as np
 from .utils import distance_btw_points, closest_point
 from .grid import get_coast_mask, get_icefront_mask
 from .ics_obcs import fill_ocean
-from constants import temp_C2K 
+from .file_io import find_cesm2_file
+from .constants import temp_C2K, rho_fw
 
 # Function subsets global forcing files from the same grid to the new domain, and fills any NaN values with connected 
 # nearest neighbour and then fill_val.
@@ -177,48 +178,47 @@ def process_cesm2_ocn_conditions (expt, var, ens, out_dir):
 
 # Process atmospheric forcing from CESM2 scenarios (PPACE, LENS, MENS, LW1.5, LW2.0) for a single variable and single ensemble member.
 # expt='LE2', var='PRECT', ens='1011.001' etc.
-def cesm2_atm_forcing (expt, var, ens, out_dir):
+def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
 
     if expt not in ['LE2']:
         raise Exception('Invalid experiment {expt}')
-    
+
     freq     = 'daily'
-    end_year = 2100
     for year in range(start_year, end_year+1):
-        print(f'Processing {year}')
         # read in the data and subset to the specified year
         file_path = find_cesm2_file(expt, var, 'atm', freq, ens, year)
         ds        = xr.open_dataset(file_path)
         data      = ds[var].isel(time=(ds.time.dt.year == year))
 
-        # Unit conversions ### need to check that these are still consistent between CESM1 and CESM2
-        if var in ['FLDS', 'FSDS']:
-            # Swap sign
-            data *= -1
-        elif var == 'TREFHT':
+        # Unit conversions #
+        # notes: don't think I need to swap FSDS,FLDS signs like Kaitlin did for CESM1, qrefht is specific 
+        #        humidity so don't need to convert, but will need to change read in option in namelist_cfg
+        if var == 'TREFHT':
             # Convert from K to C
             data -= temp_C2K
-
+        elif var=='PRECT': # total precipitation
+            # Convert from m/s to kg/m2/s
+            data *= rho_fw
+        
         # Write data
-        out_file_name = f'{out_dir}{expt}_ens{ens_str}_{var}_{year}.nc'
+        out_file_name = f'{out_dir}CESM2-{expt}_ens{ens}_{var}_y{year}.nc'
         data.to_netcdf(out_file_name)
     return
 
+
 # Create CESM atmospheric forcing for the given scenario, for all variables and ensemble members.
 # ens_strs : list of strings of ensemble member names
-def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None):
+def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None, start_year=1850, end_year=2100):
+    
+    if out_dir is None:
+        raise Exception('Please specify an output directory via optional argument out_dir')
 
-    out_dir_prefix = '/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/'
-    if expt == 'LE2':
-        if out_dir is None:
-            out_dir = f'{out_dir_prefix}LE2/processed/'
-
-    var_names = ['TREFHT', 'QREFHT', 'PSL', 'UBOT', 'VBOT', 'PRECT', 'FLDS', 'FSDS']
+    var_names = ['UBOT','VBOT','FSDS','FLDS','TREFHT','QREFHT','PRECT','PSL']
 
     for ens in ens_strs:
         print(f'Processing ensemble member {ens}')
         for var in var_names:
-            print('Processing {var}')
-            cesm2_atm_forcing(expt, var, ens, out_dir)
+            print(f'Processing {var}')
+            cesm2_atm_forcing(expt, var, ens, out_dir, start_year=start_year, end_year=end_year)
 
-    return    
+    return
