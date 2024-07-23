@@ -154,6 +154,7 @@ def read_zhou(fileT='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/observations/shenj
 def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year,
                     base_dir='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/'):
 
+    import glob
     from datetime import datetime
 
     if expt not in ['LE2']:
