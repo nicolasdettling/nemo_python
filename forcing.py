@@ -3,7 +3,7 @@
 ###########################################################
 import xarray as xr
 import numpy as np
-from .utils import distance_btw_points, closest_point
+from .utils import distance_btw_points, closest_point, convert_to_teos10
 from .grid import get_coast_mask, get_icefront_mask
 from .ics_obcs import fill_ocean
 from .file_io import find_cesm2_file
@@ -138,15 +138,12 @@ def create_calving(calving, nemo_mask, calving_var='soicbclv', new_file_path='./
     return calv_ice_new
 
 # Process ocean conditions from CESM2 scenarios for a single variable and single ensemble member (for initial and boundary conditions).
-def process_cesm2_ocn_conditions (expt, var, ens, out_dir):
-
-    from .utils import convert_to_teos10
+def process_cesm2_ocn_conditions (expt, var, ens, out_dir, start_year=1850, end_year=2100):
 
     if expt not in ['LE2']:
-        raise Exception('Invalid experiment {expt}')
+        raise Exception(f'Invalid experiment {expt}')
 
-    freq     = 'monthly'
-    end_year = 2100
+    freq = 'monthly'
     for year in range(start_year, end_year+1):
         print(f'Processing {year}')
         # read in the data and subset to the specified year
@@ -158,6 +155,8 @@ def process_cesm2_ocn_conditions (expt, var, ens, out_dir):
         if var in ['SSH','UVEL','VVEL']:
             # convert length units from cm to m
             data *= 0.01
+       
+        # Convert from practical salinity to absolute salinity??
         elif var == 'TEMP':
             # Convert from potential temperature to conservative temperature
             # need to load absolute salinity from file
@@ -170,7 +169,7 @@ def process_cesm2_ocn_conditions (expt, var, ens, out_dir):
             data = ds['ConsTemp']
 
         # Write data
-        out_file_name = f'{out_dir}{expt}_ens{ens_str}_{var}_{year}.nc'
+        out_file_name = f'{out_dir}CESM2-{expt}_ens{ens_str}_{var}_y{year}.nc'
         data.to_netcdf(out_file_name)
 
     return
@@ -193,10 +192,7 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
         # Unit conversions #
         # notes: don't think I need to swap FSDS,FLDS signs like Kaitlin did for CESM1, qrefht is specific 
         #        humidity so don't need to convert, but will need to change read in option in namelist_cfg
-        if var == 'TREFHT':
-            # Convert from K to C
-            data -= temp_C2K
-        elif var=='PRECT': # total precipitation
+        if var=='PRECT': # total precipitation
             # Convert from m/s to kg/m2/s
             data *= rho_fw
         
@@ -220,5 +216,22 @@ def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None, start_year=18
         for var in var_names:
             print(f'Processing {var}')
             cesm2_atm_forcing(expt, var, ens, out_dir, start_year=start_year, end_year=end_year)
+
+    return
+
+def cesm2_expt_all_ocn_forcing(expt, ens_strs=None, out_dir=None, start_year=1850, end_year=2100):
+
+    if out_dir is None:
+        raise Exception('Please specify an output directory via optional argument out_dir')
+
+    ocn_var_names = ['TEMP','SALT','UVEL','VVEL','SSH']
+    ice_var_names = ['aice','sithick','sisnthick']
+    var_names = ocn_var_names + ice_var_names
+ 
+    for ens in ens_strs:
+        print(f'Processing ensemble member {ens}')
+        for var in var_names:
+            print(f'Processing {var}')
+            cesm2_ocn_forcing(expt, var, ens, out_dir, start_year=start_year, end_year=end_year)
 
     return
