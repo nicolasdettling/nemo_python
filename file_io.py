@@ -187,14 +187,18 @@ def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year,
         str_format = '%Y%m%d'
     elif freq == 'monthly':
         str_format = '%Y%m'
-    file_list = glob.glob(f'{base_dir}{expt}/{start_stub}{expt}-{ensemble_member}{domain_stub}{var_name}*')
+    file_list  = glob.glob(f'{base_dir}{expt}/{start_stub}{expt}-{ensemble_member}{domain_stub}{var_name}*')
+    found_date = False
     for file in file_list:
         date_range = (file.split(f'.{var_name}.')[1]).split('.nc')[0]
         start_year = datetime.strptime(date_range.split('-')[0], str_format).year
         end_year   = datetime.strptime(date_range.split('-')[1], str_format).year
         if (year <= end_year) and (year >= start_year): # found the file we're looking for
+            found_date = True
             break
 
+    if not found_date:
+        raise Exception('File for requested year not found, double-check that it exists?')
     file_path = f'{base_dir}{expt}/{start_stub}{expt}-{ensemble_member}{domain_stub}{var_name}.{date_range}.nc'
 
     return file_path
