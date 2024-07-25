@@ -185,9 +185,17 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
     freq     = 'daily'
     for year in range(start_year, end_year+1):
         # read in the data and subset to the specified year
-        file_path = find_cesm2_file(expt, var, 'atm', freq, ens, year)
-        ds        = xr.open_dataset(file_path)
-        data      = ds[var].isel(time=(ds.time.dt.year == year))
+        if var=='PRECS': # snowfall
+            file_pathc = find_cesm2_file(expt, 'PRECSC', 'atm', freq, ens, year)
+            file_pathl = find_cesm2_file(expt, 'PRECSL', 'atm', freq, ens, year)
+            ds_conv    = xr.open_dataset(file_pathc) # convective snow rate
+            ds_large   = xr.open_dataset(file_pathl) # large-scale snow rate
+            data_conv  = ds_conv['PRECSC'].isel(time=(ds.time.dt.year == year))
+            data_large = ds_large['PRECSL'].isel(time=(ds.time.dt.year == year))
+        else: 
+            file_path = find_cesm2_file(expt, var, 'atm', freq, ens, year)
+            ds        = xr.open_dataset(file_path)
+            data      = ds[var].isel(time=(ds.time.dt.year == year))
 
         # Unit conversions #
         # notes: don't think I need to swap FSDS,FLDS signs like Kaitlin did for CESM1, qrefht is specific 
@@ -195,7 +203,10 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
         if var=='PRECT': # total precipitation
             # Convert from m/s to kg/m2/s
             data *= rho_fw
-        
+        elif var=='PRECS': # snowfall
+            # Combine convective and large scale snowfall rates and convert from m of water equivalent to kg/m2/s
+            data  = (data_conv + data_large) * rho_fw        
+
         # Write data
         out_file_name = f'{out_dir}CESM2-{expt}_ens{ens}_{var}_y{year}.nc'
         data.to_netcdf(out_file_name)
@@ -209,7 +220,7 @@ def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None, start_year=18
     if out_dir is None:
         raise Exception('Please specify an output directory via optional argument out_dir')
 
-    var_names = ['UBOT','VBOT','FSDS','FLDS','TREFHT','QREFHT','PRECT','PSL']
+    var_names = ['UBOT','VBOT','FSDS','FLDS','TREFHT','QREFHT','PRECT','PSL','PRECS']
 
     for ens in ens_strs:
         print(f'Processing ensemble member {ens}')
