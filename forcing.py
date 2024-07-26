@@ -154,8 +154,7 @@ def process_cesm2_ocn_conditions (expt, var, ens, out_dir, start_year=1850, end_
         # Unit conversions ### need to check that these are still consistent between CESM1 and CESM2
         if var in ['SSH','UVEL','VVEL']:
             # convert length units from cm to m
-            data *= 0.01
-       
+            data *= 0.01 
         # Convert from practical salinity to absolute salinity??
         elif var == 'TEMP':
             # Convert from potential temperature to conservative temperature
@@ -190,8 +189,8 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
             file_pathl = find_cesm2_file(expt, 'PRECSL', 'atm', freq, ens, year)
             ds_conv    = xr.open_dataset(file_pathc) # convective snow rate
             ds_large   = xr.open_dataset(file_pathl) # large-scale snow rate
-            data_conv  = ds_conv['PRECSC'].isel(time=(ds.time.dt.year == year))
-            data_large = ds_large['PRECSL'].isel(time=(ds.time.dt.year == year))
+            data_conv  = ds_conv['PRECSC'].isel(time=(ds_conv.time.dt.year == year))
+            data_large = ds_large['PRECSL'].isel(time=(ds_large.time.dt.year == year))
         else: 
             file_path = find_cesm2_file(expt, var, 'atm', freq, ens, year)
             ds        = xr.open_dataset(file_path)
@@ -221,7 +220,7 @@ def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None, start_year=18
         raise Exception('Please specify an output directory via optional argument out_dir')
 
     var_names = ['UBOT','VBOT','FSDS','FLDS','TREFHT','QREFHT','PRECT','PSL','PRECS']
-
+    
     for ens in ens_strs:
         print(f'Processing ensemble member {ens}')
         for var in var_names:
