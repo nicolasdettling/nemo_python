@@ -146,7 +146,10 @@ def cesm2_ocn_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
     freq = 'monthly'
     for year in range(start_year, end_year+1):
         # read in the data and subset to the specified year
-        file_path = find_cesm2_file(expt, var, 'ocn', freq, ens, year)
+        if var in ['aice','sithick','sisnthick']:
+            file_path = find_cesm2_file(expt, var, 'ice', freq, ens, year)
+        else:
+            file_path = find_cesm2_file(expt, var, 'ocn', freq, ens, year)
         ds        = xr.open_dataset(file_path)
         data      = ds[var].isel(time=(ds.time.dt.year == year))
 
