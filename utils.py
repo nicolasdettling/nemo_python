@@ -512,7 +512,7 @@ def convert_to_teos10(dataset, var='PracSal'):
         # Get absolute salinity from practical salinity
         absS  = gsw.SA_from_SP(dataset[var], press, lon, lat)
 
-        return absS
+        return absS.rename('AbsSal')
     elif var=='InsituTemp':    
         if 'PracSal' in list(dataset.keys()):
             # Get absolute salinity from practical salinity
@@ -522,7 +522,7 @@ def convert_to_teos10(dataset, var='PracSal'):
         else:
             raise Exception('Must include practical salinity (PracSal) variable in dataset when converting in-situ temperature')
         
-        return consT
+        return consT.rename('ConsTemp')
     elif var=='PotTemp': # potential temperature    
         if 'PracSal' in list(dataset.keys()):
             # Get absolute salinity from practical salinity
@@ -534,7 +534,7 @@ def convert_to_teos10(dataset, var='PracSal'):
         else:
             raise Exception('Must include practical salinity (PracSal) variable in dataset when converting potential temperature')
         
-        return consT
+        return consT.rename('ConsTemp')
     else:
         raise Exception('Variable options are PracSal, InsituTemp, PotTemp')    
     
