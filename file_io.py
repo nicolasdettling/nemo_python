@@ -100,7 +100,7 @@ def read_woa (woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_
         # Have in-situ temperature and practical salinity; want potential temperature        
         woa_temp = gsw.pt0_from_t(abs_salt, woa_temp, woa_press)
     elif eos == 'teos10':
-        # Convert to TEOS80
+        # Convert to TEOS10
         # Want conservative temperature and absolute salinity
         woa_salt = abs_salt
         woa_temp = gsw.CT_from_t(woa_salt, woa_temp, woa_press)
@@ -141,7 +141,7 @@ def read_zhou(fileT='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/observations/shenj
 
     # does not provide depth, so calculate:
     depth  = gsw.z_from_p(obs_ds.pressure, obs_ds.lat)
-    obs_ds = obs_ds.assign({'depth':depth}).squeeze()
+    obs_ds = obs_ds.assign({'depth':abs(depth)}).squeeze()
 
     # Convert units to TEOS10
     if eos!='teos10':
