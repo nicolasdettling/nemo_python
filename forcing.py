@@ -196,13 +196,10 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100,
             ds_large   = xr.open_dataset(file_pathl) # large-scale snow rate
             data_conv  = ds_conv['PRECSC'].isel(time=(ds_conv.time.dt.year == year))
             data_large = ds_large['PRECSL'].isel(time=(ds_large.time.dt.year == year))
-            data_conv  = data_conv.where(cesm2_mask.isel(time=0) == 0) # mask atmospheric forcing over land
-            data_large = data_large.where(cesm2_mask.isel(time=0) == 0) 
         else: 
             file_path = find_cesm2_file(expt, var, 'atm', freq, ens, year)
             ds        = xr.open_dataset(file_path)
             data      = ds[var].isel(time=(ds.time.dt.year == year))
-            data      = data.where(cesm2_mask.isel(time=0) == 0) # mask atmospheric forcing over land
 
         # Unit conversions #
         # notes: don't think I need to swap FSDS,FLDS signs like Kaitlin did for CESM1, qrefht is specific 
@@ -215,6 +212,11 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100,
             data  = (data_conv + data_large) * rho_fw        
             data  = data.rename('PRECS')
 
+        # Mask atmospheric forcing over land based on cesm2 land mask (since land values might not be representative for the ocean areas)
+        data = data.where(cesm2_mask.isel(time=0) == 0)
+        # And then fill masked areas with nearest non-NaN latitude neighbour
+        data = data.interpolate_na(dim='lat', method='nearest', fill_value="extrapolate")
+        
         # Write data
         out_file_name = f'{out_dir}CESM2-{expt}_ens{ens}_{var}_y{year}.nc'
         data.to_netcdf(out_file_name)
@@ -228,9 +230,7 @@ def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None, start_year=18
     if out_dir is None:
         raise Exception('Please specify an output directory via optional argument out_dir')
 
-    #var_names = ['UBOT','VBOT','FSDS','FLDS','TREFHT','QREFHT','PRECT','PSL','PRECS']
-    var_names = ['PRECS']
-    
+    var_names = ['UBOT','VBOT','FSDS','FLDS','TREFHT','QREFHT','PRECT','PSL','PRECS']
     for ens in ens_strs:
         print(f'Processing ensemble member {ens}')
         for var in var_names:
