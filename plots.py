@@ -36,9 +36,10 @@ def finished_plot (fig, fig_name=None, dpi=None, print_out=True):
 # change_points: arguments to ismr colourmap (see above)
 # contour: list of levels to contour in black
 # shade_land: whether to shade the land mask in grey
+# lognorm: logarithmic colormap normalization
 
 # TODO contour ice front
-def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None, periodic=True, lat_max=None, contour=None, shade_land=True, cbar_kwags={}):
+def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None, periodic=True, lat_max=None, contour=None, shade_land=True, lognorm=False, cbar_kwags={}):
 
     new_fig = ax is None
     if title is None:
@@ -100,7 +101,14 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
         # Clear ocean back to white
         ax.pcolormesh(x_edges, y_edges, ocean_mask, cmap=cl.ListedColormap(['white']))
     # Now plot the data
-    img = ax.pcolormesh(x_edges, y_edges, data, cmap=cmap, vmin=vmin, vmax=vmax)
+    if lognorm:
+       if (vmin <= 0 or vmax <= 0):
+          print('vmin and vmax must be positive and non-zero when using a logarithmic colormap (lognorm=True), so allowing pcolormesh to choose limits instead')
+          vmin=None; vmax=None;
+
+       img = ax.pcolormesh(x_edges, y_edges, data, cmap=cmap, norm=cl.LogNorm(vmin=vmin, vmax=vmax)) # note that vmin can't be zero when logarithmic
+    else:   
+       img = ax.pcolormesh(x_edges, y_edges, data, cmap=cmap, vmin=vmin, vmax=vmax)
     if contour is not None:
         x, y = polar_stereo(grid[lon_name], grid[lat_name])
         ax.contour(x, y, data, levels=contour, colors=('black'), linewidths=1, linestyles='solid')
