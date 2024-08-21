@@ -256,10 +256,10 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100,
 
         # Change variable names and units in the dataset:
         if var=='PRECS':
-            data[var].attrs['long_name'] ='Total snowfall (convective + large-scale)'
-            data[var].attrs['units'] = 'kg/m2/s'
+            data.attrs['long_name'] ='Total snowfall (convective + large-scale)'
+            data.attrs['units'] = 'kg/m2/s'
         elif var=='PRECT':
-            data[var].attrs['units'] = 'kg/m2/s'
+            data.attrs['units'] = 'kg/m2/s'
 
         # Write data
         out_file_name = f'{out_dir}CESM2-{expt}_ens{ens}_{var}_y{year}.nc'
@@ -288,7 +288,7 @@ def cesm2_expt_all_ocn_forcing(expt, ens_strs=None, out_dir=None, start_year=185
     if out_dir is None:
         raise Exception('Please specify an output directory via optional argument out_dir')
 
-    ocn_var_names = ['SSH'] # ['TEMP','SALT','UVEL','VVEL','SSH']
+    ocn_var_names = ['TEMP','SALT','UVEL','VVEL','SSH']
     ice_var_names = ['aice','sithick','sisnthick']
     var_names = ocn_var_names + ice_var_names
  
