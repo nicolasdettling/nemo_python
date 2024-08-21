@@ -3,7 +3,7 @@
 ###########################################################
 import xarray as xr
 import numpy as np
-from .utils import distance_btw_points, closest_point, convert_to_teos10
+from .utils import distance_btw_points, closest_point, convert_to_teos10, fix_lon_range
 from .grid import get_coast_mask, get_icefront_mask
 from .ics_obcs import fill_ocean
 from .file_io import find_cesm2_file
@@ -143,6 +143,8 @@ def cesm2_ocn_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
     if expt not in ['LE2']:
         raise Exception(f'Invalid experiment {expt}')
 
+    # cesm2 ocean files are already land masked and will be exteneded into cavities later so don't need to landmask here
+
     freq = 'monthly'
     for year in range(start_year, end_year+1):
         # read in the data and subset to the specified year
@@ -150,8 +152,8 @@ def cesm2_ocn_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
             file_path = find_cesm2_file(expt, var, 'ice', freq, ens, year)
         else:
             file_path = find_cesm2_file(expt, var, 'ocn', freq, ens, year)
-        ds        = xr.open_dataset(file_path)
-        data      = ds[var].isel(time=(ds.time.dt.year == year))
+        ds   = xr.open_dataset(file_path)
+        data = ds[var].isel(time=(ds.time.dt.year == year))
 
         # Unit conversions ### need to check that these are still consistent between CESM1 and CESM2
         if var in ['SSH','UVEL','VVEL']:
@@ -165,12 +167,44 @@ def cesm2_ocn_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
             salt_ds   = xr.open_dataset(salt_path)
             salt_data = salt_ds['SALT'].isel(time=(salt_ds.time.dt.year == year))
 
-            dsc = xr.Dataset({'PotTemp':data, 'AbsSal':salt_data, 'depth':data.z_t, 'lon':data.TLONG, 'lat':data.TLAT})
+            dsc  = xr.Dataset({'PotTemp':data, 'AbsSal':salt_data, 'depth':data.z_t, 'lon':data.TLONG, 'lat':data.TLAT})
             data = convert_to_teos10(dsc, var='PotTemp')
 
+        # Convert calendar to Gregorian
+        data = data.convert_calendar('gregorian')
+        # Convert longitude range from 0-360 to degrees east
+        if var in ['SSH','SALT','TEMP']:
+            lon_name = 'TLONG'
+        elif var in ['aice','sithick','sisnthick']:
+            lon_name = 'TLON'
+        elif var in ['UVEL','VVEL']:
+            lon_name = 'ULONG'
+        data[lon_name] = fix_lon_range(data[lon_name])
+        
+        # Convert depth (z_t) from cm to m
+        if var in ['SALT','TEMP','UVEL','VVEL']:
+            data['z_t'] = data['z_t']*0.01
+            data['z_t'].attrs['units'] = 'meters'
+            data['z_t'].attrs['long_name'] = 'depth from surface to midpoint of layer'
+
+        # Change variable names and units in the dataset:
+        if var=='TEMP':
+            varname = 'ConsTemp'
+            data.attrs['long_name'] ='Conservative Temperature'
+        elif var=='SALT':
+            varname = 'AbsSal'
+            data = data.rename(varname)
+            data.attrs['long_name'] ='Absolute Salinity'
+        else:
+            varname=var
+            if var=='SSH':
+                data.attrs['units'] = 'meters'
+            elif var in ['UVEL','VVEL']:
+                data.attrs['units'] = 'm/s'
+
         # Write data
-        out_file_name = f'{out_dir}CESM2-{expt}_ens{ens}_{var}_y{year}.nc'
-        data.to_netcdf(out_file_name)
+        out_file_name = f'{out_dir}CESM2-{expt}_ens{ens}_{varname}_y{year}.nc'
+        data.to_netcdf(out_file_name, unlimited_dims='time')
 
     return
 
@@ -217,9 +251,19 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100,
         # And then fill masked areas with nearest non-NaN latitude neighbour
         data = data.interpolate_na(dim='lat', method='nearest', fill_value="extrapolate")
         
+        # Convert calendar to Gregorian
+        data = data.convert_calendar('gregorian')
+
+        # Change variable names and units in the dataset:
+        if var=='PRECS':
+            data[var].attrs['long_name'] ='Total snowfall (convective + large-scale)'
+            data[var].attrs['units'] = 'kg/m2/s'
+        elif var=='PRECT':
+            data[var].attrs['units'] = 'kg/m2/s'
+
         # Write data
         out_file_name = f'{out_dir}CESM2-{expt}_ens{ens}_{var}_y{year}.nc'
-        data.to_netcdf(out_file_name)
+        data.to_netcdf(out_file_name, unlimited_dims='time')
     return
 
 
@@ -244,7 +288,7 @@ def cesm2_expt_all_ocn_forcing(expt, ens_strs=None, out_dir=None, start_year=185
     if out_dir is None:
         raise Exception('Please specify an output directory via optional argument out_dir')
 
-    ocn_var_names = ['TEMP','SALT','UVEL','VVEL','SSH']
+    ocn_var_names = ['SSH'] # ['TEMP','SALT','UVEL','VVEL','SSH']
     ice_var_names = ['aice','sithick','sisnthick']
     var_names = ocn_var_names + ice_var_names
  
