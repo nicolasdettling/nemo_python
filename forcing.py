@@ -143,8 +143,6 @@ def cesm2_ocn_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
     if expt not in ['LE2']:
         raise Exception(f'Invalid experiment {expt}')
 
-    # cesm2 ocean files are already land masked and will be exteneded into cavities later so don't need to landmask here
-
     freq = 'monthly'
     for year in range(start_year, end_year+1):
         # read in the data and subset to the specified year
@@ -186,6 +184,11 @@ def cesm2_ocn_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
             data['z_t'] = data['z_t']*0.01
             data['z_t'].attrs['units'] = 'meters'
             data['z_t'].attrs['long_name'] = 'depth from surface to midpoint of layer'
+  
+        # Mask sea ice conditions based on tmask (so that land is NaN and no ice areas are zero)
+        if var in ['sithick','sisnthick']:
+            data = data.fillna(0) 
+            data = data.where((ds.tmask.fillna(0)) != 0)
 
         # Change variable names and units in the dataset:
         if var=='TEMP':
@@ -288,7 +291,7 @@ def cesm2_expt_all_ocn_forcing(expt, ens_strs=None, out_dir=None, start_year=185
     if out_dir is None:
         raise Exception('Please specify an output directory via optional argument out_dir')
 
-    ocn_var_names = ['TEMP','SALT','UVEL','VVEL','SSH']
+    ocn_var_names = [] #['TEMP','SALT','UVEL','VVEL','SSH']
     ice_var_names = ['aice','sithick','sisnthick']
     var_names = ocn_var_names + ice_var_names
  
