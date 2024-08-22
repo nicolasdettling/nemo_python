@@ -188,7 +188,7 @@ def cesm2_ocn_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
         # Mask sea ice conditions based on tmask (so that land is NaN and no ice areas are zero)
         if var in ['sithick','sisnthick']:
             data = data.fillna(0) 
-            data = data.where((ds.tmask.fillna(0)) != 0)
+            data = data.where((ds.tmask.fillna(0).values) != 0)
 
         # Change variable names and units in the dataset:
         if var=='TEMP':
