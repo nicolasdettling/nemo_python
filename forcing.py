@@ -291,7 +291,7 @@ def cesm2_expt_all_ocn_forcing(expt, ens_strs=None, out_dir=None, start_year=185
     if out_dir is None:
         raise Exception('Please specify an output directory via optional argument out_dir')
 
-    ocn_var_names = [] #['TEMP','SALT','UVEL','VVEL','SSH']
+    ocn_var_names = ['TEMP','SALT','UVEL','VVEL','SSH']
     ice_var_names = ['aice','sithick','sisnthick']
     var_names = ocn_var_names + ice_var_names
  
