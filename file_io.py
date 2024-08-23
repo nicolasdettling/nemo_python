@@ -2,6 +2,7 @@ import netCDF4 as nc
 import numpy as np
 import xarray as xr
 
+from .constants import cesm2_ensemble_members
 from .utils import select_bottom, convert_to_teos10
 from .interpolation import interp_latlon_cf
 
@@ -161,14 +162,20 @@ def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year,
         raise Exception(f'Invalid experiment {expt}')
     if freq not in ['daily', 'monthly']:
         raise Exception(f'Frequency can be either daily or monthly, but is specified as {freq}')
-    if ensemble_member not in ['1011.001']:
+    if ensemble_member not in cesm2_ensemble_members:
         raise Exception(f'Ensemble member {ensemble_member} is not available')
 
     if expt == 'LE2':
         if (year <= 2014) and (year >= 1850):
-            start_stub = 'b.e21.BHISTsmbb.f09_g17.'
+            if int(ensemble_member[2]) % 2 == 0: # if even decade, then it's part of cmip6
+                start_stub = 'b.e21.BHISTcmip6.f09_g17.'
+            else:
+                start_stub = 'b.e21.BHISTsmbb.f09_g17.'
         elif year <= 2100 and (year >=2015):
-            start_stub = 'b.e21.BSSP370smbb.f09_g17.'
+            if int(ensemble_member[2]) % 2 == 0: # if even decade, then it's part of cmip6
+                start_stub = 'b.e21.BSSP370cmip6.f09_g17.'
+            else:
+                start_stub = 'b.e21.BSSP370smbb.f09_g17.'
         else:
             raise Exception('Not a valid year for the specified experiment and ensemble member')
 
@@ -202,3 +209,26 @@ def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year,
     file_path = f'{base_dir}{expt}/{start_stub}{expt}-{ensemble_member}{domain_stub}{var_name}.{date_range}.nc'
 
     return file_path
+
+# Generate the postprocessing file name for a CESM variable for the given experiment, year and ensemble member.
+# for example, expt = 'LE2', ensemble_member='1011.001'
+def find_processed_cesm2_file(expt, var_name, ensemble_member, year,
+                              base_dir='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/'):
+
+    import glob
+    from datetime import datetime
+
+    if expt not in ['LE2']:
+        raise Exception(f'Invalid experiment {expt}')
+    if ensemble_member not in cesm2_ensemble_members:
+        raise Exception(f'Ensemble member {ensemble_member} is not available')
+
+    if expt == 'LE2':
+        if (year > 2100) or (year < 1850):
+            raise Exception('Not a valid year for the specified experiment and ensemble member')
+
+    # Return the requested file
+    file_path = f'{base_dir}{expt}/processed/CESM2-{expt}_ens{ensemble_member}_{var_name}_y{year}.nc'
+
+    return file_path
+
