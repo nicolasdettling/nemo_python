@@ -227,6 +227,17 @@ def find_processed_cesm2_file(expt, var_name, ensemble_member, year,
         if (year > 2100) or (year < 1850):
             raise Exception('Not a valid year for the specified experiment and ensemble member')
 
+    file_list  = glob.glob(f'{base_dir}{expt}/processed/CESM2-{expt}_ens{ensemble_member}_{var_name}_y*')
+    found_date = False
+    for file in file_list:
+        file_year = datetime.strptime((file.split(f'_{var_name}_y')[1]).split('.nc')[0], '%Y').year
+        if (year == file_year): # found the file we're looking for
+            found_date = True
+            break
+
+    if not found_date:
+        raise Exception('File for requested year not found, double-check that it exists?')
+   
     # Return the requested file
     file_path = f'{base_dir}{expt}/processed/CESM2-{expt}_ens{ensemble_member}_{var_name}_y{year}.nc'
 
