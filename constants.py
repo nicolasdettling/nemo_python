@@ -147,3 +147,6 @@ line_colours = ['black', 'Crimson', 'blue', 'DarkMagenta', 'DimGrey', 'DarkGreen
 land_colour     = '#9999a3'
 iceshelf_colour = '#d4d5da' 
 
+# Keep track of ensemble members downloaded for all variables:
+cesm2_ensemble_members = ['1011.001','1021.002','1031.002','1041.003','1051.003','1061.004', \
+                          '1071.004','1081.005','1091.005'] 
