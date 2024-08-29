@@ -158,6 +158,196 @@ def construct_cf (data, x, y, lon=None, lat=None, lon_bounds=None, lat_bounds=No
     return field
 
 
+# Function similar to "construct_cf" but for 3D variables to construct a minimal CF field so cf-python can do regridding
+# Have not yet generalized to take only lat lon depth without needing to specify x,y,z when that's possible
+# If the coordinate axes (1D) x and y are not lat-lon, pass in auxiliary lat-lon values (2D).
+# Input:
+# - data  : xarray variable of dimensions (z,y,x) to be regridded
+# - x     : 1D x coordinates 
+# - y     : 1D y coordinates 
+# - z     : 1D z coordinates 
+# - lon   : 2D longitude values
+# - lat   : 2D latitude values
+# - depth : 1D or 3D array of grid depth points
+def construct_cf_3d(data, x, y, z, lon=None, lat=None, depth=None):
+    import cf
+
+    # Inner function to convert to np arrays if needed
+    def convert_np (var):
+        if isinstance(var, xr.DataArray):
+            var = var.data
+        return var
+    data = convert_np(data)
+    x = convert_np(x)
+    y = convert_np(y)
+    z = convert_np(z)
+    lon = convert_np(lon)
+    lat = convert_np(lat)
+    depth = convert_np(depth)
+
+    field = cf.Field()
+
+    dim_x = cf.DimensionCoordinate(data=cf.Data(x, 'm'), properties={'axis':'X'})
+    dim_y = cf.DimensionCoordinate(data=cf.Data(y, 'm'), properties={'axis':'Y'})
+    dim_z = cf.DimensionCoordinate(data=cf.Data(z, 'm'), properties={'axis':'Z'})
+    field.set_construct(cf.DomainAxis(size=x.size), key='X')
+    field.set_construct(dim_x, axes='X')
+    field.set_construct(cf.DomainAxis(size=y.size), key='Y')
+    field.set_construct(dim_y, axes='Y')
+    field.set_construct(cf.DomainAxis(size=z.size), key='Z')
+    field.set_construct(dim_z, axes='Z')
+
+    dim_lon = cf.AuxiliaryCoordinate(data=cf.Data(lon, 'degrees_east'), properties={'standard_name':'longitude'})
+    field.set_construct(dim_lon, axes=('Y','X'))
+    dim_lat = cf.AuxiliaryCoordinate(data=cf.Data(lat, 'degrees_north'), properties={'standard_name':'latitude'})
+    field.set_construct(dim_lat, axes=('Y','X'))
+    dim_dep = cf.AuxiliaryCoordinate(data=cf.Data(depth, 'meters'), properties={'standard_name':'depth'})
+    if depth.ndim == 3:
+        field.set_construct(dim_dep, axes=('Z','Y','X'))
+    elif depth.ndim == 1:
+        field.set_construct(dim_dep, axes=('Z'))
+    else: 
+        raise Exception('Depth variable must be either 1D (Z) or 3D (Z,Y,X)')
+        
+    field.set_data(cf.Data(data), axes=('Z','Y','X'))
+    return field
+
+# Helper function to calculate longitude and latitude bounds for cf (following Kaitlin's interp_latlon_cf function)
+# Inputs:
+# - dataset : xarray dataset to calculate edges for (with dimensions x,y, and/or lon lat)
+# - (optional) ds_type : either src or nemo (type of grid to calculate edges of)
+# - (optional) method  : cf regridding method that the bounds will be used for
+def lonlat_bounds_cf(dataset, ds_type='src', method='linear', periodic_src=False, pster_src=False, periodic_nemo=True):
+
+    # Helper function to get an xarray DataArray of edges (size N+1, or N+1 by M+1) into a Numpy array of bounds for CF (size N x 2, or N x M x 4)
+    def edges_to_bounds (edges):
+        if len(edges.shape)==1:
+            # 1D variable
+            bounds = np.empty([edges.shape[0]-1, 2])
+            bounds[...,0] = edges.values[:-1]
+            bounds[...,1] = edges.values[1:]
+        elif len(edges.shape)==2:
+            # 2D variable
+            bounds = np.empty([edges.shape[0]-1, edges.shape[1]-1, 4])
+            bounds[...,0] = edges.values[:-1,:-1]  # SW corner
+            bounds[...,1] = edges.values[:-1,1:] # SE
+            bounds[...,2] = edges.values[1:,1:] # NE
+            bounds[...,3] = edges.values[1:,:-1] # NW
+        return bounds
+
+    if method == 'conservative':
+        if ds_type=='src':
+            if len(dataset['x'].shape) != 1:
+                raise Exception('Cannot find bounds if source dataset not a regular grid')
+            # Get grid cell edges for x and y
+            def construct_edges (array, dim):
+                centres = 0.5*(array[:-1] + array[1:])
+                if periodic_src and dim=='lon':
+                    first_edge = 0.5*(array[0] + array[-1] - 360)
+                    last_edge  = 0.5*(array[0] + 360 + array[-1])
+                else:
+                    first_edge = 2*array[0] - array[1]
+                    last_edge  = 2*array[-1] - array[-2]
+                edges = np.concatenate(([first_edge], centres, [last_edge]))
+                return xr.DataArray(edges, coords={dim:edges})
+            x_edges = construct_edges(dataset['x'].values, 'x')
+            y_edges = construct_edges(dataset['y'].values, 'y')
+            if pster_src:
+                # Now convert to lat-lon
+                lon_edges, lat_edges = polar_stereo_inv(x_edges, y_edges)
+            else:
+                lon_edges = x_edges
+                lat_edges = y_edges
+            lon_bounds = edges_to_bounds(lon_edges)
+            lat_bounds = edges_to_bounds(lat_edges)
+        elif ds_type=='nemo':
+            def construct_nemo_bounds (array):
+                edges = extend_grid_edges(array, 'f', periodic=periodic_nemo)
+                return edges_to_bounds(edges)
+            if ('glamt' in dataset) and ('gphif' in dataset):
+                lon_bounds = construct_nemo_bounds(dataset['glamt'])
+                lat_bounds = construct_nemo_bounds(dataset['gphif'])
+            elif ('bounds_lon' in dataset) and ('bounds_lat' in dataset):
+                lon_bounds = dataset['bounds_lon']
+                lat_bounds = dataset['bounds_lat']
+            elif ('bounds_nav_lon_grid_T' in dataset) and ('bounds_nav_lat_grid_T' in dataset):
+                lon_bounds = dataset['bounds_nav_lon_grid_T']
+                lat_bounds = dataset['bounds_nav_lat_grid_T']
+            else:
+                raise Exception('dataset does not contain the necessary variables for ds_type nemo. Should contain glamt, gphif, or bounds_lon, bounds_lat')
+        else:
+            raise Exception('ds_type must be one of src or nemo')
+    else:
+        lon_bounds = None
+        lat_bounds = None
+        
+    return lon_bounds, lat_bounds
+
+# Function to create a cf regrid operator that regrids source to destination
+# currently, cf allows conservative regridding for 2d arrays only unfortunately
+# Input:
+# - source : xarray dataset containing: x, y, z, lon, lat, data, depth, (lon_bounds, lat_bounds --- only for 2d)
+#            lon_bounds and lat_bounds can be calculated with lonlat_bounds_cf
+#            (might require some pre-processing to rename the variables)
+# - (optional) key_3d : boolean indicating whether to regrid a 3D array or 2D array
+# - (optional) filename : string of location to save the pickle, for example: regrid-CESM2toNEMO-linear.pickle
+def regrid_operator_cf(source, destination, key_3d=True, filename=None, 
+                       method='linear', ln_z=False, use_dst_mask=True, 
+                       src_cyclic=False, dst_cyclic=False):
+    import cf
+
+    if key_3d: # 3D regridding
+        dummy_data = np.zeros([destination.sizes['z'], destination.sizes['y'], destination.sizes['x']]) # to specify dims
+        src = construct_cf_3d(source['data'], source['x'], source['y'], source['z'],
+                              lon=source['lon'], lat=source['lat'], depth=source['depth'])
+        dst = construct_cf_3d(dummy_data, destination['x'], destination['y'], destination['z'],
+                              lon=destination['lon'], lat=destination['lat'], depth=destination['depth'])
+
+        # calculate regridding operator with cf
+        regrid_operator = src.regrids(dst, method=method, src_z='Z', dst_z='Z', ln_z=ln_z, 
+                                      dst_axes={'X':'X','Y':'Y','Z':'Z'}, src_axes={'X':'X','Y':'Y','Z':'Z'}, 
+                                      use_dst_mask=use_dst_mask, src_cyclic=src_cyclic, dst_cyclic=dst_cyclic, 
+                                      return_operator=True)    
+    else: # 2D regridding
+        dummy_data = np.zeros([destination.sizes['y'], destination.sizes['x']]) # to specify dims
+        src = construct_cf(source['data'], source['x']     , source['y']     , lon=source['lon']     , lat=source['lat'])#,
+                           #lon_bounds=source['lon_bounds'] , lat_bounds=source['lat_bounds'])
+        dst = construct_cf(dummy_data    , destination['x'], destination['y'], lon=destination['lon'], lat=destination['lat'])#,
+                           #lon_bounds=destination['lon_bounds'], lat_bounds=destination['lat_bounds'])
+
+        # calculate regridding operator with cf
+        regrid_operator = src.regrids(dst, method=method, dst_axes={'X':'X','Y':'Y'}, src_axes={'X':'X','Y':'Y'},
+                                      use_dst_mask=use_dst_mask, src_cyclic=src_cyclic, dst_cyclic=dst_cyclic)
+
+    if filename:
+        import pickle
+        with open(filename, 'wb') as handle:
+            pickle.dump(regrid_operator, handle)
+        # reload with pickle.load(handle)
+    
+    return regrid_operator
+
+# Function regrids the given source cf construct using the regrid operator calculated by regrid_operator_cf
+# Inputs:
+# - source : cf construct of the source data to regrid to a new grid specified by the operator
+# - regrid_operator : cf regrid operator (produced by function cf_regrid_operator)
+# - (optional) key_3d : boolean to specify whether you want to regrid 3D data
+# - (optional) method : method used for cf regridding; should be the same as what was specified to create the cf regrid operator
+def regrid_array_cf(source, regrid_operator, key_3d=True, method='linear', src_cyclic=False, dst_cyclic=False):
+    import cf
+
+    if key_3d:
+        src = construct_cf_3d(source['data'], source['x'], source['y'], source['z'],
+                              lon=source['lon'], lat=source['lat'], depth=source['depth'])
+    else:
+        src = construct_cf(source['data'], source['x'], source['y'], lon=source['lon'], lat=source['lat'])#, 
+                          # lon_bounds=source['lon_bounds'], lat_bounds=source['lat_bounds'])
+
+    regridded_array = src.regrids(regrid_operator, dst_axes={'X':'X','Y':'Y'}, src_axes={'X':'X','Y':'Y'}, method=method,
+                                  src_cyclic=src_cyclic, dst_cyclic=dst_cyclic)
+    
+    return regridded_array
+
 # Interpolate the source dataset to the NEMO coordinates using CF. This is good for smaller interpolation jobs (i.e. not BedMachine3) and hopefully will be good for big interpolation jobs once CF is next updated.
 # Inputs:
 # source: xarray Dataset containing the coordinates 'x' and 'y' (could be either lat/lon or polar stereographic), and any data variables you want
