@@ -256,6 +256,8 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100,
         
         # Convert calendar to Gregorian
         data = data.convert_calendar('gregorian')
+        # Convert longitude range from 0-360 to degrees east
+        data['lon'] = fix_lon_range(data['lon'])
 
         # Change variable names and units in the dataset:
         if var=='PRECS':
