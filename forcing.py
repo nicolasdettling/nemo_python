@@ -7,7 +7,7 @@ from .utils import distance_btw_points, closest_point, convert_to_teos10, fix_lo
 from .grid import get_coast_mask, get_icefront_mask
 from .ics_obcs import fill_ocean
 from .file_io import find_cesm2_file
-from .constants import temp_C2K, rho_fw
+from .constants import temp_C2K, rho_fw, cesm2_ensemble_members
 
 # Function subsets global forcing files from the same grid to the new domain, and fills any NaN values with connected 
 # nearest neighbour and then fill_val.
