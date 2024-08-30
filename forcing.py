@@ -147,10 +147,21 @@ def cesm2_ocn_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
     for year in range(start_year, end_year+1):
         # read in the data and subset to the specified year
         if var in ['aice','sithick','sisnthick']:
+            if year > 1850:
+                file_path_prev = find_cesm2_file(expt, var, 'ice', freq, ens, year-1)
             file_path = find_cesm2_file(expt, var, 'ice', freq, ens, year)
         else:
+            if year > 1850:
+                file_path_prev = find_cesm2_file(expt, var, 'ocn', freq, ens, year-1) # load last month from previous file
             file_path = find_cesm2_file(expt, var, 'ocn', freq, ens, year)
-        ds   = xr.open_dataset(file_path)
+        
+        if year==1850:
+            ds = xr.open_dataset(file_path)
+        else:
+            if file_path_prev != file_path:
+                ds = xr.open_mfdataset([file_path_prev, file_path])
+            else:
+                ds = xr.open_dataset(file_path)
         data = ds[var].isel(time=(ds.time.dt.year == year))
 
         # Unit conversions ### need to check that these are still consistent between CESM1 and CESM2
@@ -187,8 +198,8 @@ def cesm2_ocn_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
   
         # Mask sea ice conditions based on tmask (so that land is NaN and no ice areas are zero)
         if var in ['sithick','sisnthick']:
-            data = data.fillna(0) 
-            data = data.where((ds.tmask.fillna(0).values) != 0)
+            data = data.fillna(0)
+            data = data.where((ds.isel(time=(ds.time.dt.year == year)).tmask.fillna(0).values) != 0)
 
         # Change variable names and units in the dataset:
         if var=='TEMP':
@@ -212,7 +223,7 @@ def cesm2_ocn_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
     return
 
 
-# Process atmospheric forcing from CESM2 scenarios (PPACE, LENS, MENS, LW1.5, LW2.0) for a single variable and single ensemble member.
+# Process atmospheric forcing from CESM2 scenarios (LE2, etc.) for a single variable and single ensemble member.
 # expt='LE2', var='PRECT', ens='1011.001' etc.
 def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, 
                        land_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/LE2/b.e21.BHISTsmbb.f09_g17.LE2-1011.001.cam.h0.LANDFRAC.185001-185912.nc'):
@@ -253,9 +264,12 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100,
         data = data.where(cesm2_mask.isel(time=0) == 0)
         # And then fill masked areas with nearest non-NaN latitude neighbour
         data = data.interpolate_na(dim='lat', method='nearest', fill_value="extrapolate")
-        
-        # Convert calendar to Gregorian
-        data = data.convert_calendar('gregorian')
+       
+        # CESM2 does not do leap years, but NEMO does, so fill 02-29 with 02-28        
+        # Also convert calendar to Gregorian
+        fill_value = data.isel(time=((data.time.dt.month==2)*(data.time.dt.day==28)))
+        data = data.convert_calendar('gregorian', missing=fill_value)
+
         # Convert longitude range from 0-360 to degrees east
         data['lon'] = fix_lon_range(data['lon'])
 
@@ -272,7 +286,7 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100,
     return
 
 
-# Create CESM atmospheric forcing for the given scenario, for all variables and ensemble members.
+# Create CESM2 atmospheric forcing for the given scenario, for all variables and ensemble members.
 # ens_strs : list of strings of ensemble member names
 def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None, start_year=1850, end_year=2100):
     
@@ -288,6 +302,8 @@ def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None, start_year=18
 
     return
 
+# Create CESM2 ocean forcing for the given scenario, for all variables and ensemble members.
+# ens_strs : list of strings of ensemble member names
 def cesm2_expt_all_ocn_forcing(expt, ens_strs=None, out_dir=None, start_year=1850, end_year=2100):
 
     if out_dir is None:
@@ -303,4 +319,139 @@ def cesm2_expt_all_ocn_forcing(expt, ens_strs=None, out_dir=None, start_year=185
             print(f'Processing {var}')
             cesm2_ocn_forcing(expt, var, ens, out_dir, start_year=start_year, end_year=end_year)
 
+    return
+
+
+# Helper function calculates the time-mean over specified year range for ERA5 output (for bias correction)
+# Input: 
+# - variable : string of forcing variable name (in CESM2 naming convention)
+# - (optional) year_start : start year for time averaging
+# - (optional) end_year   : end year for time averaging
+# - (optional) out_file   : path to file to write time mean to NetCDF in case you want to store it
+def era5_time_mean_forcing(variable, year_start=1979, year_end=2015, out_file=None):
+
+    ERA5_ds   = xr.open_mfdataset(f'{base_folder}ERA5-forcing/files/era5_{variable}_*_daily_averages.nc')
+    ERA5_ds   = ERA5_ds.isel(time=((ERA5_ds.time.dt.year <= year_end)*(ERA5_ds.time.dt.year >= year_start)))
+    time_mean = ERA5_ds.mean(dim='time') 
+
+    if variable in ['PRECS','PRECT']:
+        time_mean *= rho_fw/sec_per_day # convert to match units
+    elif variable in ['FLDS','FSDS']:
+        time_mean /= sec_per_hour # convert to match units
+    
+    if out_file:
+        time_mean.to_netcdf(out_file)
+    return time_mean
+
+# Function calculates the time-mean over specified year range for mean of all CESM2 ensemble members in the specified experiment (for bias correction)
+# Input:
+# - expt : string of CESM2 experiment name (e.g. 'LE2')
+# - variable : string of forcing variable name
+# - (optional) year_start : start year for time averaging
+# - (optional) end_year   : end year for time averaging
+# - (optional) out_file   : path to file to write time mean to NetCDF in case you want to store it
+# - (optional) ensemble_members : list of strings of ensemble members to average (defaults to all the ones that have been downloaded)
+def cesm2_ensemble_time_mean_forcing(expt, variable, year_start=1979, year_end=2015, out_file=None, ensemble_members=cesm2_ensemble_members):
+
+    # calculate ensemble mean for each year
+    year_mean = xr.Dataset()
+    for year in range(year_start, year_end+1):
+        files_to_open = []
+        for ens in ensemble_members:
+            file_path     = find_processed_cesm2_file(expt, variable, ens, year)
+            files_to_open += [file_path]
+        # calculate ensemble mean    
+        ens_files = xr.open_mfdataset(files_to_open, concat_dim='ens', combine='nested')
+        ens_year  = ens_files[variable].isel(time=(ens_files.time.dt.year==year))
+        ens_mean  = ens_year.mean(dim=['time','ens']) # dimensions should be x,y
+        # save ensemble mean to xarray dataset
+        if year == year_start:
+            year_mean = ens_mean
+        else:
+            year_mean = xr.concat([year_mean, ens_mean], dim='year')
+            
+    # and then calculate time-mean of all ensemble means:
+    time_mean = year_mean.mean(dim='year')
+    if out_file:
+        time_mean.to_netcdf(out_file)
+    
+    return time_mean.to_dataset()
+
+# Function calculate the bias correction for the atmospheric variable from the specified source type based on 
+# the difference between its mean state and the ERA5 mean state.
+# Input:
+# - source : string of source type (currently only set up for 'CESM2') 
+# - variable : string of the variable from the source dataset to be corrected
+# - (optional) expt : 
+# - (optional) year_start : start year for time averaging
+# - (optional) end_year   : end year for time averaging
+# - (optional) ensemble_mean_file, era5_mean_file : string paths to files in case you've already ran the averaging separately
+# - (optional) nemo_grid, nemo_mask : string of path to NEMO domain_cfg and mesh_mask files
+# - (optional) out_folder : string to location to save the bias correction file
+def atm_bias_correction(source, variable, expt='LE2', year_start=1979, year_end=2015, 
+                        ensemble_mean_file=None, era5_mean_file=None,
+                        nemo_grid='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/domain_cfg-20240305.nc',
+                        nemo_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc',
+                        out_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/LE2/processed/'):
+
+    # NEMO configuration domain_cfg file for regridding
+    nemo_grid_ds = xr.open_dataset(nemo_grid).squeeze()
+    
+    # process_forcing_for_correction(source, variable)
+    if source=='CESM2':
+        # Read in ensemble time mean (or calculate it)
+        if ensemble_mean_file:
+            CESM2_time_mean = xr.open_dataset(ensemble_mean_file)
+        else:
+            CESM2_time_mean = cesm2_ensemble_time_mean_forcing(expt, variable, year_start=year_start, year_end=year_end)
+
+        # Read in time mean of ERA5 files (or calculate it)
+        if era5_mean_file:
+            ERA5_time_mean = xr.open_dataset(era5_mean_file)
+        else:
+            CESM2_to_ERA5_varnames = {'TREFHT':'t2m','FSDS':'ssrd','FLDS':'strd','QREFHT':'sph2m', 'PRECS':'sf', 'PRECT':'tp'} # I calculated specific humidity
+            varname = CESM2_to_ERA5_varnames[variable]
+            ERA5_time_mean = era5_time_mean_forcing(varname, year_start=year_start, year_end=year_end)
+            if variable=='QREFHT':
+                varname='specific_humidity'
+            ERA5_time_mean = ERA5_time_mean.rename({varname:variable, 'longitude':'lon', 'latitude':'lat'})
+        
+        # Adjust the longitude and regrid time means to NEMO configuration grid, so that they can be used to bias correct
+        ERA5_time_mean['lon'] = fix_lon_range(ERA5_time_mean['lon'])        
+        CESM2_source = CESM2_time_mean.sortby('lon')
+        ERA5_source  = ERA5_time_mean.sortby('lon')
+        CESM2_mean_interp = interp_latlon_cf(CESM2_source, nemo_grid_ds, pster_src=False, periodic_src=True, periodic_nemo=True, method='conservative')
+        ERA5_mean_interp  = interp_latlon_cf(ERA5_source , nemo_grid_ds, pster_src=False, periodic_src=True, periodic_nemo=True, method='conservative')
+        
+        # thermodynamic correction
+        if variable in ['TREFHT','QREFHT','FLDS','FSDS','PRECS','PRECT']:
+            print('Correcting thermodynamics')
+            out_file = f'{out_folder}{source}-{expt}_{variable}_bias_corr.nc'
+            thermo_correction(CESM2_mean_interp, ERA5_mean_interp, out_file)
+        else:
+            raise Exception(f'Variable {variable} does not need bias correction. Check that this is true.')
+    else:
+        raise Exception("Bias correction currently only set up to correct CESM2. Sorry you'll need to write some more code!")
+
+    return
+
+# Function to calculate the bias and associated thermodynamic correction between source (CESM2) and ERA5 mean fields
+# Inputs:
+# - source_mean : xarray Dataset containing the ensemble and time mean of the source dataset variable (currently CESM2)
+# - ERA5_mean  : xarray Dataset containing the time mean of the ERA5 variable
+# - out_file   : string to path to write NetCDF file to
+def thermo_correction(source_mean, ERA5_mean, out_file,
+                      nemo_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
+    
+    # NEMO configuration domain_cfg file for regridding
+    nemo_mask_ds = xr.open_dataset(nemo_mask).squeeze()
+
+    # Calculate difference:
+    bias = source_mean - ERA5_mean
+    # Mask land regions to zero:
+    bias = xr.where(nemo_mask_ds.isel(nav_lev=0).tmask==0, 0, bias)
+
+    # write to file
+    bias.to_netcdf(out_file)
+    
     return
