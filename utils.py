@@ -359,10 +359,10 @@ def month_convert (date_code):
         raise Exception('Invalid month')
 
 
-# Rotate a vector from the local x-y space to geographic space (with true zonal and meridional components). Follows subroutines "angle" and "rot_rep" in nemo/src/OCE/SBC/geo2ocean.F90.
+# Rotate a vector from the local x-y space to geographic space (with true zonal and meridional components) or do the reverse. Follows subroutines "angle" and "rot_rep" in nemo/src/OCE/SBC/geo2ocean.F90.
 # Warning, this might not handle the north pole correctly, so use with caution if you are plotting a global grid and care about the north pole.
 # Inputs:
-# u, v: xarray DataArrays containing the u and v components of the vector in local x-y space (eg velocities from NEMO output).
+# u, v: xarray DataArrays containing the u and v components of the vector in local x-y space (eg velocities from NEMO output) or if reverse=True containing velocities in geographic space that will be reversed to local x-y space
 # domcfg: either the path to the domain_cfg file, or an xarray Dataset containing glamt, gphit, glamu, etc.
 # gtype: grid type: 'T', 'U', 'V', or 'F'. In practice you will interpolate both velocities to the T-grid and then call this with gtype='T' (default).
 # periodic: whether the grid is periodic
@@ -371,7 +371,7 @@ def month_convert (date_code):
 # Outputs:
 # ug, vg: xarray DataArrays containing the zonal and meridional components of the vector in geographic space
 # cos_grid, sin_grid (only if return_angles=True): cos and sin of the angle between the grid and east
-def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True, return_angles=False):
+def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True, return_angles=False, reverse=False):
 
     # Repeat all necessary import statements within here so the function is self-contained (someone can just copy and paste the whole thing if wanted)
     import xarray as xr
@@ -477,8 +477,12 @@ def rotate_vector (u, v, domcfg, gtype='T', periodic=True, halo=True, return_ang
     cos_grid = xr.where(index, 1, cos_grid)
 
     # Finally, rotate!
-    ug = u*cos_grid - v*sin_grid
-    vg = v*cos_grid + u*sin_grid
+    if reverse: # go from grid i-j direction to geographic u, v, such as for boundary conditions
+        ug = u*cos_grid + v*sin_grid
+        vg = v*cos_grid - u*sin_grid
+    else:
+        ug = u*cos_grid - v*sin_grid
+        vg = v*cos_grid + u*sin_grid
 
     if return_angles:
         return ug, vg, cos_grid, sin_grid
