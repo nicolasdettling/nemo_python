@@ -228,16 +228,20 @@ def cesm2_ocn_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
 def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, 
                        land_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/LE2/b.e21.BHISTsmbb.f09_g17.LE2-1011.001.cam.h0.LANDFRAC.185001-185912.nc'):
 
-    if expt not in ['LE2']:
+    if expt not in ['LE2', 'piControl']:
         raise Exception('Invalid experiment {expt}')
 
     # load cesm2 land-ocean mask
     cesm2_mask = xr.open_dataset(land_mask).LANDFRAC
 
+    if expt=='piControl' and var=='UBOT':  var='U'
+    elif expt=='piControl' and var=='VBOT': var='V'
+
     freq     = 'daily'
     for year in range(start_year, end_year+1):
         # read in the data and subset to the specified year
         if var=='PRECS': # snowfall
+            if expt=='piControl': freq='monthly' # only monthly files available
             file_pathc = find_cesm2_file(expt, 'PRECSC', 'atm', freq, ens, year)
             file_pathl = find_cesm2_file(expt, 'PRECSL', 'atm', freq, ens, year)
             ds_conv    = xr.open_dataset(file_pathc) # convective snow rate
@@ -259,6 +263,10 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100,
             # Combine convective and large scale snowfall rates and convert from m of water equivalent to kg/m2/s
             data  = (data_conv + data_large) * rho_fw        
             data  = data.rename('PRECS')
+
+        # For the piControl experiment, only full column winds are available, so select the bottom wind
+        if var=='U' or var=='V':
+            data = data.isel(lev=-1) # bottom wind is the last entry (992 hPa)
 
         # Mask atmospheric forcing over land based on cesm2 land mask (since land values might not be representative for the ocean areas)
         data = data.where(cesm2_mask.isel(time=0) == 0)
@@ -299,6 +307,8 @@ def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None, start_year=18
         for var in var_names:
             print(f'Processing {var}')
             cesm2_atm_forcing(expt, var, ens, out_dir, start_year=start_year, end_year=end_year)
+    else:
+        raise Exception('Experiment options currently are only LE2 or piControl')
 
     return
 
