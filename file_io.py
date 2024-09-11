@@ -158,12 +158,13 @@ def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year,
     import glob
     from datetime import datetime
 
-    if expt not in ['LE2']:
+    if expt not in ['LE2', 'piControl']:
         raise Exception(f'Invalid experiment {expt}')
     if freq not in ['daily', 'monthly']:
         raise Exception(f'Frequency can be either daily or monthly, but is specified as {freq}')
-    if ensemble_member not in cesm2_ensemble_members:
-        raise Exception(f'Ensemble member {ensemble_member} is not available')
+    if expt != 'piControl':
+        if ensemble_member not in cesm2_ensemble_members:
+            raise Exception(f'Ensemble member {ensemble_member} is not available')
 
     if expt == 'LE2':
         if (year <= 2014) and (year >= 1850):
@@ -178,6 +179,8 @@ def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year,
                 start_stub = 'b.e21.BSSP370smbb.f09_g17.'
         else:
             raise Exception('Not a valid year for the specified experiment and ensemble member')
+    elif expt=='piControl':
+        start_stub = 'b.e21.B1850.f09_g17.CMIP6'
 
     if domain == 'atm':
         if freq == 'monthly':
@@ -194,7 +197,12 @@ def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year,
         str_format = '%Y%m%d'
     elif freq == 'monthly':
         str_format = '%Y%m'
-    file_list  = glob.glob(f'{base_dir}{expt}/{start_stub}{expt}-{ensemble_member}{domain_stub}{var_name}*')
+ 
+    if expt=='LE2':
+        file_list  = glob.glob(f'{base_dir}{expt}/{start_stub}{expt}-{ensemble_member}{domain_stub}{var_name}*')
+    elif expt=='piControl':
+        file_list  = glob.glob(f'{base_dir}{expt}/{start_stub}-{expt}.001{domain_stub}{var_name}*')    
+
     found_date = False
     for file in file_list:
         date_range = (file.split(f'.{var_name}.')[1]).split('.nc')[0]
@@ -206,7 +214,11 @@ def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year,
 
     if not found_date:
         raise Exception('File for requested year not found, double-check that it exists?')
-    file_path = f'{base_dir}{expt}/{start_stub}{expt}-{ensemble_member}{domain_stub}{var_name}.{date_range}.nc'
+
+    if expt=='LE2':
+        file_path = f'{base_dir}{expt}/{start_stub}{expt}-{ensemble_member}{domain_stub}{var_name}.{date_range}.nc'
+    elif expt=='piControl':
+        file_path = f'{base_dir}{expt}/{start_stub}-{expt}.001{domain_stub}{var_name}.{date_range}.nc'
 
     return file_path
 
