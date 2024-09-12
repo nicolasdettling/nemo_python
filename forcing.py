@@ -222,6 +222,23 @@ def cesm2_ocn_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100):
 
     return
 
+# Convert wind velocities from the lowest atmospheric model level grid cell to the 10 m wind level 
+# (CESM2 output UBOT and VBOT is at 992 hPa) by using the wind speed magnitude from the variable U10 and the wind directions from UBOT and VBOT
+def UBOT_to_U10_wind(UBOT, VBOT, U10):
+
+    # calculate the angle between the UBOT and VBOT wind vectors
+    theta = np.arctan2(VBOT, UBOT) 
+    # then use this angle to create the x and y wind vector components that sum to the magnitude of the U10 wind speed
+    U10x = U10*np.cos(theta)
+    U10y = U10*np.sin(theta)
+
+    # check that the differences between U10 speed and recreated U10 speed are small:
+    U10_recreate = np.sqrt(U10x**2 + U10y**2)
+    if np.max(np.abs(U10 - U10_recreate)) > 0.1: 
+        raise Exception('The maximum difference between the provided U10 wind speed and the recreated speed' + \
+                        'is greater than 0.1 m/s. Double check that wind velocities were recreated correctly.')
+
+    return U10x, U10y
 
 # Process atmospheric forcing from CESM2 scenarios (LE2, etc.) for a single variable and single ensemble member.
 # expt='LE2', var='PRECT', ens='1011.001' etc.
@@ -234,9 +251,6 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100,
     # load cesm2 land-ocean mask
     cesm2_mask = xr.open_dataset(land_mask).LANDFRAC
 
-    if expt=='piControl' and var=='UBOT':  var='U'
-    elif expt=='piControl' and var=='VBOT': var='V'
-
     freq     = 'daily'
     for year in range(start_year, end_year+1):
         # read in the data and subset to the specified year
@@ -248,6 +262,19 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100,
             ds_large   = xr.open_dataset(file_pathl) # large-scale snow rate
             data_conv  = ds_conv['PRECSC'].isel(time=(ds_conv.time.dt.year == year))
             data_large = ds_large['PRECSL'].isel(time=(ds_large.time.dt.year == year))
+        elif var=='wind':
+            if expt=='piControl': var_U = 'U'; var_V='V';
+            else: var_U='UBOT'; var_V='VBOT';
+            file_path_UBOT = find_cesm2_file(expt, var_U, 'atm', freq, ens, year)
+            file_path_VBOT = find_cesm2_file(expt, var_V, 'atm', freq, ens, year)
+            file_path_U10  = find_cesm2_file(expt, 'U10', 'atm', freq, ens, year)
+
+            ds_UBOT = xr.open_dataset(file_path_UBOT)
+            ds_VBOT = xr.open_dataset(file_path_VBOT)
+            ds_U10  = xr.open_dataset(file_path_U10)
+            data_UBOT = ds_UBOT[var_U].isel(time=(ds_UBOT.time.dt.year == year))
+            data_VBOT = ds_VBOT[var_V].isel(time=(ds_VBOT.time.dt.year == year))
+            data_U10  = ds_U10['U10'].isel(time=(ds_U10.time.dt.year == year))
         else: 
             file_path = find_cesm2_file(expt, var, 'atm', freq, ens, year)
             ds        = xr.open_dataset(file_path)
@@ -264,33 +291,53 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100,
             data  = (data_conv + data_large) * rho_fw        
             data  = data.rename('PRECS')
 
-        # For the piControl experiment, only full column winds are available, so select the bottom wind
-        if var=='U' or var=='V':
-            data = data.isel(lev=-1) # bottom wind is the last entry (992 hPa)
+        # Convert the wind to the 10 m wind
+        if var=='wind':
+            # For the piControl experiment, only full column winds are available, so select the bottom wind
+            if expt=='piControl':
+                data_UBOT = data_UBOT.isel(lev=-1) # bottom wind is the last entry (992 hPa)
+                data_VBOT = data_VBOT.isel(lev=-1)
+            # Convert the wind to the corrected height
+            Ux, Uy = UBOT_to_U10_wind(data_UBOT, data_VBOT, data_U10)
+            data_UBOT = Ux.rename('U10x')
+            data_VBOT = Uy.rename('U10y')
 
-        # Mask atmospheric forcing over land based on cesm2 land mask (since land values might not be representative for the ocean areas)
-        data = data.where(cesm2_mask.isel(time=0) == 0)
-        # And then fill masked areas with nearest non-NaN latitude neighbour
-        data = data.interpolate_na(dim='lat', method='nearest', fill_value="extrapolate")
-       
-        # CESM2 does not do leap years, but NEMO does, so fill 02-29 with 02-28        
-        # Also convert calendar to Gregorian
-        fill_value = data.isel(time=((data.time.dt.month==2)*(data.time.dt.day==28)))
-        data = data.convert_calendar('gregorian', missing=fill_value)
+        if var=='wind':
+            data_arrays = [data_UBOT, data_VBOT]
+        else:
+            data_arrays = [data]       
 
-        # Convert longitude range from 0-360 to degrees east
-        data['lon'] = fix_lon_range(data['lon'])
+        for arr in data_arrays:
+            if var in ['QREFHT','TREFHT','FSDS','FLDS','SLP']: 
+                # Mask atmospheric forcing over land based on cesm2 land mask (since land values might not be representative for the ocean areas)
+                arr = arr.where(cesm2_mask.isel(time=0) == 0)
+                # And then fill masked areas with nearest non-NaN latitude neighbour
+                arr = arr.interpolate_na(dim='lat', method='nearest', fill_value="extrapolate")
+      
+            # CESM2 does not do leap years, but NEMO does, so fill 02-29 with 02-28        
+            # Also convert calendar to Gregorian
+            fill_value = arr.isel(time=((arr.time.dt.month==2)*(arr.time.dt.day==28)))
+            arr = arr.convert_calendar('gregorian', missing=fill_value)
 
-        # Change variable names and units in the dataset:
-        if var=='PRECS':
-            data.attrs['long_name'] ='Total snowfall (convective + large-scale)'
-            data.attrs['units'] = 'kg/m2/s'
-        elif var=='PRECT':
-            data.attrs['units'] = 'kg/m2/s'
+            # Convert longitude range from (0,360) to (-180,180) degrees east
+            arr['lon'] = fix_lon_range(arr['lon'])
 
-        # Write data
-        out_file_name = f'{out_dir}CESM2-{expt}_ens{ens}_{var}_y{year}.nc'
-        data.to_netcdf(out_file_name, unlimited_dims='time')
+            # Change variable names and units in the dataset:
+            varname = arr.name
+            if var=='PRECS':
+                arr.attrs['long_name'] ='Total snowfall (convective + large-scale)'
+                arr.attrs['units'] = 'kg/m2/s'
+            elif var=='PRECT':
+                arr.attrs['units'] = 'kg/m2/s'
+            elif var=='wind':
+                if varname=='U10x':
+                    arr.attrs['long_name'] = 'zonal wind at 10 m'
+                elif varname=='U10y':
+                    arr.attrs['long_name'] = 'meridional wind at 10 m'
+
+            # Write data
+            out_file_name = f'{out_dir}CESM2-{expt}_ens{ens}_{varname}_y{year}.nc'
+            arr.to_netcdf(out_file_name, unlimited_dims='time')
     return
 
 
@@ -301,14 +348,12 @@ def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None, start_year=18
     if out_dir is None:
         raise Exception('Please specify an output directory via optional argument out_dir')
 
-    var_names = ['UBOT','VBOT','FSDS','FLDS','TREFHT','QREFHT','PRECT','PSL','PRECS']
+    var_names = ['wind','FSDS','FLDS','TREFHT','QREFHT','PRECT','PSL','PRECS']
     for ens in ens_strs:
         print(f'Processing ensemble member {ens}')
         for var in var_names:
             print(f'Processing {var}')
             cesm2_atm_forcing(expt, var, ens, out_dir, start_year=start_year, end_year=end_year)
-    else:
-        raise Exception('Experiment options currently are only LE2 or piControl')
 
     return
 
