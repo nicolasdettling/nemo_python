@@ -242,7 +242,7 @@ def UBOT_to_U10_wind(UBOT, VBOT, U10):
 
 # Process atmospheric forcing from CESM2 scenarios (LE2, etc.) for a single variable and single ensemble member.
 # expt='LE2', var='PRECT', ens='1011.001' etc.
-def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, 
+def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, year_ens_start=1750,
                        land_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/LE2/b.e21.BHISTsmbb.f09_g17.LE2-1011.001.cam.h0.LANDFRAC.185001-185912.nc'):
 
     if expt not in ['LE2', 'piControl']:
@@ -337,13 +337,15 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100,
 
             # Write data
             out_file_name = f'{out_dir}CESM2-{expt}_ens{ens}_{varname}_y{year}.nc'
+            if expt=='piControl': # split files into ensemble chunks
+                out_file_name = f'{out_dir}CESM2-{expt}_ens{ens}_{varname}_y{1850+(year-year_ens_start)}.nc'
             arr.to_netcdf(out_file_name, unlimited_dims='time')
     return
 
 
 # Create CESM2 atmospheric forcing for the given scenario, for all variables and ensemble members.
 # ens_strs : list of strings of ensemble member names
-def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None, start_year=1850, end_year=2100):
+def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None, start_year=1850, end_year=2100, year_ens_start=1750):
     
     if out_dir is None:
         raise Exception('Please specify an output directory via optional argument out_dir')
@@ -353,7 +355,7 @@ def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None, start_year=18
         print(f'Processing ensemble member {ens}')
         for var in var_names:
             print(f'Processing {var}')
-            cesm2_atm_forcing(expt, var, ens, out_dir, start_year=start_year, end_year=end_year)
+            cesm2_atm_forcing(expt, var, ens, out_dir, start_year=start_year, end_year=end_year, year_ens_start=year_ens_start)
 
     return
 
