@@ -766,7 +766,27 @@ def extend_into_mask (data, missing_val=-9999, fill_val=np.nan, masked=False, us
 
     return data    
 
-    
+# Helper function to use CF to regrid CESM2 to ERA5 grid; probably combine with other functions later but for now just do separate for simplicity
+def regrid_era5_to_cesm2(cesm2_ds, era5_ds, variable):
+    import cf
+
+    destination = cesm2_ds.copy().rename({variable:'data'})
+    source      = era5_ds.copy().rename({variable:'data'})
+
+    # Create CF-python constructs
+    dummy_data = np.zeros([destination.sizes['lat'], destination.sizes['lon']]) # to specify dims
+    src = construct_cf(source['data'], source['lon']     , source['lat']     )
+    dst = construct_cf(dummy_data    , destination['lon'], destination['lat'])
+
+    # calculate regridding operator with cf
+    opts={'method':'bilinear', 'dst_axes':{'X':'X','Y':'Y'}, 'src_axes':{'X':'X','Y':'Y'}, 'src_cyclic':True, 'dst_cyclic':True}
+    regrid_operator = src.regrids(dst, **opts)
+    era5_regrid     = src.regrids(regrid_operator, **opts)
+
+    # Dataset with ERA5 variable regridded to the CESM2 grid
+    era5_regridded = xr.Dataset({variable: (('lat','lon'), era5_regrid.array)}).assign({'lon':cesm2_ds.lon, 'lat':cesm2_ds.lat})
+
+    return era5_regridded
             
             
             

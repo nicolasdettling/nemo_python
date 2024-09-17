@@ -6,6 +6,7 @@ import numpy as np
 from .utils import distance_btw_points, closest_point, convert_to_teos10, fix_lon_range
 from .grid import get_coast_mask, get_icefront_mask
 from .ics_obcs import fill_ocean
+from .interpolation import regrid_era5_to_cesm2
 from .file_io import find_cesm2_file
 from .constants import temp_C2K, rho_fw, cesm2_ensemble_members
 
@@ -337,8 +338,9 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, 
 
             # Write data
             out_file_name = f'{out_dir}CESM2-{expt}_ens{ens}_{varname}_y{year}.nc'
-            if expt=='piControl': # split files into ensemble chunks
-                out_file_name = f'{out_dir}CESM2-{expt}_ens{ens}_{varname}_y{1850+(year-year_ens_start)}.nc'
+            #if expt=='piControl': # split files into ensemble chunks
+                # for now just keep the smae:
+                #out_file_name = f'{out_dir}CESM2-{expt}_ens{ens}_{varname}_y{1850+(year-year_ens_start)}.nc'
             arr.to_netcdf(out_file_name, unlimited_dims='time')
     return
 
@@ -350,7 +352,7 @@ def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None, start_year=18
     if out_dir is None:
         raise Exception('Please specify an output directory via optional argument out_dir')
 
-    var_names = ['wind','FSDS','FLDS','TREFHT','QREFHT','PRECT','PSL','PRECS']
+    var_names = ['FSDS','FLDS','TREFHT','QREFHT','PRECT','PSL','PRECS'] #['wind','FSDS','FLDS','TREFHT','QREFHT','PRECT','PSL','PRECS']
     for ens in ens_strs:
         print(f'Processing ensemble member {ens}')
         for var in var_names:
@@ -381,21 +383,29 @@ def cesm2_expt_all_ocn_forcing(expt, ens_strs=None, out_dir=None, start_year=185
 
 # Helper function calculates the time-mean over specified year range for ERA5 output (for bias correction)
 # Input: 
-# - variable : string of forcing variable name (in CESM2 naming convention)
+# - variable : string of forcing variable name (in ERA5 naming convention)
 # - (optional) year_start : start year for time averaging
 # - (optional) end_year   : end year for time averaging
 # - (optional) out_file   : path to file to write time mean to NetCDF in case you want to store it
-def era5_time_mean_forcing(variable, year_start=1979, year_end=2015, out_file=None):
+def era5_time_mean_forcing(variable, year_start=1979, year_end=2015, out_file=None, 
+                           era5_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/ERA5_forcing/files/',
+                           land_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/ERA5-forcing/ERA5-landmask.nc'):
 
-    ERA5_ds   = xr.open_mfdataset(f'{base_folder}ERA5-forcing/files/era5_{variable}_*_daily_averages.nc')
+    ERA5_ds   = xr.open_mfdataset(f'{era5_folder}era5_{variable}_*_daily_averages.nc')
     ERA5_ds   = ERA5_ds.isel(time=((ERA5_ds.time.dt.year <= year_end)*(ERA5_ds.time.dt.year >= year_start)))
     time_mean = ERA5_ds.mean(dim='time') 
 
-    if variable in ['PRECS','PRECT']:
+    if variable in ['sf','tp']:
         time_mean *= rho_fw/sec_per_day # convert to match units
-    elif variable in ['FLDS','FSDS']:
+    elif variable in ['ssrd','strd']:
         time_mean /= sec_per_hour # convert to match units
     
+    # mask areas that are land:
+    era5_mask = xr.open_dataset(land_mask).lsm.isel(time=0) 
+    era5_mask['longitude'] = fix_lon_range(era5_mask['longitude'])  
+    time_mean['longitude'] = fix_lon_range(time_mean['longitude'])  
+    time_mean = xr.where(era5_mask != 0, np.nan, time_mean)
+
     if out_file:
         time_mean.to_netcdf(out_file)
     return time_mean
@@ -408,7 +418,8 @@ def era5_time_mean_forcing(variable, year_start=1979, year_end=2015, out_file=No
 # - (optional) end_year   : end year for time averaging
 # - (optional) out_file   : path to file to write time mean to NetCDF in case you want to store it
 # - (optional) ensemble_members : list of strings of ensemble members to average (defaults to all the ones that have been downloaded)
-def cesm2_ensemble_time_mean_forcing(expt, variable, year_start=1979, year_end=2015, out_file=None, ensemble_members=cesm2_ensemble_members):
+def cesm2_ensemble_time_mean_forcing(expt, variable, year_start=1979, year_end=2015, out_file=None, ensemble_members=cesm2_ensemble_members,
+                             land_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/LE2/b.e21.BHISTsmbb.f09_g17.LE2-1011.001.cam.h0.LANDFRAC.185001-185912.nc'):
 
     # calculate ensemble mean for each year
     year_mean = xr.Dataset()
@@ -429,6 +440,12 @@ def cesm2_ensemble_time_mean_forcing(expt, variable, year_start=1979, year_end=2
             
     # and then calculate time-mean of all ensemble means:
     time_mean = year_mean.mean(dim='year')
+
+    # mask areas that are land:
+    cesm2_mask = xr.open_dataset(land_mask).LANDFRAC
+    cesm2_mask['lon'] = fix_lon_range(cesm2_mask['lon'])  
+    time_mean  = xr.where(cesm2_mask.isel(time=0) != 0, np.nan, time_mean)
+
     if out_file:
         time_mean.to_netcdf(out_file)
     
@@ -447,20 +464,17 @@ def cesm2_ensemble_time_mean_forcing(expt, variable, year_start=1979, year_end=2
 # - (optional) out_folder : string to location to save the bias correction file
 def atm_bias_correction(source, variable, expt='LE2', year_start=1979, year_end=2015, 
                         ensemble_mean_file=None, era5_mean_file=None,
-                        nemo_grid='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/domain_cfg-20240305.nc',
-                        nemo_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc',
+                        era5_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/ERA5_forcing/files/',
                         out_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/LE2/processed/'):
 
-    # NEMO configuration domain_cfg file for regridding
-    nemo_grid_ds = xr.open_dataset(nemo_grid).squeeze()
-    
     # process_forcing_for_correction(source, variable)
     if source=='CESM2':
         # Read in ensemble time mean (or calculate it)
         if ensemble_mean_file:
             CESM2_time_mean = xr.open_dataset(ensemble_mean_file)
         else:
-            CESM2_time_mean = cesm2_ensemble_time_mean_forcing(expt, variable, year_start=year_start, year_end=year_end)
+            ensemble_mean_file = f'{out_folder}{variable}_mean_{year_start}-{year_end}.nc'
+            CESM2_time_mean = cesm2_ensemble_time_mean_forcing(expt, variable, out_file=ensemble_mean_file, year_start=year_start, year_end=year_end)
 
         # Read in time mean of ERA5 files (or calculate it)
         if era5_mean_file:
@@ -468,23 +482,20 @@ def atm_bias_correction(source, variable, expt='LE2', year_start=1979, year_end=
         else:
             CESM2_to_ERA5_varnames = {'TREFHT':'t2m','FSDS':'ssrd','FLDS':'strd','QREFHT':'sph2m', 'PRECS':'sf', 'PRECT':'tp'} # I calculated specific humidity
             varname = CESM2_to_ERA5_varnames[variable]
-            ERA5_time_mean = era5_time_mean_forcing(varname, year_start=year_start, year_end=year_end)
+            era5_mean_file = f'{era5_folder}{variable}_mean_{year_start}-{year_end}.nc'
+            ERA5_time_mean = era5_time_mean_forcing(varname, year_start=year_start, year_end=year_end, out_file=era5_mean_file, era5_folder=era5_folder)
             if variable=='QREFHT':
                 varname='specific_humidity'
             ERA5_time_mean = ERA5_time_mean.rename({varname:variable, 'longitude':'lon', 'latitude':'lat'})
         
         # Adjust the longitude and regrid time means to NEMO configuration grid, so that they can be used to bias correct
-        ERA5_time_mean['lon'] = fix_lon_range(ERA5_time_mean['lon'])        
-        CESM2_source = CESM2_time_mean.sortby('lon')
-        ERA5_source  = ERA5_time_mean.sortby('lon')
-        CESM2_mean_interp = interp_latlon_cf(CESM2_source, nemo_grid_ds, pster_src=False, periodic_src=True, periodic_nemo=True, method='conservative')
-        ERA5_mean_interp  = interp_latlon_cf(ERA5_source , nemo_grid_ds, pster_src=False, periodic_src=True, periodic_nemo=True, method='conservative')
-        
+        ERA5_regridded = regrid_era5_to_cesm2(CESM2_time_mean, ERA5_time_mean, variable)
+ 
         # thermodynamic correction
         if variable in ['TREFHT','QREFHT','FLDS','FSDS','PRECS','PRECT']:
             print('Correcting thermodynamics')
             out_file = f'{out_folder}{source}-{expt}_{variable}_bias_corr.nc'
-            thermo_correction(CESM2_mean_interp, ERA5_mean_interp, out_file)
+            thermo_correction(CESM2_time_mean, ERA5_regridded, out_file)
         else:
             raise Exception(f'Variable {variable} does not need bias correction. Check that this is true.')
     else:
@@ -497,16 +508,14 @@ def atm_bias_correction(source, variable, expt='LE2', year_start=1979, year_end=
 # - source_mean : xarray Dataset containing the ensemble and time mean of the source dataset variable (currently CESM2)
 # - ERA5_mean  : xarray Dataset containing the time mean of the ERA5 variable
 # - out_file   : string to path to write NetCDF file to
-def thermo_correction(source_mean, ERA5_mean, out_file,
-                      nemo_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
+# - fill_land (optional) : boolean indicating whether to fill areas that are land in the source mask with nearest values or whether to just leave it as is
+def thermo_correction(source_mean, ERA5_mean, out_file, fill_land=True):
     
-    # NEMO configuration domain_cfg file for regridding
-    nemo_mask_ds = xr.open_dataset(nemo_mask).squeeze()
-
     # Calculate difference:
-    bias = source_mean - ERA5_mean
-    # Mask land regions to zero:
-    bias = xr.where(nemo_mask_ds.isel(nav_lev=0).tmask==0, 0, bias)
+    bias = ERA5_mean - source_mean
+    # Fill land regions along latitudes
+    if fill_land:
+        bias = bias.interpolate_na(dim='lat', method='nearest', fill_value="extrapolate")
 
     # write to file
     bias.to_netcdf(out_file)
