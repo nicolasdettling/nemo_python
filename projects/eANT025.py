@@ -5,14 +5,15 @@ import matplotlib.pyplot as plt
 import glob
 import numpy as np
 import cmocean
+from calendar import monthrange
 
-from ..plots import finished_plot, plot_hovmoeller, animate_2D_circumpolar, plot_transect
+from ..plots import finished_plot, plot_hovmoeller, animate_2D_circumpolar, plot_transect, circumpolar_plot
 from ..utils import moving_average, distance_along_transect
 from ..timeseries import calc_hovmoeller_region
 from ..projects.evaluation import bottom_TS_vs_obs
-from ..constants import region_names, transect_amundsen
+from ..constants import region_names, transect_amundsen, sec_per_day
 from ..file_io import read_dutrieux
-from ..grid import transect_coords_from_latlon_waypoints
+from ..grid import transect_coords_from_latlon_waypoints, region_mask
 
 # Calculate and plot domain-wide sea surface height time series:
 # Function plots two timeseries as one extended timeseries figure (ds1, then ds2)
@@ -124,6 +125,101 @@ def plot_WOA_eval(run_folder, figname1, figname2, figname3, nemo_mesh='/gws/nopw
     bottom_TS_vs_obs(nemo_ds.isel(time_counter=slice(-12,None)).mean(dim='time_counter'), time_ave=False, fig_name=figname3, dpi=dpi)
     return
 
+
+# Calculate the regional melt rate from a nemo experiment
+# Inputs:
+# region_name : string, one of: nemo_python.constants.region_names
+# nemo_ds     : xarray dataset of nemo SBC files (containing fwfisf)
+# return_name (optional) : boolean to return full region name
+# return_mask (optional) : boolean to return region mask used
+# domain_cfg (optional)  : string of path to NEMO domain cfg file
+def calculate_regional_melt_rate(region_name, nemo_ds, return_name=False, return_mask=False,
+                             domain_cfg='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/domain_cfg-20240305.nc'):
+   
+    # get region mask:
+    nemo_domcfg               = xr.open_dataset(domain_cfg).squeeze()
+    mask, _, region_full_name = region_mask(region_name, nemo_domcfg, option='cavity', return_name=True)
+
+    # calculate the regional melt rate: in the form of (y, x, month), units of kg/month
+    # calculate number of days in months for melt rate:
+    days_per_month = [monthrange(nemo_ds.time_counter.dt.year[i].values, nemo_ds.time_counter.dt.month[i].values)[1] for i in range(0,nemo_ds.time_counter.size)]
+    nemo_ds        = nemo_ds.assign({'days_per_month':(('time_counter'), days_per_month)})
+    regional_melt_rate = xr.where(mask.rename({'x':'x_grid_T', 'y':'y_grid_T'})==1, 
+                                ((nemo_ds.area_grid_T*nemo_ds.fwfisf)*nemo_ds['days_per_month']*sec_per_day),
+                                  np.nan)
+
+    # annual regional melt rate: in the form of (y, x, year), units of gT/year
+    annual_regional_melt_rate = regional_melt_rate.resample(time_counter='Y').sum()*1e-12
+
+    if return_name and return_mask:
+        return regional_melt_rate, annual_regional_melt_rate, region_full_name, mask
+    elif return_name:
+        return regional_melt_rate, annual_regional_melt_rate, region_full_name
+    elif return_mask:
+        return regional_melt_rate, annual_regional_melt_rate, mask
+    else:
+        return regional_melt_rate, annual_regional_melt_rate
+
+# Plot timeseries of total annual melt by region, with maps alongside showing region definitions
+# Inputs:
+# SBC_files  : list of strings of SBC output file locations (that contain the variable fwfisf) 
+# domain_cfg (optional) : string of path to NEMO domain cfg file
+# mesh_mask  (optional) : string of path to NEMO mesh mask file
+# fig_name   (optional) : string of path to save figure to 
+# return_fig (optional) : boolean specifying whether to return the figure and axes
+def plot_annual_melt_overview(SBC_files, 
+                              domain_cfg='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/domain_cfg-20240305.nc',
+                              mesh_mask ='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc',
+                              fig_name=None, return_fig=False):
+
+    nemo_ds       = xr.open_mfdataset(SBC_files)
+    nemo_meshmask = xr.open_dataset(mesh_mask).squeeze()
+
+    # Create figure
+    fig, ax = plt.subplots(2,2, figsize=(12,8), dpi=100, gridspec_kw={'width_ratios': [3, 2]})
+
+    colors = ['IndianRed', 'SandyBrown', 'LightGreen', 'MediumTurquoise', 'SteelBlue', 'Plum', 'Pink']
+    # region names for time series (need to be included in the list of names in constants.py
+    region_list1 = ['all', 'west_antarctica', 'east_antarctica', 'ross', 'filchner_ronne'] # subplot 1
+    region_list2 = ['abbot', 'amery', 'cosgrove', 'dotson_crosson', 'getz', 'pine_island', 'thwaites'] # subplot 2
+    kwags = {'masked':False, 'make_cbar':False, 'title':'', 'lat_max':-66}
+
+    # calculate annual melt for each region and add to figure
+    i=0
+    for region_list in [region_list1, region_list2]:
+        r=0
+        for region in region_list:
+            _, annual_melt, region_full_name, mask = calculate_regional_melt_rate(region, nemo_ds, return_name=True, return_mask=True,
+                                                                                  domain_cfg=domain_cfg)
+            ax[i,0].plot(annual_melt.time_counter.dt.year, annual_melt.sum(dim=['x_grid_T','y_grid_T']), 
+                       label=region_full_name, c=colors[r])
+            
+            # map of region definitions
+            if i==0: zoom_amundsen=False
+            else: zoom_amundsen=True # add zoom into the amundsen sea region for panel 2
+            if r==0:
+                img1 = circumpolar_plot(mask, nemo_meshmask, ax=ax[i,1], ctype=colors[r], shade_land=True, 
+                                        zoom_amundsen=zoom_amundsen, **kwags)  
+            else:
+                img1 = circumpolar_plot(mask, nemo_meshmask, ax=ax[i,1], ctype=colors[r], shade_land=False, 
+                                        zoom_amundsen=zoom_amundsen, **kwags)
+            r+=1
+        ax[i,0].legend(loc=(1.85, 0.52), frameon=False)
+        _, axup = ax[i,0].get_ylim()
+        ax[i,0].set_ylim(0, axup*1.1)
+        ax[i,0].set_ylabel('Ice shelf freshwater flux (Gt/year)')
+        i+=1
+        
+    ax[0,0].set_title('Antarctica')
+    ax[1,0].set_title('West Antarctica') 
+
+    if fig_name:
+        finished_plot(fig, fig_name=fig_name)
+    if return_fig:
+        return fig, ax    
+    
+    return
+
 # Visualize the timeseries of variable averaged over a region to see convection
 def plot_hovmoeller_convect(run_folder, region, figname1, figname2, title='', tlim=(-1.5, 0.5), slim=(34.8, 34.86)):
 
@@ -146,53 +242,6 @@ def animate_vars(run_folder, nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS
 
     for v in range(len(var)):
         animate_2D_circumpolar(run_folder, var[v], stub[v], vlim=vlims[v], cmap=cmaps[v], nemo_mesh=nemo_mesh)
-
-    return
-
-# transections of U and V velocities, but still need to be rotated from the grid to universal (!!)
-def transects_UV_Amundsen(run_folder, savefig=False, nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
-    # load nemo simulations
-    gridU_files  = glob.glob(f'{run_folder}*grid_U*')
-    gridV_files  = glob.glob(f'{run_folder}*grid_V*')
-    nemoU_ds     = xr.open_mfdataset(gridU_files) # load all the grid files in the run folder
-    nemoV_ds     = xr.open_mfdataset(gridV_files)  
-    nemoU_ds     = nemoU_ds.rename({'depthu':'depth'})
-    nemoV_ds     = nemoV_ds.rename({'depthv':'depth'})
-    nemoU_results = nemoU_ds.isel(time_counter=slice(180,None)).mean(dim='time_counter')  # Average time series
-    nemoV_results = nemoV_ds.isel(time_counter=slice(180,None)).mean(dim='time_counter')
-    nemo_mesh_ds  = xr.open_dataset(nemo_mesh).isel(time_counter=0)
-
-    # calculate transects and plot:
-    for transect in ['shelf_west', 'shelf_mid', 'shelf_east', 'shelf_edge']:
-        # get coordinates for the transect:
-        xU_sim, yU_sim = transect_coords_from_latlon_waypoints(nemoU_results, transect_amundsen[transect], opt_float=False)
-        xV_sim, yV_sim = transect_coords_from_latlon_waypoints(nemoV_results, transect_amundsen[transect], opt_float=False)
-
-        # subset the datasets and nemo_mesh to the coordinates of the transect:
-        simU_transect = nemoU_results.isel(x=xr.DataArray(xU_sim, dims='n'), y=xr.DataArray(yU_sim, dims='n'))
-        simV_transect = nemoV_results.isel(x=xr.DataArray(xV_sim, dims='n'), y=xr.DataArray(yV_sim, dims='n'))
-        nemo_mesh_transectU = nemo_mesh_ds.isel(x=xr.DataArray(xU_sim, dims='n'), y=xr.DataArray(yU_sim, dims='n')).rename({'nav_lev':'depth'})
-        nemo_mesh_transectV = nemo_mesh_ds.isel(x=xr.DataArray(xV_sim, dims='n'), y=xr.DataArray(yV_sim, dims='n')).rename({'nav_lev':'depth'})
-
-        # add tmask, iceshelfmask and depths to the simulation dataset
-        simU_transect = simU_transect.assign({'gdept_0':nemo_mesh_transectU.gdept_0, 'tmask':nemo_mesh_transectU.umask, 'isfdraft':nemo_mesh_transectU.isfdraft})
-        simV_transect = simV_transect.assign({'gdept_0':nemo_mesh_transectV.gdept_0, 'tmask':nemo_mesh_transectV.vmask, 'isfdraft':nemo_mesh_transectV.isfdraft})
-
-        # calculate the distance of each point along the transect relative to the start of the transect:
-        simU_distance = distance_along_transect(simU_transect)
-        simV_distance = distance_along_transect(simV_transect)
-
-        # visualize the transect:
-        fig, ax = plt.subplots(2,1, figsize=(8,6), dpi=300)
-        kwagsU    ={'vmin':-0.15,'vmax':0.15,'cmap':cmocean.cm.balance,'label':'U velocity'}
-        kwagsV    ={'vmin':-0.15,'vmax':0.15,'cmap':cmocean.cm.balance,'label':'V velocity'}
-        kwags_mask={'mask_land':True, 'mask_iceshelf':True}
-        plot_transect(ax[0], simU_distance, simU_transect, 'uo', **kwagsU, **kwags_mask)
-        plot_transect(ax[1], simV_distance, simV_transect, 'vo', **kwagsV, **kwags_mask)
-        ax[1].set_xlabel('Distance (km)')
-
-        if savefig:
-            finished_plot(fig, fig_name=f'{run_folder}figures/transect_UV_{transect}.jpg')
 
     return
 
