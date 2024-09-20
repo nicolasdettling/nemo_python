@@ -37,9 +37,10 @@ def finished_plot (fig, fig_name=None, dpi=None, print_out=True):
 # contour: list of levels to contour in black
 # shade_land: whether to shade the land mask in grey
 # lognorm: logarithmic colormap normalization
+# zoom_amundsen: boolean to activate a zoom on the Amundsen sea region
 
 # TODO contour ice front
-def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None, periodic=True, lat_max=None, contour=None, shade_land=True, lognorm=False, cbar_kwags={}):
+def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None, periodic=True, lat_max=None, contour=None, shade_land=True, lognorm=False, cbar_kwags={}, zoom_amundsen=False):
 
     new_fig = ax is None
     if title is None:
@@ -80,7 +81,13 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
     x_edges, y_edges = polar_stereo(lon_edges, lat_edges)
 
     # Get axes bounds
-    x_bounds, y_bounds = polar_stereo(np.array([0, 90, 180, -90]), np.array([lat_max]*4))
+    if zoom_amundsen:
+        lon_bounds = np.array([-87, -145, -145, -87])
+        lat_bounds = np.array([-70, -77, -77, -70])
+    else:
+        lon_bounds = np.array([0, 90, 180, -90])
+        lat_bounds = np.array([lat_max]*4)
+    x_bounds, y_bounds = polar_stereo(lon_bounds, lat_bounds)
     xlim = [x_bounds[3], x_bounds[1]]
     ylim = [y_bounds[2], y_bounds[0]]
 
