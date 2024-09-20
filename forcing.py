@@ -309,7 +309,7 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, 
             data_arrays = [data]       
 
         for arr in data_arrays:
-            if var in ['QREFHT','TREFHT','FSDS','FLDS','SLP']: 
+            if var in ['QREFHT','TREFHT','FSDS','FLDS','PSL']: 
                 # Mask atmospheric forcing over land based on cesm2 land mask (since land values might not be representative for the ocean areas)
                 arr = arr.where(cesm2_mask.isel(time=0) == 0)
                 # And then fill masked areas with nearest non-NaN latitude neighbour
@@ -393,6 +393,9 @@ def era5_time_mean_forcing(variable, year_start=1979, year_end=2015, out_file=No
 
     ERA5_ds   = xr.open_mfdataset(f'{era5_folder}era5_{variable}_*_daily_averages.nc')
     ERA5_ds   = ERA5_ds.isel(time=((ERA5_ds.time.dt.year <= year_end)*(ERA5_ds.time.dt.year >= year_start)))
+    if variable in ['sf','tp']:
+        # should never be negative (but has few tiny negative values, so zero those)
+        ERA5_ds[variable] = xr.where(ERA5_ds[variable] < 0, 0, ERA5_ds[variable]) 
     time_mean = ERA5_ds.mean(dim='time') 
 
     if variable in ['sf','tp']:
@@ -459,11 +462,12 @@ def cesm2_ensemble_time_mean_forcing(expt, variable, year_start=1979, year_end=2
 # - (optional) expt : 
 # - (optional) year_start : start year for time averaging
 # - (optional) end_year   : end year for time averaging
+# - (optional) fill_land  : boolean whether or not to fill grid cells that are land in CESM2 with ocean values along lines of latitudes
 # - (optional) ensemble_mean_file, era5_mean_file : string paths to files in case you've already ran the averaging separately
 # - (optional) nemo_grid, nemo_mask : string of path to NEMO domain_cfg and mesh_mask files
 # - (optional) out_folder : string to location to save the bias correction file
 def atm_bias_correction(source, variable, expt='LE2', year_start=1979, year_end=2015, 
-                        ensemble_mean_file=None, era5_mean_file=None,
+                        ensemble_mean_file=None, era5_mean_file=None, fill_land=False,
                         era5_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/ERA5_forcing/files/',
                         out_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/LE2/processed/'):
 
@@ -495,7 +499,7 @@ def atm_bias_correction(source, variable, expt='LE2', year_start=1979, year_end=
         if variable in ['TREFHT','QREFHT','FLDS','FSDS','PRECS','PRECT']:
             print('Correcting thermodynamics')
             out_file = f'{out_folder}{source}-{expt}_{variable}_bias_corr.nc'
-            thermo_correction(CESM2_time_mean, ERA5_regridded, out_file)
+            thermo_correction(CESM2_time_mean, ERA5_regridded, out_file, fill_land=fill_land)
         else:
             raise Exception(f'Variable {variable} does not need bias correction. Check that this is true.')
     else:
