@@ -230,13 +230,15 @@ def find_processed_cesm2_file(expt, var_name, ensemble_member, year,
     import glob
     from datetime import datetime
 
-    if expt not in ['LE2']:
+    if expt not in ['LE2', 'piControl']:
         raise Exception(f'Invalid experiment {expt}')
-    if ensemble_member not in cesm2_ensemble_members:
-        raise Exception(f'Ensemble member {ensemble_member} is not available')
-
-    if expt == 'LE2':
+    if expt=='LE2':
+        if ensemble_member not in cesm2_ensemble_members:
+            raise Exception(f'Ensemble member {ensemble_member} is not available')
         if (year > 2100) or (year < 1850):
+            raise Exception('Not a valid year for the specified experiment and ensemble member')
+    if expt == 'piControl':
+        if year > 2000:
             raise Exception('Not a valid year for the specified experiment and ensemble member')
 
     file_list  = glob.glob(f'{base_dir}{expt}/processed/CESM2-{expt}_ens{ensemble_member}_{var_name}_y*')
@@ -254,4 +256,3 @@ def find_processed_cesm2_file(expt, var_name, ensemble_member, year,
     file_path = f'{base_dir}{expt}/processed/CESM2-{expt}_ens{ensemble_member}_{var_name}_y{year}.nc'
 
     return file_path
-
