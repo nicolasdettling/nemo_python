@@ -8,7 +8,7 @@ from ..constants import deg_string, gkg_string, transect_amundsen
 from ..plots import circumpolar_plot, finished_plot, plot_ts_distribution, plot_transect
 from ..interpolation import interp_latlon_cf, interp_latlon_cf_blocks
 from ..file_io import read_schmidtko, read_woa, read_dutrieux, read_zhou
-from ..grid import extract_var_region, transect_coords_from_latlon_waypoints
+from ..grid import extract_var_region, transect_coords_from_latlon_waypoints, region_mask
 
 # Compare the bottom temperature and salinity in NEMO (time-averaged over the given xarray Dataset) to observations: Schmidtko on the continental shelf, World Ocean Atlas 2018 in the deep ocean.
 def bottom_TS_vs_obs (nemo, time_ave=True,
@@ -231,7 +231,144 @@ def circumpolar_TS_vs_obs (nemo, depth_min, depth_max, nemo_mesh='/gws/nopw/j04/
                 plt.colorbar(img, cax=cax, extend='both' if n==0 else 'neither')
     
     finished_plot(fig, fig_name=fig_name, dpi=dpi)
-            
+
+# Helper function to mask the temperature and salinity from the simulation outputs for regional_profile_TS_std
+# Function is very similar to extract_var_region in grid.py and could probably be replaced by it with a bit of adjustment
+# Inputs
+# gridT_files : list of NEMO simulation gridT files
+# mask        : xarray dataset containing a mask to extract the specified region 
+# Returns xarray DataArrays of temperature and salinity with NaNs everywhere except the region of
+def mask_sim_region(gridT_files, mask, region_subsetx=slice(0,None), region_subsety=slice(0,None)):
+
+    # load all the gridT files in the run folder
+    nemo_ds     = xr.open_mfdataset(gridT_files)
+    nemo_ds = nemo_ds.rename({'x_grid_T':'x', 'y_grid_T':'y', 'nav_lon_grid_T':'nav_lon', 'nav_lat_grid_T':'nav_lat'})
+    dates_month  = nemo_ds.time_counter.dt.month
+    nemo_ds      = nemo_ds.isel(time_counter=((dates_month==1) | (dates_month==2))) # select only January and February
+
+    # Average full time series: ## average only over January and February of each year
+    nemo_T = nemo_ds.thetao.isel(x=region_subsetx, y=region_subsety)
+    nemo_S = nemo_ds.so.isel(x=region_subsetx, y=region_subsety)
+
+    # region masked: fill regions outside of the mask with NaN and replace zeros with NaN for averaging
+    nemo_T_masked = xr.where((mask!=0)*(nemo_T!=0), nemo_T, np.nan)
+    nemo_S_masked = xr.where((mask!=0)*(nemo_S!=0), nemo_S, np.nan)
+
+    return nemo_T_masked, nemo_S_masked
+
+# Helper function to mask temperature and salinity from observations for regional_profile_TS_std
+# Inputs
+# fileT : list of temperature observation files
+# fileS : list of salinity observation files
+# mask  : xarray dataset containing a mask to extract the specified region 
+# nemo_domcfg : string of path to NEMO domain_cfg file
+# Returns xarray DataArrays of temperature and salinity with NaNs everywhere except the region of interest
+def mask_obs_region(fileT, fileS, mask, nemo_domcfg='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/domain_cfg-20240305.nc'):
+
+    nemo_file = xr.open_dataset(nemo_domcfg).squeeze()
+
+    #  set region limits based on min and max value in mask (not the exact solution but ok for now):
+    mask_lon_min = (mask*nemo_file.nav_lon).min().values
+    mask_lon_max = xr.where(mask*nemo_file.nav_lon !=0, mask*nemo_file.nav_lon, np.nan).max().values
+    mask_lat_min = (mask*nemo_file.nav_lat).min().values
+    mask_lat_max = xr.where(mask*nemo_file.nav_lat !=0, mask*nemo_file.nav_lat, np.nan).max().values
+
+    #  load observations
+    if type(fileT) == list:
+        i=0
+        for fT, fS in zip(fileT, fileS):
+            if i==0:
+                obs = read_dutrieux(eos='teos10', fileT=fT, fileS=fS)
+            else:
+                obs_new = read_dutrieux(eos='teos10', fileT=fT, fileS=fS)
+                obs = xr.concat([obs, obs_new], 'year')
+            i+=1
+    else:
+        obs = read_dutrieux(eos='teos10', fileT=fileT, fileS=fileS)
+    array_mask   = (obs.lon >= mask_lon_min)*(obs.lon <= mask_lon_max)*(obs.lat >= mask_lat_min)*(obs.lat <= mask_lat_max)
+    # mask observations:
+    obs_T_masked = xr.where(array_mask, obs.ConsTemp, np.nan)
+    obs_S_masked = xr.where(array_mask, obs.AbsSal, np.nan)
+
+    return obs_T_masked, obs_S_masked
+    
+# Function to plot vertical profiles of regional mean annual temperature, salinity, and their standard deviations from observations and simulations
+# Inputs
+# run_folder             : string path to NEMO simulation run folder with grid_T files
+# region                 : string of the region to calculate the profiles for (from one of the region_names in constants.py)
+# option      (optional) : string specifying whether to calculate averages over continental shelf region, 'shelf', 'cavity', or 'all'
+# conf        (optional) : string of name of configuration; used to subset grid to the Amundsen region when specifying eANT025 (messy)
+# fig_name    (optional) : string of path to save figure to
+# dir_obs     (optional) : string of path to observation directory
+# nemo_domcfg (optional) : string of path to NEMO domain_cfg file 
+def regional_profile_TS_std(run_folder, region, option='shelf', fig_name=None, dpi=None, conf=None,
+                            dir_obs='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/observations/pierre-dutrieux/',
+                            nemo_domcfg='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/domain_cfg-20240305.nc'):
+
+    # Get NEMO domain grid and mask for the specified region
+    nemo_file = xr.open_dataset(nemo_domcfg).squeeze()
+    mask, _, region_name = region_mask(region, nemo_file, option=option, return_name=True)
+    # not the most elegant, but to speed up the calculations, subset x and y grid to the Amundsen Sea region. Specific to configuration/region:
+    if conf=='eANT025':
+        region_subsetx = slice(450,850); region_subsety = slice(140,300);
+    else:
+    	region_subsetx = slice(0,None); region_subsety = slice(0,None);  
+    mask_subset = mask.isel(x=region_subsetx, y=region_subsety)
+
+    # Find list of observations and simulation files
+    # observations span 1994-2019, with mostly 2000-2019, so only take simulation files between 2000-2019 onwards
+    yearly_Tobs = glob.glob(f'{dir_obs}ASEctd_griddedMean????_PT.nc')
+    yearly_Sobs = glob.glob(f'{dir_obs}ASEctd_griddedMean????_S.nc')
+    yearly_TSsim = glob.glob(f'{run_folder}files/*1m*20[0-1][0-9]0101*grid_T*')
+
+    #----------- Figure ----------
+    fig, ax = plt.subplots(1,4, figsize=(12,6), dpi=dpi, gridspec_kw={'width_ratios': [2, 1, 2, 1]})
+
+    fig.suptitle(f'{region_name}', fontweight='bold')
+    ax[0].set_ylabel('Depth (m)')
+    titles = ['Conservative Temperature (C)', 'std', 'Absolute Salinity (g/kg)', 'std']
+    for i, axis in enumerate(ax.ravel()):
+        axis.set_ylim(1000, 0)
+        if i!=0:
+            axis.yaxis.set_ticklabels([])
+        axis.set_title(titles[i])
+        axis.xaxis.grid(True, which='major', linestyle='dotted')
+        axis.yaxis.grid(True, which='major', linestyle='dotted')
+
+    # Yearly profiles of model simulations:
+    for file in yearly_TSsim:
+        sim_T, sim_S = mask_sim_region(file, mask_subset, region_subsetx=region_subsetx, region_subsety=region_subsety)
+        ax[0].plot(sim_T.mean(dim=['x','y','time_counter']), sim_T.deptht, '-k', linewidth=0.3)
+        ax[2].plot(sim_S.mean(dim=['x','y','time_counter']), sim_S.deptht, '-k', linewidth=0.3)
+    # mean over all the years:
+    sim_T, sim_S = mask_sim_region(yearly_TSsim, mask_subset, region_subsetx=region_subsetx, region_subsety=region_subsety)
+    ax[0].plot(sim_T.mean(dim=['x','y','time_counter']), sim_T.deptht, '-k', linewidth=2.5, label='Model')
+    ax[2].plot(sim_S.mean(dim=['x','y','time_counter']), sim_T.deptht, '-k', linewidth=2.5)
+    # standard deviation
+    ax[1].plot(sim_T.mean(dim=['x','y']).std(dim='time_counter'), sim_T.deptht, '-k')
+    ax[3].plot(sim_S.mean(dim=['x','y']).std(dim='time_counter'), sim_S.deptht, '-k')
+
+    # Yearly profiles of observations:
+    for obsT, obsS in zip(yearly_Tobs, yearly_Sobs):
+        obs_T, obs_S = mask_obs_region(obsT, obsS, mask, nemo_domcfg=nemo_domcfg)
+        ax[0].plot(obs_T.mean(dim=['lon','lat']), abs(obs_T.depth), '--c', linewidth=0.5)
+        ax[2].plot(obs_S.mean(dim=['lon','lat']), abs(obs_S.depth), '--c', linewidth=0.5)
+    # mean over all the years 
+    obs_T, obs_S = mask_obs_region(f'{dir_obs}ASEctd_griddedMean_PT.nc', f'{dir_obs}ASEctd_griddedMean_S.nc', mask, nemo_domcfg=nemo_domcfg)
+    ax[0].plot(obs_T.mean(dim=['lon','lat']), abs(obs_T.depth), '--c', linewidth=2.5, label='Observations')
+    ax[2].plot(obs_S.mean(dim=['lon','lat']), abs(obs_S.depth), '--c', linewidth=2.5)
+    # standard deviation
+    print('Calculating standard dev. obs')
+    obs_T_yearly, obs_S_yearly = mask_obs_region(yearly_Tobs, yearly_Sobs, mask, nemo_domcfg=nemo_domcfg)
+    ax[1].plot(obs_T_yearly.mean(dim=['lon','lat']).std(dim='year'), abs(obs_T.depth), '-c')
+    ax[3].plot(obs_S_yearly.mean(dim=['lon','lat']).std(dim='year'), abs(obs_S.depth), '-c')
+
+    ax[0].legend(frameon=False)
+
+    finished_plot(fig, fig_name=fig_name, dpi=dpi)
+
+    return
+
 # Function creates a figure with T-S diagram for simulations and for Pierre's observations in the Amundsen Sea
 # Inputs:
 # run_folder : string path to simulation folder
@@ -433,5 +570,6 @@ def transects_Amundsen(run_folder, transect_locations=['Getz_left','Getz_right',
                 finished_plot(fig, fig_name=f'{run_folder}figures/evaluation_transect_{transect}.jpg')
 
     return
+
     
     
