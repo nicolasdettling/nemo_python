@@ -7,7 +7,7 @@ from .utils import distance_btw_points, closest_point, convert_to_teos10, fix_lo
 from .grid import get_coast_mask, get_icefront_mask
 from .ics_obcs import fill_ocean
 from .interpolation import regrid_era5_to_cesm2
-from .file_io import find_cesm2_file
+from .file_io import find_cesm2_file, find_processed_cesm2_file
 from .constants import temp_C2K, rho_fw, cesm2_ensemble_members
 
 # Function subsets global forcing files from the same grid to the new domain, and fills any NaN values with connected 
@@ -280,7 +280,7 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, 
             file_path = find_cesm2_file(expt, var, 'atm', freq, ens, year)
             ds        = xr.open_dataset(file_path)
             data      = ds[var].isel(time=(ds.time.dt.year == year))
-
+ 
         # Unit conversions #
         # notes: don't think I need to swap FSDS,FLDS signs like Kaitlin did for CESM1, qrefht is specific 
         #        humidity so don't need to convert, but will need to change read in option in namelist_cfg
@@ -311,10 +311,10 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, 
         for arr in data_arrays:
             if var in ['QREFHT','TREFHT','FSDS','FLDS','PSL']: 
                 # Mask atmospheric forcing over land based on cesm2 land mask (since land values might not be representative for the ocean areas)
-                arr = arr.where(cesm2_mask.isel(time=0) == 0)
+                arr = xr.where(cesm2_mask.isel(time=0).values != 0, np.nan, arr)
                 # And then fill masked areas with nearest non-NaN latitude neighbour
                 arr = arr.interpolate_na(dim='lat', method='nearest', fill_value="extrapolate")
-      
+     
             # CESM2 does not do leap years, but NEMO does, so fill 02-29 with 02-28        
             # Also convert calendar to Gregorian
             fill_value = arr.isel(time=((arr.time.dt.month==2)*(arr.time.dt.day==28)))
@@ -352,7 +352,7 @@ def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None, start_year=18
     if out_dir is None:
         raise Exception('Please specify an output directory via optional argument out_dir')
 
-    var_names = ['FSDS','FLDS','TREFHT','QREFHT','PRECT','PSL','PRECS'] #['wind','FSDS','FLDS','TREFHT','QREFHT','PRECT','PSL','PRECS']
+    var_names = ['wind','FSDS','FLDS','TREFHT','QREFHT','PRECT','PSL','PRECS']
     for ens in ens_strs:
         print(f'Processing ensemble member {ens}')
         for var in var_names:
@@ -452,7 +452,7 @@ def cesm2_ensemble_time_mean_forcing(expt, variable, year_start=1979, year_end=2
     if out_file:
         time_mean.to_netcdf(out_file)
     
-    return time_mean.to_dataset()
+    return time_mean
 
 # Function calculate the bias correction for the atmospheric variable from the specified source type based on 
 # the difference between its mean state and the ERA5 mean state.
