@@ -6,8 +6,8 @@ import cmocean
 from ..utils import select_bottom, distance_along_transect
 from ..constants import deg_string, gkg_string, transect_amundsen
 from ..plots import circumpolar_plot, finished_plot, plot_ts_distribution, plot_transect
-from ..interpolation import interp_latlon_cf
-from ..file_io import read_schmidtko, read_woa, read_dutrieux
+from ..interpolation import interp_latlon_cf, interp_latlon_cf_blocks
+from ..file_io import read_schmidtko, read_woa, read_dutrieux, read_zhou
 from ..grid import extract_var_region, transect_coords_from_latlon_waypoints
 
 # Compare the bottom temperature and salinity in NEMO (time-averaged over the given xarray Dataset) to observations: Schmidtko on the continental shelf, World Ocean Atlas 2018 in the deep ocean.
@@ -15,7 +15,7 @@ def bottom_TS_vs_obs (nemo, time_ave=True,
                       schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/schmidtko_TS.txt', 
                       woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_decav_*00_04.nc', 
                       nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc',
-                      fig_name=None, amundsen=False, dpi=None):
+                      fig_name=None, amundsen=False, dpi=None, return_fig=False):
 
     obs = read_schmidtko(schmidtko_file=schmidtko_file, eos='teos10')
     woa = read_woa(woa_files=woa_files, eos='teos10')
@@ -62,7 +62,7 @@ def bottom_TS_vs_obs (nemo, time_ave=True,
        vmax = [2, 2, 1, 35, 35, 0.4]
 
        # fig, ax = plt.subplots(2,3, figsize=(20,8), subplot_kw={'projection': ccrs.Mercator(latitude_true_scale=-70)})
-       fig, ax = plt.subplots(2,3, figsize=(18,10), subplot_kw={'projection': ccrs.Mercator(latitude_true_scale=-70)})
+       fig, ax = plt.subplots(2,3, figsize=(15,6), subplot_kw={'projection': ccrs.Mercator(latitude_true_scale=-70)}, dpi=dpi)
 
        for axis in ax.ravel():
           axis.set_extent([-95, -135, -76, -68], ccrs.PlateCarree())
@@ -75,12 +75,15 @@ def bottom_TS_vs_obs (nemo, time_ave=True,
           for n, name in enumerate(['Model', 'Observations', 'Model bias']):
              lon_plt, lat_plt, var_plt = mask_land(mesh_sub, data_plot[n][var])
              img = ax[v,n].pcolormesh(lon_plt, lat_plt, var_plt, transform=ccrs.PlateCarree(), rasterized=True, cmap='RdBu_r', vmin=vmin[i], vmax=vmax[i])
-             ax[v,n].set_title(name)
+             #ax[v,n].set_title(name)
              i+=1
              if n != 1:
                 cax = fig.add_axes([0.04+0.44*n, 0.56-0.41*v, 0.02, 0.3])
-                plt.colorbar(img, cax=cax, extend='both' if n==0 else 'neither', label=var_titles[v])
-       finished_plot(fig, fig_name=fig_name, dpi=dpi)
+                plt.colorbar(img, cax=cax, extend='both', label=var_titles[v])
+       if return_fig:
+           return fig, ax
+       else:
+           finished_plot(fig, fig_name=fig_name, dpi=dpi)
     else:
        # Make the plot
        fig = plt.figure(figsize=(10,7))
@@ -106,24 +109,151 @@ def bottom_TS_vs_obs (nemo, time_ave=True,
                    cax = fig.add_axes([0.01+0.46*n, 0.58-0.48*v, 0.02, 0.3])
                    plt.colorbar(img, cax=cax, extend='both' if n==0 else 'neither')
        finished_plot(fig, fig_name=fig_name, dpi=dpi)
-                
+          
+# 4-panel evaluation plot of Barotropic streamfunction, winter mixed-layer depth, bottom T, bottom S as in Fig.1, Holland et al. 2014
+def circumpolar_Holland_tetraptych(run_folder, nemo_domain='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/domain_cfg-20240305.nc',
+                                   nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc',
+                                   fig_name=None, dpi=None):
+
+    from ..diagnostics import barotropic_streamfunction
+
+    # Load NEMO gridT files for MLD and bottom T, S
+    gridT_files = glob.glob(f'{run_folder}files/*grid_T*')
+    nemo_ds     = xr.open_mfdataset(gridT_files) # load all the gridT files in the run folder
+    nemo_grid   = xr.open_dataset(gridT_files[0]) # for plotting for later 
+    nemo_ds = nemo_ds.rename({'e3t':'thkcello', 'x_grid_T':'x', 'y_grid_T':'y', 'e3t':'thkcello',
+                              'nav_lon_grid_T':'nav_lon', 'nav_lat_grid_T':'nav_lat'})
+
+    # Calculate the average winter (June, July, August) mixed layer depth    
+    dates_month = nemo_ds.time_counter.dt.month
+    nemo_winter = nemo_ds.isel(time_counter=((dates_month==6) | (dates_month==7) | (dates_month==8)))
+    MLD_winter  = nemo_winter['mldr10_1'].mean(dim='time_counter')
+
+    # Calculate the average of bottom temperature and salinity over the full time series and mask land
+    nemo_plot = xr.Dataset({'temp':nemo_ds['sbt'], 'salt':nemo_ds['sbs']}).mean(dim='time_counter')
+    nemo_plot = nemo_plot.assign({'MLD':MLD_winter}).rename({'x_grid_T_inner':'x', 'y_grid_T_inner':'y'})
+    nemo_plot = nemo_plot.where(nemo_plot['temp']!=0)
+
+    # Mask out anything beyond region of interest, plus ice shelf cavities for the barotropic streamfunction
+    def apply_mask(data, nemo_mesh, mask_shallow=False):
+       mesh_file = xr.open_dataset(nemo_mesh).isel(time_counter=0)
+    
+       data = data.where(mesh_file.misf!=0) # mask ice shelf
+       if mask_shallow:
+           # Also mask anything shallower than 500m
+           data = data.where(mesh_file.bathy_metry >= 500)
+       return data
+
+    # Load velocity files for barotropic streamfunction calculation
+    gridU_files = glob.glob(f'{run_folder}files/*grid_U*')
+    gridV_files = glob.glob(f'{run_folder}files/*grid_V*')
+    ds_u = xr.open_mfdataset(gridU_files, chunks='auto').squeeze().rename({'e3u':'thkcello'})[['uo','thkcello']]
+    ds_v = xr.open_mfdataset(gridV_files, chunks='auto').squeeze().rename({'e3v':'thkcello'})[['vo','thkcello']]
+    # Calculate barotropic streamfunction and average over the full time series
+    ds_domcfg = xr.open_dataset(nemo_domain).isel(time_counter=0)
+    strf = barotropic_streamfunction(ds_u, ds_v, ds_domcfg, periodic=True, halo=True)
+    strf_masked = apply_mask(strf, nemo_mesh, mask_shallow=False)
+    strf_mean   = strf_masked.mean(dim='time_counter')
+
+    # create figure
+    plot_vars = [strf_mean, nemo_plot['MLD'], nemo_plot['temp'], nemo_plot['salt']]
+    titles    = ['Barotropic streamfunction (Sv)', 'Winter mixed-layer depth (m)', 'Bottom Temp. (C)', 'Bottom Sal. (g/kg)']
+    vlims     = [(-50,150), (0,300), (-2,2), (34.5, 35.0)]
+
+    fig, ax = plt.subplots(2,2, figsize=(10,10), dpi=dpi)
+    args = {'masked':True, 'make_cbar':False, 'ctype':cmocean.cm.balance, 'shade_land':False}
+    for i, axis in enumerate(ax.ravel()):
+       img = circumpolar_plot(plot_vars[i], nemo_grid, ax=axis, title=titles[i], contour=0, vmin=vlims[i][0], vmax=vlims[i][1], **args)
+       if i<2:
+          cax = fig.add_axes([0.49+0.43*i, 0.55, 0.02, 0.3])
+       else:
+          cax = fig.add_axes([0.49+0.43*(i-2), 0.14, 0.02, 0.3])
+       plt.colorbar(img, cax=cax, extend='both')
+
+    finished_plot(fig, fig_name=fig_name, dpi=dpi)
+    
+    return
+
+
+# Compare temperature and salinity in a depth range in NEMO (time-averaged over the given xarray Dataset) to observations: 
+# Specifically, Shenji Zhou's 2024 dataset
+def circumpolar_TS_vs_obs (nemo, depth_min, depth_max, nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc', fig_name=None, dpi=None):
+
+    # depth is the depth to look at (could be a slice):
+    obs      = read_zhou()
+    obs      = obs.where((abs(obs.depth) > depth_min) * (abs(obs.depth) <= depth_max)).mean(dim='z')
+    obs_zhou = obs.drop_vars(['lat', 'lon', 'pressure', 'depth']).rename_dims({'x':'lon', 'y':'lat'})
+    obs_zhou = obs_zhou.assign_coords({'lon':obs.lon.isel(y=0).values,'lat':obs.lat.isel(x=0).values}).transpose() 
+    del obs
+    # Regrid to the NEMO grid
+    print('Interpolating Zhou 2024 dataset to grid')
+    nemo_mesh = xr.open_dataset(nemo_mesh)
+    obs_zhou_interp    = interp_latlon_cf_blocks(obs_zhou, nemo_mesh, method='bilinear', pster_src=False, periodic_nemo=False)
+    # Now combine them, giving precedence to Shenji's dataset, then Schmidtko
+    obs_plot = obs_zhou
+
+    # Select the NEMO variables we need and time-average
+    nemo_plot = xr.Dataset({'ConsTemp':nemo['thetao'], 'AbsSal':nemo['so']})
+    nemo_plot = nemo_plot.where((nemo_plot.deptht > depth_min) * (nemo_plot.deptht <= depth_max)).mean(dim='deptht')
+    nemo_plot = nemo_plot.where(nemo_plot['ConsTemp']!=0) # Apply NEMO land mask to both
+
+    obs_plot
+    obs_plot  = obs_plot.where(nemo_plot['ConsTemp'].notnull()*obs_plot.notnull())
+    obs_plot  = obs_plot.where(nemo_plot['ConsTemp']!=0)
+    nemo_plot = nemo_plot.where(nemo_plot['ConsTemp']!=0)
+    # Get difference from obs
+    bias = nemo_plot - obs_plot
+
+    
+    print('Creating figure')
+   # Make the plot
+    fig = plt.figure(figsize=(10,7))
+    gs = plt.GridSpec(2,3)
+    gs.update(left=0.1, right=0.9, bottom=0.05, top=0.95, hspace=0.2, wspace=0.1)
+    data_plot = [nemo_plot, obs_plot, bias]
+    var_plot = ['ConsTemp', 'AbsSal']
+    var_titles = ['Bottom temperature ('+deg_string+'C)', 'Bottom salinity ('+gkg_string+')']
+    alt_titles = [None, 'Observations', 'Model bias']
+    vmin = [-2, -2, -0.5, 34.5, 34.5, -0.2]
+    vmax = [2, 2, 0.5, 35, 35, 0.2]
+    ctype = ['RdBu_r', 'RdBu_r', 'plusminus']
+    i=0
+    for v in range(2):
+        for n in range(3):
+            ax = plt.subplot(gs[v,n])
+            ax.axis('equal')
+            img = circumpolar_plot(data_plot[n][var_plot[v]], nemo, ax=ax, masked=True, make_cbar=False, 
+                                   title=(var_titles[v] if n==0 else alt_titles[n]), 
+                                   vmin=vmin[i], vmax=vmax[i], ctype=ctype[n], shade_land=False)
+            i+=1
+            if n != 1:
+                cax = fig.add_axes([0.01+0.46*n, 0.58-0.48*v, 0.02, 0.3])
+                plt.colorbar(img, cax=cax, extend='both' if n==0 else 'neither')
+    
+    finished_plot(fig, fig_name=fig_name, dpi=dpi)
             
 # Function creates a figure with T-S diagram for simulations and for Pierre's observations in the Amundsen Sea
 # Inputs:
 # run_folder : string path to simulation folder
+# show_obs   : (optional) boolean for whether to plot observations as well
+# file_ind   : (optional) index of file to read
 # time_slice : (optional) slice to subset time_counter for averaging simulation
 # depth_slice: (optional) slice to subset deptht from simulation
 # fig_name   : (optional) string for path to save figure if you want to save it
 # return_fig : (optional) boolean for returning fig and ax
-def TS_diagrams_Amundsen (run_folder, time_slice=None, depth_slice=None, fig_name=None, return_fig=False, smin=30, smax=35.25, tmin=-3, tmax=2.25):
+def TS_diagrams_Amundsen (run_folder, show_obs=True, file_ind=None, time_slice=None, depth_slice=None, fig_name=None, return_fig=False, smin=30, smax=35.25, tmin=-3, tmax=2.25, nbins=150):
     # --- get data ----
     
-    # load observations
-    obs = read_dutrieux(eos='teos10')
+    if show_obs:
+        # load observations
+        obs = read_dutrieux(eos='teos10')
     
     # load nemo simulations
-    gridT_files  = glob.glob(f'{run_folder}/*grid_T*') # load all the gridT files in the run folder
-    nemo_ds      = xr.open_mfdataset(gridT_files).rename({'x_grid_T':'x','y_grid_T':'y'}) 
+    gridT_files = glob.glob(f'{run_folder}files/*grid_T*') # load all the gridT files in the run folder
+    if file_ind:
+        nemo_ds = xr.open_dataset(gridT_files[file_ind]).rename({'x_grid_T':'x','y_grid_T':'y'})
+    else: 
+        nemo_ds = xr.open_mfdataset(gridT_files).rename({'x_grid_T':'x','y_grid_T':'y'}) 
     if time_slice:
         nemo_average = nemo_ds.isel(time_counter=time_slice).mean(dim='time_counter') 
     else:
@@ -136,11 +266,17 @@ def TS_diagrams_Amundsen (run_folder, time_slice=None, depth_slice=None, fig_nam
         amundsen_to = amundsen_to.isel(deptht=depth_slice)
 
     # --- plot distributions -----
-    fig, ax = plt.subplots(1,2,figsize=(18,7), dpi=300)
-    ax[0].set_title('Amundsen Sea simulations')
-    plot_ts_distribution(ax[0], amundsen_so.values.flatten(), amundsen_to.values.flatten(), plot_density=True, plot_freeze=True, bins=150, smin=smin, smax=smax, tmin=tmin, tmax=tmax)
-    ax[1].set_title('Amundsen Sea observations Pierre')
-    plot_ts_distribution(ax[1], obs.AbsSal.values.flatten(), obs.ConsTemp.values.flatten(), plot_density=True, plot_freeze=True, smin=smin, smax=smax, tmin=tmin, tmax=tmax)
+    if not show_obs:
+        fig, ax = plt.subplots(1,1,figsize=(9,7), dpi=300)
+        axis = ax
+    else:
+        fig, ax = plt.subplots(1,2,figsize=(18,7), dpi=300)
+        axis = ax[0]
+        ax[1].set_title('Amundsen Sea observations Pierre')
+        plot_ts_distribution(ax[1], obs.AbsSal.values.flatten(), obs.ConsTemp.values.flatten(), plot_density=True, plot_freeze=True, smin=smin, smax=smax, tmin=tmin, tmax=tmax)
+
+    axis.set_title('Amundsen Sea simulations')
+    plot_ts_distribution(axis, amundsen_so.values.flatten(), amundsen_to.values.flatten(), plot_density=True, plot_freeze=True, bins=nbins, smin=smin, smax=smax, tmin=tmin, tmax=tmax)
 
     if fig_name:
         finished_plot(fig, fig_name=fig_name)
@@ -148,18 +284,108 @@ def TS_diagrams_Amundsen (run_folder, time_slice=None, depth_slice=None, fig_nam
         return fig, ax
     else:
         return
+
+# Function produces animation of transects of the Amundsen Sea shelf (with constant observation panels)
+def animate_transect(run_folder, loc='shelf_west'):
     
+    import tqdm
+
+    gridT_files  = glob.glob(f'{run_folder}/*grid_T*')
+    nemo_ds      = xr.open_mfdataset(gridT_files)
+    for t, time in enumerate(nemo_ds.time_counter):
+        print(t)
+        year  = time.dt.year.values
+        month = time.dt.month.values
+        transects_Amundsen(run_folder, transect_locations=[loc], time_slice=t, savefig=True, 
+                           fig_name=f'{run_folder}animations/frames/transect_{loc}_y{year}m{month:02}.jpg')
+
+    return
+
+# not yet generalized for other domains
+def frames_transect_Amundsen_sims(run_folder, savefig=False, transect_location='shelf_west', add_rho=False, clevels=10, 
+                                  smin=33.8, smax=34.9, tmin=0.2, tmax=1.0, fig_name='',
+                                  nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
+    import warnings
+    import gsw
+
+    gridT_files  = glob.glob(f'{run_folder}files/*grid_T*')
+    nemo_ds      = xr.open_mfdataset(gridT_files, engine='netcdf4').isel(x_grid_T=slice(580, 790), y_grid_T=slice(200,300), time_counter=slice(0,365))
+    nemo_ds      = nemo_ds.rename({'x_grid_T':'x', 'y_grid_T':'y', 'nav_lon_grid_T':'nav_lon', 'nav_lat_grid_T':'nav_lat', 'deptht':'depth'}) 
+    if add_rho:
+        sigma        = gsw.density.sigma0(nemo_ds.so, nemo_ds.thetao)
+        nemo_ds      = nemo_ds.assign({'sigma0':sigma})
+        contour_var  = 'sigma0'
+    else:
+        contour_var  = '' 
+
+    print(transect_amundsen[transect_location])
+    print(nemo_ds.isel(time_counter=0))
+    x_sim, y_sim = transect_coords_from_latlon_waypoints(nemo_ds.isel(time_counter=0), transect_amundsen[transect_location], opt_float=False)
+    print(x_sim)
+    sim_transect = nemo_ds.isel(x=xr.DataArray(x_sim, dims='n'), y=xr.DataArray(y_sim, dims='n'), time_counter=0)
+    nemo_mesh_ds = xr.open_dataset(nemo_mesh).isel(time_counter=0,x=slice(580, 790),y=slice(200,300))
+    nemomesh_tr  = nemo_mesh_ds.isel(x=xr.DataArray(x_sim, dims='n'), y=xr.DataArray(y_sim, dims='n')).rename({'nav_lev':'depth'})
+    print('sim', sim_transect)
+    # add tmask, iceshelfmask and depths to the simulation dataset
+    sim_transect = sim_transect.assign({'gdept_0':nemomesh_tr.gdept_0, 'tmask':nemomesh_tr.tmask, 'isfdraft':nemomesh_tr.isfdraft})
+    sim_distance = distance_along_transect(sim_transect)
+    print('distance', sim_distance)
+    
+    for time in nemo_ds.time_counter:
+        sim_transect = nemo_ds.isel(x=xr.DataArray(x_sim, dims='n'), y=xr.DataArray(y_sim, dims='n')).sel(time_counter=time)
+        sim_transect = sim_transect.assign({'gdept_0':nemomesh_tr.gdept_0, 'tmask':nemomesh_tr.tmask, 'isfdraft':nemomesh_tr.isfdraft})
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                "The input coordinates to pcolormesh are interpreted as cell centers, but "
+                "are not monotonically increasing or decreasing. This may lead to "
+                "incorrectly calculated cell edges, in which case, please supply explicit "
+                "cell edges to pcolormesh.",
+                UserWarning,
+            )
+
+            fig, ax = plt.subplots(1,2, figsize=(14,4), dpi=125)
+            kwagsT    ={'vmin':tmin,'vmax':tmax,'cmap':cmocean.cm.dense,'label':'Conservative Temp.','ylim':(1300, -10)}
+            kwagsS    ={'vmin':smin,'vmax':smax,'cmap':cmocean.cm.haline,'label':'Absolute Salinity','ylim':(1300, -10)}
+            kwagsrho  = {'clevels':clevels, 'contour_var':contour_var}
+            kwags_mask={'mask_land':True, 'mask_iceshelf':True}
+            plot_transect(ax[0], sim_distance, sim_transect, 'thetao', **kwagsT, **kwagsrho, **kwags_mask)
+            plot_transect(ax[1], sim_distance, sim_transect, 'so', **kwagsS, **kwagsrho, **kwags_mask)   
+            ax[0].set_xlabel('Distance (km)')
+            ax[1].set_xlabel('Distance (km)')
+    
+            fig.suptitle(f"{time.dt.strftime('%Y-%m-%d').values}")
+            #plt.close()
+
+            if savefig:
+                year=time.dt.year.values
+                month=time.dt.month.values
+                day=time.dt.day.values
+                if fig_name:
+                    finished_plot(fig, fig_name=f'{run_folder}animations/frames/transect_{transect_location}_{fig_name}_rho_y{year}m{month:02}d{day:02}.jpg')
+                else:
+                    finished_plot(fig, fig_name=f'{run_folder}animations/frames/transect_{transect_location}_rho_y{year}m{month:02}d{day:02}.jpg')
+    return 
     
 # Function produces figures of transects of observations on the Amundsen Sea shelf and simulation results    
 # Inputs:
 # run_folder : string path to folder containing NEMO simulations (gridT files)
 # savefig    : (optional) boolean whether to save figure within figures sub-directory in run_folder
-def transects_Amundsen(run_folder, savefig=False, nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
+def transects_Amundsen(run_folder, transect_locations=['Getz_left','Getz_right','Dotson','PI_trough','shelf_west','shelf_mid','shelf_east','shelf_edge'], 
+                       time_slice=slice(180,None), tmin=-2, tmax=0.5, smin=33, smax=35, savefig=False, ylim=(1300, -20), 
+                       nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc', fig_name=''):
     # load nemo simulations
-    gridT_files  = glob.glob(f'{run_folder}*grid_T*')
+    gridT_files  = glob.glob(f'{run_folder}files/*grid_T*')
     nemo_ds      = xr.open_mfdataset(gridT_files) # load all the gridT files in the run folder
-    nemo_ds      = nemo_ds.rename({'x_grid_T':'x', 'y_grid_T':'y', 'nav_lon_grid_T':'nav_lon', 'nav_lat_grid_T':'nav_lat', 'deptht':'depth'}) 
-    nemo_results = nemo_ds.isel(time_counter=slice(180,None)).mean(dim='time_counter')  # Average time series
+    nemo_ds      = nemo_ds.rename({'x_grid_T':'x', 'y_grid_T':'y', 'nav_lon_grid_T':'nav_lon', 'nav_lat_grid_T':'nav_lat', 'deptht':'depth'})
+    if time_slice:
+        try:
+            nemo_results = nemo_ds.isel(time_counter=time_slice).mean(dim='time_counter')
+        except:
+            nemo_results = nemo_ds.isel(time_counter=time_slice) 
+    else:
+        nemo_results = nemo_ds.mean(dim='time_counter')
     nemo_mesh_ds  = xr.open_dataset(nemo_mesh).isel(time_counter=0)
     
     # load observations:
@@ -167,10 +393,10 @@ def transects_Amundsen(run_folder, savefig=False, nemo_mesh='/gws/nopw/j04/anthr
     dutrieux_obs = obs.assign({'nav_lon':obs.lon, 'nav_lat':obs.lat}).rename_dims({'lat':'y', 'lon':'x'})
     
     # calculate transects and plot:
-    for transect in ['shelf_west', 'shelf_mid', 'shelf_east', 'shelf_edge']:
+    for transect in transect_locations:
         # get coordinates for the transect:
         x_obs, y_obs = transect_coords_from_latlon_waypoints(dutrieux_obs, transect_amundsen[transect], opt_float=False)
-        x_sim, y_sim = transect_coords_from_latlon_waypoints(nemo_results, transect_amundsen[transect], opt_float=False)
+        x_sim, y_sim = transect_coords_from_latlon_waypoints(nemo_mesh_ds, transect_amundsen[transect], opt_float=False)
 
         # subset the datasets and nemo_mesh to the coordinates of the transect:
         obs_transect = dutrieux_obs.isel(x=xr.DataArray(x_obs, dims='n'), y=xr.DataArray(y_obs, dims='n'))
@@ -182,12 +408,12 @@ def transects_Amundsen(run_folder, savefig=False, nemo_mesh='/gws/nopw/j04/anthr
 
         # calculate the distance of each point along the transect relative to the start of the transect:
         obs_distance = distance_along_transect(obs_transect)
-        sim_distance = distance_along_transect(sim_transect)
+        sim_distance = distance_along_transect(nemo_mesh_transect)
 
         # visualize the transect:
         fig, ax = plt.subplots(2,2, figsize=(15,6), dpi=300)
-        kwagsT    ={'vmin':-2,'vmax':1,'cmap':cmocean.cm.dense,'label':'Conservative Temp.'}
-        kwagsS    ={'vmin':33,'vmax':35,'cmap':cmocean.cm.haline,'label':'Absolute Salinity'}
+        kwagsT    ={'vmin':tmin,'vmax':tmax,'cmap':cmocean.cm.dense,'label':'Conservative Temp.', 'ylim':ylim}
+        kwagsS    ={'vmin':smin,'vmax':smax,'cmap':cmocean.cm.haline,'label':'Absolute Salinity', 'ylim':ylim}
         kwags_mask={'mask_land':True, 'mask_iceshelf':True}
         ax[0,0].set_title('Observations Dutrieux')
         ax[0,1].set_title('Observations Dutrieux')
@@ -201,7 +427,10 @@ def transects_Amundsen(run_folder, savefig=False, nemo_mesh='/gws/nopw/j04/anthr
         ax[1,1].set_xlabel('Distance (km)')
 
         if savefig:
-            finished_plot(fig, fig_name=f'{run_folder}figures/evaluation_transect_{transect}.jpg')
+            if fig_name:
+                finished_plot(fig, fig_name=f'{run_folder}figures/evaluation_transect_{transect}_{fig_name}.jpg')
+            else:
+                finished_plot(fig, fig_name=f'{run_folder}figures/evaluation_transect_{transect}.jpg')
 
     return
     
