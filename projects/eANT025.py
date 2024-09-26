@@ -167,7 +167,7 @@ def calculate_regional_melt_rate(region_name, nemo_ds, return_name=False, return
 # mesh_mask  (optional) : string of path to NEMO mesh mask file
 # fig_name   (optional) : string of path to save figure to 
 # return_fig (optional) : boolean specifying whether to return the figure and axes
-def plot_annual_melt_overview(SBC_files, 
+def plot_annual_melt_overview(SBC_files, ylim=None,
                               domain_cfg='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/domain_cfg-20240305.nc',
                               mesh_mask ='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc',
                               fig_name=None, return_fig=False):
@@ -181,7 +181,7 @@ def plot_annual_melt_overview(SBC_files,
     colors = ['IndianRed', 'SandyBrown', 'LightGreen', 'MediumTurquoise', 'SteelBlue', 'Plum', 'Pink']
     # region names for time series (need to be included in the list of names in constants.py
     region_list1 = ['all', 'west_antarctica', 'east_antarctica', 'ross', 'filchner_ronne'] # subplot 1
-    region_list2 = ['abbot', 'amery', 'cosgrove', 'dotson_crosson', 'getz', 'pine_island', 'thwaites'] # subplot 2
+    region_list2 = ['abbot', 'cosgrove', 'dotson_crosson', 'getz', 'pine_island', 'thwaites'] # subplot 2
     kwags = {'masked':False, 'make_cbar':False, 'title':'', 'lat_max':-66}
 
     # calculate annual melt for each region and add to figure
@@ -205,8 +205,11 @@ def plot_annual_melt_overview(SBC_files,
                                         zoom_amundsen=zoom_amundsen, **kwags)
             r+=1
         ax[i,0].legend(loc=(1.85, 0.52), frameon=False)
-        _, axup = ax[i,0].get_ylim()
-        ax[i,0].set_ylim(0, axup*1.1)
+        if ylim:
+            ax[i,0].set_ylim(ylim[0], ylim[1])
+        else:
+            _, axup = ax[i,0].get_ylim()
+            ax[i,0].set_ylim(0, axup*1.1)
         ax[i,0].set_ylabel('Ice shelf freshwater flux (Gt/year)')
         i+=1
         
