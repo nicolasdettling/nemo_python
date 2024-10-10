@@ -388,7 +388,7 @@ def cesm2_expt_all_ocn_forcing(expt, ens_strs=None, out_dir=None, start_year=185
 # - (optional) end_year   : end year for time averaging
 # - (optional) out_file   : path to file to write time mean to NetCDF in case you want to store it
 def era5_time_mean_forcing(variable, year_start=1979, year_end=2015, out_file=None, 
-                           era5_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/ERA5_forcing/files/',
+                           era5_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/ERA5-forcing/files/',
                            land_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/ERA5-forcing/ERA5-landmask.nc'):
 
     ERA5_ds   = xr.open_mfdataset(f'{era5_folder}era5_{variable}_*_daily_averages.nc')
@@ -433,7 +433,7 @@ def cesm2_ensemble_time_mean_forcing(expt, variable, year_start=1979, year_end=2
             files_to_open += [file_path]
         # calculate ensemble mean    
         ens_files = xr.open_mfdataset(files_to_open, concat_dim='ens', combine='nested')
-        ens_year  = ens_files[variable].isel(time=(ens_files.time.dt.year==year))
+        ens_year  = ens_files.isel(time=(ens_files.time.dt.year==year))
         ens_mean  = ens_year.mean(dim=['time','ens']) # dimensions should be x,y
         # save ensemble mean to xarray dataset
         if year == year_start:
@@ -468,7 +468,7 @@ def cesm2_ensemble_time_mean_forcing(expt, variable, year_start=1979, year_end=2
 # - (optional) out_folder : string to location to save the bias correction file
 def atm_bias_correction(source, variable, expt='LE2', year_start=1979, year_end=2015, 
                         ensemble_mean_file=None, era5_mean_file=None, fill_land=False,
-                        era5_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/ERA5_forcing/files/',
+                        era5_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/ERA5-forcing/files/',
                         out_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/LE2/processed/'):
 
     # process_forcing_for_correction(source, variable)
