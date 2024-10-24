@@ -224,13 +224,13 @@ def plot_annual_melt_overview(SBC_files, ylim=None,
     return
 
 # Visualize the timeseries of variable averaged over a region to see convection
-def plot_hovmoeller_convect(run_folder, region, figname1, figname2, title='', tlim=(-1.5, 0.5), slim=(34.8, 34.86)):
+def plot_hovmoeller_convect(run_folder, region, figname1, figname2, title='', tlim=(-1.5, 0.5), slim=(34.8, 34.86), ylim=(5500,0)):
 
     T_region = calc_hovmoeller_region('thetao', region, run_folder=run_folder)    
     S_region = calc_hovmoeller_region('so', region, run_folder=run_folder)
 
-    plot_hovmoeller(T_region, title=title, ylim=(5500,0), vlim=tlim, fig_name=figname1, varname='Temperature (C)')
-    plot_hovmoeller(S_region, title=title, ylim=(5500,0), vlim=slim, fig_name=figname2, varname='Salinity')
+    plot_hovmoeller(T_region, title=title, ylim=ylim, vlim=tlim, fig_name=figname1, varname='Temperature (C)')
+    plot_hovmoeller(S_region, title=title, ylim=ylim, vlim=slim, fig_name=figname2, varname='Salinity')
 
     return
 
