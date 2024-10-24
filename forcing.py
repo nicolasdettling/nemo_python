@@ -8,7 +8,7 @@ from .grid import get_coast_mask, get_icefront_mask
 from .ics_obcs import fill_ocean
 from .interpolation import regrid_era5_to_cesm2
 from .file_io import find_cesm2_file, find_processed_cesm2_file
-from .constants import temp_C2K, rho_fw, cesm2_ensemble_members
+from .constants import temp_C2K, rho_fw, cesm2_ensemble_members, sec_per_day, sec_per_hour
 
 # Function subsets global forcing files from the same grid to the new domain, and fills any NaN values with connected 
 # nearest neighbour and then fill_val.
