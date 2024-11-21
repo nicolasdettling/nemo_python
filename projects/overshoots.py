@@ -835,17 +835,21 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
     for suite_list in suite_sequences:
         for suite in suite_list:
             # Figure out whether it's a ramp-up (1), stabilisation (0), or ramp-down (-1) simulation
+            stype = None
             for scenario in suites_by_scenario:
-                if suite in scenario:
+                if suite in suites_by_scenario[scenario]:
                     if 'ramp_up' in scenario:
                         stype = 1
                     elif 'stabilise' in scenario:
                         stype = 0
                     elif 'ramp_down' in scenario:
                         stype = -1
+                        print('Found ramp down')
                     else:
                         raise Exception('invalid scenario type')
                     break
+            if stype is None:
+                raise Exception('Simulation type not found')
             ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
             data = ds[var_name] + offset
             data = data.assign_coords(scenario_type=('time_centered', np.ones(data.size)*stype))
@@ -870,6 +874,8 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
 
 # Analyse the cavity temperature beneath Ross and FRIS to see which scenarios tip and/or recover, under which global warming levels. Also plot this.
 def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
+
+    from matplotlib.lines import Line2D
 
     regions = ['ross', 'filchner_ronne']
     pi_suite = 'cs495'
@@ -915,6 +921,7 @@ def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
                 suites_tipped.append(suite_strings[n])
                 # Now consider the time after tipping
                 cavity_temp = cavity_temp.isel(time_centered=slice(tip_time,None))
+                warming = warming.isel(time_centered=slice(tip_time,None))
                 for t in range(cavity_temp.sizes['time_centered']):
                     # If the temperature has gone back down below the threshold and stays that way for the rest of the simulation, it's recovered
                     if cavity_temp.isel(time_centered=slice(t,None)).max() < tipping_threshold:
@@ -979,10 +986,14 @@ def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
     gs.update(left=0.25, right=0.95, bottom=0.1, top=0.92, hspace=0.4)
     for n in range(len(regions)):
         ax = plt.subplot(gs[n,0])
-        # First line: warming at time of tipping        
-        ax.plot(all_temp_tip[n], 2*np.ones(len(all_temp_tip[n])), 'o', markersize=5, color=assign_colours(all_temp_tip[n]))
+        # First line: warming at time of tipping
+        colours = assign_colours(all_temp_tip[n])
+        for temp, colour in zip(all_temp_tip[n], colours):
+            ax.plot(temp, 2, 'o', markersize=5, color=colour)
         # Second line: warming at time of recovery
-        ax.plot(all_temp_recover[n], 1*np.ones(len(all_temp_recover[n])), 'o', markersize=5, color=assign_colours(all_temp_recover[n]))
+        colours = assign_colours(all_temp_recover[n])
+        for temp, colour in zip(all_temp_recover[n], colours):
+            ax.plot(temp, 1, 'o', markersize=5, color=colour)
         ax.set_title(region_names[regions[n]], fontsize=14)
         ax.set_xlim([0, 6])
         ax.set_ylim([0, 3])
@@ -994,6 +1005,13 @@ def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
         if n==0:
             plt.text(np.mean(threshold_range[n]), 0.1, 'tipping threshold', ha='center', va='bottom', fontsize=9)
     ax.set_xlabel('Global warming level relative to preindustrial ('+deg_string+'C)', fontsize=12)
+    # Manual legend
+    colours = ['Crimson', 'Grey', 'DodgerBlue']
+    labels = ['ramp up', 'stabilise', 'ramp down']
+    handles = []
+    for m in range(len(colours)):
+        handles.append(Line2D([0], [0], marker='o', markersize=5, color=colours[m], label=labels[m], linestyle=''))
+    plt.legend(handles=handles, loc='center left', bbox_to_anchor=(-0.35, 1.2), fontsize=9)
     finished_plot(fig, fig_name=fig_name, dpi=300)
     
 
@@ -1155,7 +1173,7 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
     from scipy.stats import linregress
 
     pi_suite = 'cs495'
-    max_warming_regions = [3, 5]
+    max_warming_regions = [2, 4.5]
     smooth = 5*months_per_year
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
