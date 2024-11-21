@@ -825,7 +825,7 @@ def all_suite_trajectories (static_ice=False):
 
 
 # Assemble a list of all possible trajectories of the given timeseries variable (precomputed).
-# Can add an offset if needed (eg the negative of the preindustrial baseline temperature)
+# Can add an offset if needed (eg the negative of the preindustrial baseline temperature).
 def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='timeseries.nc', static_ice=False, offset=0):
 
     suite_sequences = all_suite_trajectories(static_ice=static_ice)
@@ -834,8 +834,21 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
     # Loop over each suite trajectory and build the timeseries
     for suite_list in suite_sequences:
         for suite in suite_list:
+            # Figure out whether it's a ramp-up (1), stabilisation (0), or ramp-down (-1) simulation
+            for scenario in suites_by_scenario:
+                if suite in scenario:
+                    if 'ramp_up' in scenario:
+                        stype = 1
+                    elif 'stabilise' in scenario:
+                        stype = 0
+                    elif 'ramp_down' in scenario:
+                        stype = -1
+                    else:
+                        raise Exception('invalid scenario type')
+                    break
             ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
-            data = ds[var_name] + offset           
+            data = ds[var_name] + offset
+            data = data.assign_coords(scenario_type=('time_centered', np.ones(data.size)*stype))
             if suite == suite_list[0]:
                 suite_string = suite
             else:
@@ -852,7 +865,7 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
             data_prev = data
         suite_strings.append(suite_string)
         timeseries.append(data)
-    return timeseries, suite_strings              
+    return timeseries, suite_strings
 
 
 # Analyse the cavity temperature beneath Ross and FRIS to see which scenarios tip and/or recover, under which global warming levels. Also plot this.
@@ -877,6 +890,7 @@ def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
     # Loop over regions
     all_temp_tip = []
     all_temp_recover = []
+    threshold_range = []
     for r in range(len(regions)):
         region = regions[r]
         
@@ -922,7 +936,9 @@ def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
         all_temp_recover.append(warming_at_recovery)
         
         # Risk of tipping eventually if max GW is within certain range
-        gw_targets = [1.5, 2, 2.5, 3, 4, 5, 6]
+        gw_targets = np.arange(1.5, 6, 0.5)
+        threshold_min = None
+        threshold_max = None
         for n in range(len(gw_targets)):
             warming_exceeds = gw_targets[n]
             if n==len(gw_targets)-1:
@@ -937,19 +953,47 @@ def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
                     num_total += 1
                     if suite_strings[n] in suites_tipped:
                         num_tip += 1
-            print('Maximum warming between '+str(warming_exceeds)+'-'+str(warming_below)+'K causes '+str(num_tip)+' of '+str(num_total)+' trajectories to eventually tip ('+str(num_tip/num_total*100)+'%)')
+            if num_total > 0:
+                print('Maximum warming between '+str(warming_exceeds)+'-'+str(warming_below)+'K causes '+str(num_tip)+' of '+str(num_total)+' trajectories to eventually tip ('+str(num_tip/num_total*100)+'%)')
+                if num_tip > 0 and threshold_min is None:
+                    threshold_min = warming_exceeds
+                if num_tip == num_total and threshold_max is None:
+                    threshold_max = warming_below
+        threshold_range.append([threshold_min, threshold_max])
+
+    # Inner function to colour code markers based on scenario type at given time (saved as coordinate in DataArray)
+    def assign_colours (data):
+        colours = []
+        for x in data:
+            if x.scenario_type == 1:
+                colours.append('Crimson')
+            elif x.scenario_type == 0:
+                colours.append('Grey')
+            elif x.scenario_type == -1:
+                colours.append('DodgerBlue')
+        return colours
 
     # Plot
-    fig = plt.figure(figsize=(6,8))
+    fig = plt.figure(figsize=(6,5))
     gs = plt.GridSpec(2,1)
-    gs.update(left=0.05, right=0.95, bottom=0.05, top=0.9, hspace=0.2)
+    gs.update(left=0.25, right=0.95, bottom=0.1, top=0.92, hspace=0.4)
     for n in range(len(regions)):
         ax = plt.subplot(gs[n,0])
-        # First line: warming at time of tipping
-        ax.plot(2, all_temp_tip[n], 'o', markersize=5)
+        # First line: warming at time of tipping        
+        ax.plot(all_temp_tip[n], 2*np.ones(len(all_temp_tip[n])), 'o', markersize=5, color=assign_colours(all_temp_tip[n]))
         # Second line: warming at time of recovery
-        ax.plot(1, all_temp_recover[n], 'o', markersize=5)
-        ax.set_title(region_names[region], fontsize=12)
+        ax.plot(all_temp_recover[n], 1*np.ones(len(all_temp_recover[n])), 'o', markersize=5, color=assign_colours(all_temp_recover[n]))
+        ax.set_title(region_names[regions[n]], fontsize=14)
+        ax.set_xlim([0, 6])
+        ax.set_ylim([0, 3])
+        ax.set_yticks([1, 2])
+        ax.set_yticklabels(['at time of recovery', 'at time of tipping'])
+        ax.grid(linestyle='dotted')
+        # Shade range of likely threshold to tip eventually
+        ax.axvspan(threshold_range[n][0], threshold_range[n][1], alpha=0.1, color='Crimson')
+        if n==0:
+            plt.text(np.mean(threshold_range[n]), 0.1, 'tipping threshold', ha='center', va='bottom', fontsize=9)
+    ax.set_xlabel('Global warming level relative to preindustrial ('+deg_string+'C)', fontsize=12)
     finished_plot(fig, fig_name=fig_name, dpi=300)
     
 
