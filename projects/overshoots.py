@@ -19,8 +19,9 @@ from ..plot_utils import set_colours, latlon_axes
 
 # Dictionary of which suites correspond to which scenario
 # TODO: choose whether to differentiate between 4 Gt/C and 8 Gt/C ramp-down, and whether to include 8 Gt/C at all
-# TODO: cs495 is too many files to pull at once; split this command up into multiples somehow (only matters for final calculation of PI baseline)
-suites_by_scenario = {'piControl' : ['cs495'],
+# TODO: cs495 is too many files to pull at once; split this command up into multiples somehow (only matters for final calculation of PI baseline - or do I only use the static ice one?)
+# Uncomment when new timeseries calculated
+'''suites_by_scenario = {'piControl' : ['cs495'],
                       'piControl_static_ice' : ['cs568'],
                       'ramp_up' : ['cx209', 'cw988', 'cw989', 'cw990'],
                       'ramp_up_static_ice': ['cz826'],
@@ -38,8 +39,30 @@ suites_by_scenario = {'piControl' : ['cs495'],
                       '5K_ramp_down' : ['dc251', 'dc130'],
                       '6K_stabilise' : ['cz378'],
                       '6K_ramp_down' : ['de943', 'de962', 'de963']}
+
 # Dictionary of which suites branch from which. None means it's a ramp-up suite (so branched from a piControl run, but we don't care about that for the purposes of integrated GW)
-suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'cz944':'cy838', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'db223':'cz375', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'dc163':'cz944', 'di335':'cy838', 'df453':'cz375', 'de620':'cz375', 'dc565':'cy838', 'dd210':'cz376', 'df028':'cz375', 'de621':'cz375', 'df025':'cy838', 'df027':'cy838', 'df021':'cz375', 'df023':'cz375', 'dh541':'cz376', 'dh859':'cz376', 'de943':'cz378', 'de962':'cz378', 'de963':'cz378'}
+suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'cz944':'cy838', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'db223':'cz375', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'dc163':'cz944', 'di335':'cy838', 'df453':'cz375', 'de620':'cz375', 'dc565':'cy838', 'dd210':'cz376', 'df028':'cz375', 'de621':'cz375', 'df025':'cy838', 'df027':'cy838', 'df021':'cz375', 'df023':'cz375', 'dh541':'cz376', 'dh859':'cz376', 'de943':'cz378', 'de962':'cz378', 'de963':'cz378'}'''
+
+# Old versions for now
+suites_by_scenario = {'piControl' : ['cs495'],
+                      'piControl_static_ice' : ['cs568'],
+                      'ramp_up' : ['cx209', 'cw988', 'cw989', 'cw990'],
+                      'ramp_up_static_ice': ['cz826'],
+                      '1.5K_stabilise': ['cy837','cz834','da087'],
+                      '1.5K_ramp_down': ['da697', 'dc052', 'dc248'],
+                      '2K_stabilise': ['cy838','cz855','da266'],
+                      '2K_ramp_down': ['cz944', 'dc051', 'da800'],
+                      '2K_restabilise' : ['dc163'],
+                      '2.5K_stabilise' : ['cz374','cz859'],
+                      '3K_stabilise' : ['cz375','db587','db597'],
+                      '3K_ramp_down' : ['db223', 'dc032', 'dc249'],
+                      '4K_stabilise' : ['cz376','db723','db733'],
+                      '4K_ramp_down' : ['da892', 'dc123'],
+                      '5K_stabilise' : ['cz377','db731','dc324'],
+                      '5K_ramp_down' : ['dc251', 'dc130'],
+                      '6K_stabilise' : ['cz378']}
+# Dictionary of which suites branch from which. None means it's a ramp-up suite (so branched from a piControl run, but we don't care about that for the purposes of integrated GW)
+suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'cz944':'cy838', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'db223':'cz375', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'dc163':'cz944'}
 
 # End global vars
 
