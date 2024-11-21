@@ -19,6 +19,7 @@ from ..plot_utils import set_colours, latlon_axes
 
 # Dictionary of which suites correspond to which scenario
 # TODO: choose whether to differentiate between 4 Gt/C and 8 Gt/C ramp-down, and whether to include 8 Gt/C at all
+# TODO: cs495 is too many files to pull at once; split this command up into multiples somehow (only matters for final calculation of PI baseline)
 suites_by_scenario = {'piControl' : ['cs495'],
                       'piControl_static_ice' : ['cs568'],
                       'ramp_up' : ['cx209', 'cw988', 'cw989', 'cw990'],
@@ -38,7 +39,7 @@ suites_by_scenario = {'piControl' : ['cs495'],
                       '6K_stabilise' : ['cz378'],
                       '6K_ramp_down' : ['de943', 'de962', 'de963']}
 # Dictionary of which suites branch from which. None means it's a ramp-up suite (so branched from a piControl run, but we don't care about that for the purposes of integrated GW)
-suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'cz944':'cy838', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'db223':'cz375', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'dc163':'cz944', 'di335':'cy838', 'df453':'cz375', 'de620':'cz375', 'dc565':'cy838', 'dd210':'cz376', 'df028':'cz375', 'de621':'cz375', 'df025':'cy838', 'df027':'cy838', 'df021':'cz375', 'df023':'cz375' 'dh541':'cz376', 'dh859':'cz376', 'de943':'cz378', 'de962':'cz378', 'de963':'cz378'}
+suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'cz944':'cy838', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'db223':'cz375', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'dc163':'cz944', 'di335':'cy838', 'df453':'cz375', 'de620':'cz375', 'dc565':'cy838', 'dd210':'cz376', 'df028':'cz375', 'de621':'cz375', 'df025':'cy838', 'df027':'cy838', 'df021':'cz375', 'df023':'cz375', 'dh541':'cz376', 'dh859':'cz376', 'de943':'cz378', 'de962':'cz378', 'de963':'cz378'}
 
 # End global vars
 
@@ -831,8 +832,8 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
     return timeseries, suite_strings              
 
 
-# Analyse the cavity temperature beneath Ross and FRIS to see which scenarios tip and/or recover, under which global warming levels.
-def cold_cavity_hysteresis_stats (base_dir='./'):
+# Analyse the cavity temperature beneath Ross and FRIS to see which scenarios tip and/or recover, under which global warming levels. Also plot this.
+def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
 
     regions = ['ross', 'filchner_ronne']
     pi_suite = 'cs495'
@@ -851,6 +852,8 @@ def cold_cavity_hysteresis_stats (base_dir='./'):
         warming_ts[n] = moving_average(warming_ts[n], smooth)
 
     # Loop over regions
+    all_temp_tip = []
+    all_temp_recover = []
     for r in range(len(regions)):
         region = regions[r]
         
@@ -891,6 +894,10 @@ def cold_cavity_hysteresis_stats (base_dir='./'):
         else:
             print(str(len(suites_recovered))+' tipped trajectories recover ('+str(len(suites_recovered)/len(suites_tipped)*100)+'%)')
             print('Global warming at time of recovery has mean '+str(np.mean(warming_at_recovery))+'K, standard deviation '+str(np.std(warming_at_recovery))+'K')
+        # Save results for plotting
+        all_temp_tip.append(warming_at_tip)
+        all_temp_recover.append(warming_at_recovery)
+        
         # Risk of tipping eventually if max GW is within certain range
         gw_targets = [1.5, 2, 2.5, 3, 4, 5, 6]
         for n in range(len(gw_targets)):
@@ -909,8 +916,22 @@ def cold_cavity_hysteresis_stats (base_dir='./'):
                         num_tip += 1
             print('Maximum warming between '+str(warming_exceeds)+'-'+str(warming_below)+'K causes '+str(num_tip)+' of '+str(num_total)+' trajectories to eventually tip ('+str(num_tip/num_total*100)+'%)')
 
+    # Plot
+    fig = plt.figure(figsize=(6,8))
+    gs = plt.GridSpec(2,1)
+    gs.update(left=0.05, right=0.95, bottom=0.05, top=0.9, hspace=0.2)
+    for n in range(len(regions)):
+        ax = plt.subplot(gs[n,0])
+        # First line: warming at time of tipping
+        ax.plot(2, all_temp_tip[n], 'o', markersize=5)
+        # Second line: warming at time of recovery
+        ax.plot(1, all_temp_recover[n], 'o', markersize=5)
+        ax.set_title(region_names[region], fontsize=12)
+    finished_plot(fig, fig_name=fig_name, dpi=300)
+    
 
-# Final plots for paper: (1) bottom temperature on continental shelf and in cavities, and (2) ice shelf basal mass loss as a function of global warming level, for 4 different regions, showing ramp-up, stabilise, and ramp-down in different colours
+
+# Plot: (1) bottom temperature on continental shelf and in cavities, and (2) ice shelf basal mass loss as a function of global warming level, for 4 different regions, showing ramp-up, stabilise, and ramp-down in different colours
 def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
 
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
