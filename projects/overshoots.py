@@ -844,7 +844,6 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
                         stype = 0
                     elif 'ramp_down' in scenario:
                         stype = -1
-                        print('Found ramp down')
                     else:
                         raise Exception('invalid scenario type')
                     break
@@ -882,6 +881,9 @@ def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
     timeseries_file_um = 'timeseries_um.nc'
     smooth = 5*months_per_year
     tipping_threshold = -1.9  # If cavity mean temp is warmer than surface freezing point, it's tipped
+    temp_correction = [1.00753541, 0.80698273]  # Precomputed by warming_implied_by_salinity_bias() - update if needed before publication!
+    bias_print_x = [4.5, 2.5]
+    bias_print_y = 1.5
 
     # Assemble all possible trajectories of global mean temperature anomalies relative to preindustrial
     ds = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
@@ -1004,6 +1006,13 @@ def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
         ax.axvspan(threshold_range[n][0], threshold_range[n][1], alpha=0.1, color='Crimson')
         if n==0:
             plt.text(np.mean(threshold_range[n]), 0.1, 'tipping threshold', ha='center', va='bottom', fontsize=9)
+        # Indicate temperature correction due to fresh bias in each region
+        x_start = bias_print_x[n]
+        x_end = bias_print_x[n] + temp_correction[n]
+        ax.plot([x_start, x_end], [bias_print_y]*2, color='black')
+        ax.plot([x_start]*2, [bias_print_y-0.05, bias_print_y+0.05], color='black')
+        ax.plot([x_end]*2, [bias_print_y-0.05, bias_print_y+0.05], color='black')
+        plt.text(0.5*(x_start+x_end), bias_print_y+0.4, '+'+str(np.round(temp_correction[n],1))+deg_string+'C\ncorrection', fontsize=10, color='black', ha='center', va='center')            
     ax.set_xlabel('Global warming level relative to preindustrial ('+deg_string+'C)', fontsize=12)
     # Manual legend
     colours = ['Crimson', 'Grey', 'DodgerBlue']
