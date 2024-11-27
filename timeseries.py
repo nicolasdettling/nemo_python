@@ -299,8 +299,11 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
             else:
                 # Something else; skip it
                 continue
-        # Extract date code (yyyymmdd_yyyymmdd)
-        date_code = f"{(f.split(f'{file_head}')[1]).split('_')[0]}_{(f.split(f'{file_head}')[1]).split('_')[1]}"
+        # Extract date code (yyyymmdd_yyyymmdd or yyyymmdd-yyyymmdd)
+        if config == 'eANT025':
+            date_code = f"{(f.split(f'{file_head}')[1]).split('_')[0]}_{(f.split(f'{file_head}')[1]).split('_')[1]}"
+        else:
+            date_code = f"{(f.split(f'{file_head}')[1]).split('_')[0]}"
         if update:
             # Need to check if date code has already been processed
             year = int(date_code[:4])
