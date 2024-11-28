@@ -239,11 +239,14 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
         else:
             ds_new = ds_new.assign({var:data})
     # Use time_centered as the dimension as it includes real times - time_counter is reset to 0 every output file
-    ds_new = ds_new.swap_dims({'time_counter':'time_centered'})
+    ds_new = ds_new.swap_dims({'time_counter':'time_centered'}).drop_vars({'time_counter'})
 
     if os.path.isfile(timeseries_file):
         # File already exists; read it
         ds_old = xr.open_dataset(timeseries_file)
+        if 'forecast_period' in ds_old:
+            # Old formulation using conversion from Iris (breaks in 2300s with datetime overflow): drop unused coordinates
+            ds_old = ds_old.drop_vars(['forecast_period', 'forecast_reference_time', 'height', 'latitude', 'longitude'])
         # Concatenate new data
         ds_new.load()
         ds_new = xr.concat([ds_old, ds_new], dim='time_centered')
