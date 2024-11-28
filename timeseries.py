@@ -260,6 +260,8 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
 def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='timeseries.nc', config='', 
                                   sim_dir='./', freq='m', halo=True, gtype='T', name_remapping='', nemo_mesh='',
                                   domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
+    import re
+    from datetime import datetime
 
     update = os.path.isfile(sim_dir+timeseries_file)
     if update:
@@ -299,20 +301,21 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
             else:
                 # Something else; skip it
                 continue
-        # Extract date code (yyyymmdd_yyyymmdd or yyyymmdd-yyyymmdd)
-        if config == 'eANT025':
-            date_code = f"{(f.split(f'{file_head}')[1]).split('_')[0]}_{(f.split(f'{file_head}')[1]).split('_')[1]}"
-        else:
-            date_code = f"{(f.split(f'{file_head}')[1]).split('_')[0]}"
+        # Extract date code    
+        date_code  =  re.findall(r'\d{4}\d{2}\d{2}', f) # find parts of filename that look like a date, typically two dates in NEMO
+        file_dates = []
+        for d in date_code:
+            file_date = datetime.strptime(d, '%Y%m%d').date()
+            file_dates.append(file_date) # list containing dates in the filename
         if update:
             # Need to check if date code has already been processed
-            year = int(date_code[:4])
-            month = int(date_code[4:6])
+            year = file_dates[0].year
+            month = file_dates[0].month
             if year < year_last or (year==year_last and month<=month_last):
                 # Skip it
                 continue
         # Now construct wildcard string and add to list if it's not already there
-        file_pattern = f'{file_head}{date_code}*{file_tail}'
+        file_pattern = f'{file_head}{date_code[0]}*{file_tail}'
         if file_pattern not in nemo_files:
             nemo_files.append(file_pattern)        
     # Now sort alphabetically - i.e. by ascending date code
