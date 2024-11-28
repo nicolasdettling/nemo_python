@@ -253,7 +253,11 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
         ds_old.close()
 
     # Save to file, overwriting if needed
-    ds_new.to_netcdf(timeseries_file, mode='w')
+    try:
+        ds_new.to_netcdf(timeseries_file, mode='w')
+    except(PermissionError):
+        ds_new.to_netcdf('test.nc', mode='w')
+        os.rename('test.nc', timeseries_file)
     ds_new.close()
 
 
