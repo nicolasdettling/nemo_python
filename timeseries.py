@@ -185,6 +185,7 @@ def calc_timeseries_um (var, file_path):
 
     import iris
     import warnings
+    import cftime
 
     # Parse variable name
     if var == 'global_mean_sat':
@@ -197,7 +198,7 @@ def calc_timeseries_um (var, file_path):
     # Suppress warnings (year_zero kwarg ignored for idealised calendars)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        cube = iris.load_cube(file_path, um_var)
+        cube = iris.load_cube(file_path, um_var) 
 
     if option == 'area_avg':
         # Following code by Jane Mulcahy and Catherine Hardacre
@@ -209,10 +210,8 @@ def calc_timeseries_um (var, file_path):
         data_iris = cube.collapsed(['longitude', 'latitude'], iris.analysis.MEAN, weights=grid_areas)
 
     # Now convert to a DataArray and get the time dimension to match NEMO conventions
-    data = xr.DataArray.from_iris(data_iris)
-    data = data.expand_dims(dim='time')
-    data = data.rename({'time':'time_centered'})
-    data = data.assign_attrs(long_name=title, units=units)
+    data = xr.DataArray([float(data_iris.data)], coords={'time_counter':[0.]})
+    data = data.assign_coords(time_centered=('time_counter', cftime.num2date(cube.coord('time').points, cube.coord('time').units.name, calendar=cube.coord('time').units.calendar)))
     data.load()
 
     return data

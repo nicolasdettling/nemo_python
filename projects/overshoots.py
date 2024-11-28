@@ -23,7 +23,7 @@ from ..plot_utils import set_colours, latlon_axes
 suites_by_scenario = {'piControl' : ['cs495'],
                       'piControl_static_ice' : ['cs568'],
                       'ramp_up' : ['cx209', 'cw988', 'cw989', 'cw990'],
-                      #'ramp_up_static_ice': ['cz826'], # Missing isf file
+                      'ramp_up_static_ice': ['cz826'],
                       '1.5K_stabilise': ['cy837','cz834','da087'],
                       '1.5K_ramp_down': ['da697', 'dc052', 'dc248'],
                       '2K_stabilise': ['cy838','cz855','da266'],
@@ -33,7 +33,7 @@ suites_by_scenario = {'piControl' : ['cs495'],
                       '3K_stabilise' : ['cz375','db587','db597'],
                       '3K_ramp_down' : ['db223', 'dc032', 'dc249', 'df453', 'de620', 'df028', 'de621', 'df023'],  #TODO add these back in after single copy unavailable fixed , 'df021'],
                       '4K_stabilise' : ['cz376','db723','db733'],
-                      '4K_ramp_down' : ['da892', 'dc123', 'dd210', 'dh859'],  #, 'dh541'], # Missing isf file
+                      '4K_ramp_down' : ['da892', 'dc123', 'dd210', 'dh859', 'dh541'],
                       '5K_stabilise' : ['cz377','db731','dc324'],
                       '5K_ramp_down' : ['dc251', 'dc130'],
                       '6K_stabilise' : ['cz378'],
