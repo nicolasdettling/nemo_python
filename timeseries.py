@@ -238,9 +238,8 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
             ds_new = xr.Dataset({var:data})
         else:
             ds_new = ds_new.assign({var:data})
-    if not pp:
-        # Use time_centered as the dimension as it includes real times - time_counter is reset to 0 every output file
-        ds_new = ds_new.swap_dims({'time_counter':'time_centered'})
+    # Use time_centered as the dimension as it includes real times - time_counter is reset to 0 every output file
+    ds_new = ds_new.swap_dims({'time_counter':'time_centered'})
 
     if os.path.isfile(timeseries_file):
         # File already exists; read it
