@@ -377,7 +377,6 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
             expt = [expt]
         num_ens = len(expt)
         for suite in expt:
-            print(suite)
             if integrate:
                 gw_level = integrated_gw(suite, pi_suite=pi_suite, timeseries_file_um=timeseries_file_um, base_dir=base_dir)
             else:
