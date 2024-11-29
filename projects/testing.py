@@ -83,6 +83,7 @@ def plot_bisicles_overview (base_dir='./', suite_id='dj515', fig_dir=None):
     var_titles = ['Ice thickness', 'Basal mass balance', 'Surface mass balance']
     var_units = ['m', 'm/y', 'm/y']
     domains = ['AIS', 'GrIS']
+    time_titles = ['first 10 years', 'last 10 years']
 
     # Read data
     ds_all = []
@@ -90,13 +91,34 @@ def plot_bisicles_overview (base_dir='./', suite_id='dj515', fig_dir=None):
         file_head = 'bisicles_'+suite_id+'c_1y_'
         file_tail = '_plot-'+domain+'.hdf5'
         ds_domain = read_bisicles_all(base_dir+'/'+suite_id+'/', file_head, file_tail, var_names, level=0, order=0)
-        ds_all.append(ds_domain)
+        # Mask where thickness is 0
+        ds_domain = ds_domain.where(ds_domain['thickness']>0)
+        # Average over first 10 years and last 10 years
+        ds_avg = [ds_domain.isel(time=slice(0,10)).mean(dim='time'), ds_domain.isel(time=slice(-10,None)).mean(dim='time')]
+        ds_all.append(ds_avg)
     
     for var, title, units in zip(var_names, var_titles, var_units):
         fig = plt.figure(figsize=(8,8))
         gs = plt.GridSpec(2,2)
-        gs.update(left=0.05, right=0.9, bottom=0.05, top=0.9, hspace=0.2, wspace=0.05)
-        for domain in domains:
+        gs.update(left=0.05, right=0.9, bottom=0.05, top=0.9, hspace=0.1, wspace=0.05)
+        for n in range(len(domains)):
+            vmin = np.amin([ds[var].min() for ds in ds_all[n]])
+            vmax = np.amax([ds[var].max() for ds in ds_all[n]])
+            for t in range(len(ds_all[n])):
+                ax = plt.subplot(gs[n,t])
+                img = ax.pcolormesh(ds_all[n]['x'], ds_all[n]['y'], ds_all[n][t][var], vmin=vmin, vmax=vmax)
+                if n==0:
+                    ax.set_title(time_titles[t], fontsize=12)
+            cax = fig.add_axes([0.92, 0.05+0.45*n, 0.05, 0.3])
+            plt.colorbar(img, cax=cax)
+        plt.suptitle(title+' ('+units+')', fontsize=16)
+        if fig_dir is None:
+            fig_name = None
+        else:
+            fig_name = fig_dir+'/'+var+'.png'
+        finished_plot(fig, fig_name=fig_name)
+            
+            
             
             
         
