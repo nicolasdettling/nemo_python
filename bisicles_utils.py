@@ -20,7 +20,7 @@ def read_bisicles (file_path, var_names, level=0, order=0):
     ds = None
     for var in var_names:
         x, y, data = amrio.readBox2D(amrID, level, lo, hi, var, order)
-        da = xr.DataArray(data, coords={'x':x, 'y':y})
+        da = xr.DataArray(data, coords={'y':y, 'x':x})
         da = da.expand_dims(dim={'time':[date]})
         if ds is None:
             ds = xr.Dataset({var:da})

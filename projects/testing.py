@@ -79,6 +79,7 @@ def plot_region_map (file_path='/gws/nopw/j04/terrafirma/kaight/input_data/grids
 def plot_bisicles_overview (base_dir='./', suite_id='dj515', fig_dir=None):
 
     from ..bisicles_utils import read_bisicles_all
+    
     var_names = ['thickness', 'activeBasalThicknessSource', 'activeSurfaceThicknessSource']
     var_titles = ['Ice thickness', 'Basal mass balance', 'Surface mass balance']
     var_units = ['m', 'm/y', 'm/y']
