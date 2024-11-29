@@ -6,6 +6,7 @@ import netCDF4 as nc
 
 from ..grid import region_mask
 from ..plots import circumpolar_plot, finished_plot
+from ..plot_utils import set_colours
 
 
 def find_cgrid_issues (grid_file='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA025_v3.nc'):
@@ -84,33 +85,39 @@ def plot_bisicles_overview (base_dir='./', suite_id='dj515', fig_dir=None):
     var_titles = ['Ice thickness', 'Basal mass balance', 'Surface mass balance']
     var_units = ['m', 'm/y', 'm/y']
     domains = ['AIS', 'GrIS']
-    time_titles = ['first 10 years', 'last 10 years']
+    time_titles = ['first year', 'last year']
+    ctypes = ['viridis', 'plusminus', 'plusminus']
 
     # Read data
-    ds_all = []
+    ds_2D = []
+    ds_ts = []
     for domain in domains:
         file_head = 'bisicles_'+suite_id+'c_1y_'
         file_tail = '_plot-'+domain+'.hdf5'
         ds_domain = read_bisicles_all(base_dir+'/'+suite_id+'/', file_head, file_tail, var_names, level=0, order=0)
-        # Mask where thickness is 0
-        ds_domain = ds_domain.where(ds_domain['thickness']>0)
-        # Average over first 10 years and last 10 years
-        ds_avg = [ds_domain.isel(time=slice(0,10)).mean(dim='time'), ds_domain.isel(time=slice(-10,None)).mean(dim='time')]
-        ds_all.append(ds_avg)
-    
-    for var, title, units in zip(var_names, var_titles, var_units):
+        # Save first and last years in 2D
+        ds_avg = [ds_domain.isel(time=0), ds_domain.isel(time=-1)]
+        ds_2D.append(ds_avg)
+        # Save timeseries
+        ds_ts.append(ds_domain.mean(dim=['x','y']))
+
+    # Plot maps of first and last years for each variable
+    for var, title, units, ctype in zip(var_names, var_titles, var_units, ctypes):
         fig = plt.figure(figsize=(8,8))
-        gs = plt.GridSpec(2,2)
-        gs.update(left=0.05, right=0.9, bottom=0.05, top=0.9, hspace=0.1, wspace=0.05)
+        gs = plt.GridSpec(len(domains),2)
+        gs.update(left=0.03, right=0.88, bottom=0.05, top=0.9, hspace=0.1, wspace=0.05)
         for n in range(len(domains)):
-            vmin = np.amin([ds[var].min() for ds in ds_all[n]])
-            vmax = np.amax([ds[var].max() for ds in ds_all[n]])
-            for t in range(len(ds_all[n])):
+            vmin = np.amin([ds[var].min() for ds in ds_2D[n]])
+            vmax = np.amax([ds[var].max() for ds in ds_2D[n]])
+            cmap = set_colours(ds_2D[n][0][var], ctype=ctype, vmin=vmin, vmax=vmax)[0]
+            for t in range(len(ds_2D[n])):
                 ax = plt.subplot(gs[n,t])
-                img = ax.pcolormesh(ds_all[n]['x'], ds_all[n]['y'], ds_all[n][t][var], vmin=vmin, vmax=vmax)
+                img = ax.pcolormesh(ds_2D[n][t]['x'], ds_2D[n][t]['y'], ds_2D[n][t][var], vmin=vmin, vmax=vmax, cmap=cmap)
+                ax.set_xticks([])
+                ax.set_yticks([])
                 if n==0:
                     ax.set_title(time_titles[t], fontsize=12)
-            cax = fig.add_axes([0.92, 0.05+0.45*n, 0.05, 0.3])
+            cax = fig.add_axes([0.9, 0.1+0.45*n, 0.03, 0.3])
             plt.colorbar(img, cax=cax)
         plt.suptitle(title+' ('+units+')', fontsize=16)
         if fig_dir is None:
@@ -118,6 +125,23 @@ def plot_bisicles_overview (base_dir='./', suite_id='dj515', fig_dir=None):
         else:
             fig_name = fig_dir+'/'+var+'.png'
         finished_plot(fig, fig_name=fig_name)
+
+    # Plot timeseries of area-mean all variables
+    fig = plt.figure(figsize=(8,6))
+    gs = plt.GridSpec(len(domains), len(var_names))
+    for n in range(len(domains)):
+        for v in range(len(var_names)):
+            ax = plt.subplot(gs[n,t])
+            ax.plot_date(ds_ts[n]['time'], ds_ts[n][var_names[v]])
+            ax.grid(linestyle='dotted')
+            ax.set_title(var_names[v]+' ('+domains[n]+')', fontsize=12)
+            ax.set_ylabel(var_units[v], fontsize=10)
+    if fig_dir is None:
+        fig_name = None
+    else:
+        fig_name = fig_dir+'/timeseries.png'
+    finished_plot(fig, fig_name=fig_name)
+        
             
             
             
