@@ -78,18 +78,27 @@ def plot_region_map (file_path='/gws/nopw/j04/terrafirma/kaight/input_data/grids
 
 def plot_bisicles_overview (base_dir='./', suite_id='dj515', fig_dir=None):
 
-    from ..bisicles_utils import read_bisicles_var_all
+    from ..bisicles_utils import read_bisicles_all
     var_names = ['thickness', 'activeBasalThicknessSource', 'activeSurfaceThicknessSource']
     var_titles = ['Ice thickness', 'Basal mass balance', 'Surface mass balance']
     var_units = ['m', 'm/y', 'm/y']
-    start_year = 1982
-    end_year = 2012
     domains = ['AIS', 'GrIS']
+
+    # Read data
+    ds_all = []
+    for domain in domains:
+        file_head = 'bisicles_'+suite_id+'c_1y_'
+        file_tail = '_plot-'+domain+'.hdf5'
+        ds_domain = read_bisicles_all(base_dir+'/'+suite_id+'/', file_head, file_tail, var_names, level=0, order=0)
+        ds_all.append(ds_domain)
     
     for var, title, units in zip(var_names, var_titles, var_units):
         fig = plt.figure(figsize=(8,8))
         gs = plt.GridSpec(2,2)
         gs.update(left=0.05, right=0.9, bottom=0.05, top=0.9, hspace=0.2, wspace=0.05)
+        for domain in domains:
+            
+            
         
 
 
