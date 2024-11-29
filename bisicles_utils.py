@@ -18,12 +18,27 @@ def read_bisicles_var (file_path, var, level=0, order=0):
     date_code = re.findall(r'\d{4}\d{2}\d{2}', file_path)[0]
     date = datetime.strptime(date_code, '%Y%m%d').date()
     da = da.expand_dims(dim={'time':[date]})
+    
     da.load()
     amrio.free(amrID)
     return da
 
 
-# TODO: read all the data available and concatenate in time
-def read_bisicles_ds (file_head, file_tail, var, level=0, order=0):
+# Call read_bisicles_var for every time index file in the given directory.
+def read_bisicles_var_all (sim_dir, file_head, file_tail, var, level=0, order=0):
 
-    pass
+    all_files = []
+    for f in os.listdir(sim_dir):
+        if os.path.isdir(f'{sim_dir}/{f}'): continue
+        if f.startswith(file_head) and f.endswith(file_tail):
+            all_files.append(f)
+    all_files.sort()
+    da = None
+    for f in all_files:
+        da_tmp = read_bisicles_var(sim_dir+'/'+f, var, level=level, order=order)
+        if da is None:
+            da = da_tmp
+        else:
+            da = xr.concat([da, da_tmp], dim='time')
+    return da
+
