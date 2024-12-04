@@ -239,7 +239,9 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
         else:
             ds_new = ds_new.assign({var:data})
     # Use time_centered as the dimension as it includes real times - time_counter is reset to 0 every output file
-    ds_new = ds_new.swap_dims({'time_counter':'time_centered'}).drop_vars({'time_counter'})
+    ds_new = ds_new.swap_dims({'time_counter':'time_centered'})
+    if pp:
+        ds_new = ds_new.drop_vars({'time_counter'})
 
     if os.path.isfile(timeseries_file):
         # File already exists; read it
@@ -330,10 +332,10 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
     for file_pattern in nemo_files:
         print('Processing '+file_pattern)
         if os.path.isfile(f"{sim_dir}/{file_pattern.replace('*','_isf')}") and not os.path.isfile(f"{sim_dir}/{file_pattern.replace('*','_grid')}"):
-            print('Warning: isf-T file exists with no matching grid-T file. Probably reached the end of complete months pulled from MASS. Stopping')
+            print('Warning: isf-T file exists with no matching grid-T file. Stopping')
             break
         if os.path.isfile(f"{sim_dir}/{file_pattern.replace('*','_grid')}") and not os.path.isfile(f"{sim_dir}/{file_pattern.replace('*','_isf')}"):
-            print('Warning: grid-T file exists with no matching isf-T file. It may have been skipped in call to MASS. Stopping')
+            print('Warning: grid-T file exists with no matching isf-T file. Stopping')
             break
         ds_nemo = xr.open_mfdataset(f'{sim_dir}/{file_pattern}')
         ds_nemo.load()
