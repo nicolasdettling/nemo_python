@@ -85,8 +85,8 @@ def plot_bisicles_overview (base_dir='./', suite_id='dj515', fig_dir=None):
     var_titles = ['Ice thickness', 'Basal mass balance', 'Surface mass balance']
     var_units = ['m', 'm/y', 'm/y']
     domains = ['AIS', 'GrIS']
-    time_titles = ['first year', 'last year']
-    ctypes = ['viridis', 'plusminus', 'plusminus']
+    time_titles = ['first year', 'after 10 years', 'last year']
+    ctypes = ['viridis', 'plusminus_r', 'plusminus_r']
 
     # Read data
     ds_2D = []
@@ -95,30 +95,40 @@ def plot_bisicles_overview (base_dir='./', suite_id='dj515', fig_dir=None):
         file_head = 'bisicles_'+suite_id+'c_1y_'
         file_tail = '_plot-'+domain+'.hdf5'
         ds_domain = read_bisicles_all(base_dir+'/'+suite_id+'/', file_head, file_tail, var_names, level=0, order=0)
-        # Save first and last years in 2D
-        ds_avg = [ds_domain.isel(time=0), ds_domain.isel(time=-1)]
+        # Mask where initial thickness is 0
+        ds_domain = ds_domain.where(ds_domain['thickness'].isel(time=0)>0)
+        # Save first year, 10 years in, and last year in 2D
+        ds_avg = [ds_domain.isel(time=0), ds_domain.isel(time=10), ds_domain.isel(time=-1)]
         ds_2D.append(ds_avg)
         # Save timeseries
         ds_ts.append(ds_domain.mean(dim=['x','y']))
 
-    # Plot maps of first and last years for each variable
+    # Plot maps of individual years for each variable
     for var, title, units, ctype in zip(var_names, var_titles, var_units, ctypes):
-        fig = plt.figure(figsize=(8,8))
-        gs = plt.GridSpec(len(domains),2)
+        fig = plt.figure(figsize=(10,6))
+        gs = plt.GridSpec(len(domains),len(time_titles))
         gs.update(left=0.03, right=0.88, bottom=0.05, top=0.9, hspace=0.1, wspace=0.05)
         for n in range(len(domains)):
             vmin = np.amin([ds[var].min() for ds in ds_2D[n]])
             vmax = np.amax([ds[var].max() for ds in ds_2D[n]])
+            if vmin == vmax:
+                continue
+            if var == 'activeBasalThicknessSource':
+                vmin = -10
+                extend = 'min'
+            else:
+                extend = 'neither'
             cmap = set_colours(ds_2D[n][0][var], ctype=ctype, vmin=vmin, vmax=vmax)[0]
             for t in range(len(ds_2D[n])):
                 ax = plt.subplot(gs[n,t])
                 img = ax.pcolormesh(ds_2D[n][t]['x'], ds_2D[n][t]['y'], ds_2D[n][t][var], vmin=vmin, vmax=vmax, cmap=cmap)
                 ax.set_xticks([])
                 ax.set_yticks([])
+                ax.axis('equal')
                 if n==0:
                     ax.set_title(time_titles[t], fontsize=12)
-            cax = fig.add_axes([0.9, 0.1+0.45*n, 0.03, 0.3])
-            plt.colorbar(img, cax=cax)
+            cax = fig.add_axes([0.9, 0.1+0.45*(1-n), 0.03, 0.3])
+            plt.colorbar(img, cax=cax, extend=extend)
         plt.suptitle(title+' ('+units+')', fontsize=16)
         if fig_dir is None:
             fig_name = None
@@ -127,19 +137,19 @@ def plot_bisicles_overview (base_dir='./', suite_id='dj515', fig_dir=None):
         finished_plot(fig, fig_name=fig_name)
 
     # Plot timeseries of area-mean all variables
-    fig = plt.figure(figsize=(8,6))
+    fig = plt.figure(figsize=(12,6))
     gs = plt.GridSpec(len(domains), len(var_names))
+    gs.update(left=0.06, right=0.99, bottom=0.05, top=0.9, hspace=0.4, wspace=0.3)
     for n in range(len(domains)):
         for v in range(len(var_names)):
-            ax = plt.subplot(gs[n,t])
-            ax.plot_date(ds_ts[n]['time'], ds_ts[n][var_names[v]])
+            ax = plt.subplot(gs[n,v])
+            ax.plot_date(ds_ts[n]['time'], ds_ts[n][var_names[v]], '-')
             ax.grid(linestyle='dotted')
-            ax.set_title(var_names[v]+' ('+domains[n]+')', fontsize=12)
-            ax.set_ylabel(var_units[v], fontsize=10)
+            ax.set_title(var_titles[v]+'\n('+domains[n]+'), '+var_units[v], fontsize=12)
     if fig_dir is None:
         fig_name = None
     else:
-        fig_name = fig_dir+'/timeseries.png'
+        fig_name = fig_dir+'/bisicles_timeseries.png'
     finished_plot(fig, fig_name=fig_name)
         
             
