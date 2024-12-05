@@ -90,7 +90,7 @@ def build_shelf_mask (ds):
         # Make sure ice shelves are included in the final mask, by setting bathy to 0 here
         bathy = xr.where(ice_mask, 0, bathy)
     else:
-        raise Exception('invalid Dataset for build_shelf_mask')
+        raise KeyError('invalid Dataset for build_shelf_mask')
     # Apply lat-lon bounds and bathymetry bound to ocean mask
     mask = ocean_mask*(ds['nav_lat'] <= shelf_lat)*(bathy <= shelf_depth)
     # Remove disconnected seamounts
