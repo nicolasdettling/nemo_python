@@ -337,15 +337,15 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
         print('Processing '+file_pattern)
         # Only stop if it's the last one, otherwise print warning.
         if os.path.isfile(f"{sim_dir}/{file_pattern.replace('*','_isf')}") and not os.path.isfile(f"{sim_dir}/{file_pattern.replace('*','_grid')}"):
-            print('Warning: isf-T file exists with no matching grid-T file.')
+            print('Warning: isf-T file exists with no matching grid-T file. Stopping')
+            break            
+        if os.path.isfile(f"{sim_dir}/{file_pattern.replace('*','_grid')}") and not os.path.isfile(f"{sim_dir}/{file_pattern.replace('*','_isf')}"):
+            print('Warning: grid-T file exists with no matching isf-T file.')
             if file_pattern == nemo_files[-1]:
                 print('This is the last file, so it will probably be pulled from MASS later. Stopping.')
                 break
             else:
                 print('Timeseries file will have some NaNs at this index.')
-        if os.path.isfile(f"{sim_dir}/{file_pattern.replace('*','_grid')}") and not os.path.isfile(f"{sim_dir}/{file_pattern.replace('*','_isf')}"):
-            print('Warning: grid-T file exists with no matching isf-T file. Stopping')
-            break
         ds_nemo = xr.open_mfdataset(f'{sim_dir}/{file_pattern}')
         ds_nemo.load()
         precompute_timeseries(ds_nemo, timeseries_types, f'{sim_dir}/{timeseries_file}', halo=halo, domain_cfg=domain_cfg,
