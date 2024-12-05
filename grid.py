@@ -105,7 +105,7 @@ def build_shelf_mask (ds):
 def single_cavity_mask (cavity, ds, return_name=False):
 
     if return_name:
-        title = region_names[region]
+        title = region_names[cavity]
 
     if cavity+'_single_cavity_mask' in ds:
         # Previously computed
