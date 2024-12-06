@@ -605,24 +605,24 @@ def interp_grid (A, gtype_in, gtype_out, periodic=True, halo=True):
     ny = A.sizes['y']
     if gtype_in == 'u' and gtype_out == 't':
         if periodic:
-            A_mid = A.interp(x=np.arange(nx-1)+0.5)
             if halo:
-                A_W = A_mid.isel(x=-2)
+                A_W = A.isel(x=-2)
             else:
-                A_W = 0.5*(A.isel(x=0)+A.isel(x=-1))
-            A_W['x'] = -0.5
-            A_interp = xr.concat([A_W, A_mid], dim='x')
+                A_W = A.isel(x=-1)
+            A_W['x'] = -1 # prepend A_W
+            A_concat = xr.concat([A_W, A], dim='x')
+            A_interp = A_concat.interp(x=np.arange(-1,nx-1)+0.5)
         else:
             A_interp = A.interp(x=np.concatenate(([0], np.arange(nx-1)+0.5)))
     elif gtype_in == 't' and gtype_out == 'u':
         if periodic:
-            A_mid = A.interp(x=np.arange(nx-1)+0.5)
             if halo:
-                A_E = A_mid.isel(x=1)
+                A_E = A.isel(x=1)
             else:
-                A_E = 0.5*(A.isel(x=0)+A.isel(x=-1))
-            A_E['x'] = nx - 0.5
-            A_interp = xr.concat([A_mid, A_E], dim='x')
+                A_E = A.isel(x=-1)
+            A_E['x'] = nx - 1
+            A_concat = xr.concat([A, A_E], dim='x')
+            A_interp = A_concat.interp(x=np.arange(nx)+0.5)
         else:
             A_interp = A.interp(x=np.concatenate((np.arange(nx-1)+0.5, [nx-1])))
     elif gtype_in == 'v' and gtype_out == 't':
