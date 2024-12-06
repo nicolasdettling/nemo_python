@@ -1024,13 +1024,13 @@ def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
     
 
 
-# Plot: (1) bottom temperature on continental shelf and in cavities, and (2) ice shelf basal mass loss as a function of global warming level, for 4 different regions, showing ramp-up, stabilise, and ramp-down in different colours
+# Plot: (1) bottom temperature on continental shelf and in cavities, and (2) ice shelf basal mass loss as a function of global warming level, for 2 different regions, showing ramp-up, stabilise, and ramp-down in different colours
 def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
 
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
     pi_suite = 'cs495'
-    regions = ['ross', 'filchner_ronne', 'west_antarctica', 'east_antarctica']
+    regions = ['ross', 'filchner_ronne'] #, 'west_antarctica', 'east_antarctica']
     title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ', r'$\bf{c}$. ', r'$\bf{d}$. ']
     var_names = ['bwtemp', 'massloss']
     var_titles = ['Bottom temperature on continental shelf and in ice shelf cavities', 'Basal mass loss beneath ice shelves']
@@ -1042,19 +1042,19 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks
     ds = xr.open_dataset(sample_file).squeeze()
 
+    fig = plt.figure(figsize=(10,7.5))
+    gs = plt.GridSpec(2,2)
+    gs.update(left=0.07, right=0.98, bottom=0.15, top=0.9, hspace=0.4, wspace=0.16)
     for v in range(num_var):
-        fig = plt.figure(figsize=(10,7))
-        gs = plt.GridSpec(2,2)
-        gs.update(left=0.07, right=0.98, bottom=0.15, top=0.9, hspace=0.3, wspace=0.16)
         for n in range(len(regions)):
-            ax = plt.subplot(gs[n//2, n%2])
+            ax = plt.subplot(gs[v,n])
             plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=0.75, ax=ax)
-            ax.set_title(title_prefix[n]+region_names[regions[n]], fontsize=14)
+            ax.set_title(title_prefix[v*2+n]+region_names[regions[n]], fontsize=14)
             if n == 0:
                 ax.set_ylabel(var_units[v], fontsize=12)
             else:
                 ax.set_ylabel('')
-            if n == 2:
+            if v == 1 and n == 0:
                 ax.set_xlabel('Global warming relative to preindustrial ('+deg_string+'C)', fontsize=12)
             else:
                 ax.set_xlabel('')
@@ -1067,9 +1067,10 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
                 ax2.axis('on')
                 ax2.set_xticks([])
                 ax2.set_yticks([])
-        plt.suptitle(var_titles[v], fontsize=16)
-        ax.legend(loc='center left', bbox_to_anchor=(-0.6,-0.32), fontsize=11, ncol=3)
-        finished_plot(fig, fig_name='figures/'+var_names[v]+'_by_gw_panels.png', dpi=300)
+        plt.text(0.5, 0.99-0.45*v, var_titles[v], fontsize=16, ha='center', va='top', transform=fig.transFigure)
+    #plt.suptitle(var_titles[v], fontsize=16)
+    ax.legend(loc='center left', bbox_to_anchor=(-0.6,-0.32), fontsize=11, ncol=3)
+    finished_plot(fig) #, fig_name='figures/temp_massloss_by_gw_panels.png', dpi=300)
 
 
 # Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS. To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.

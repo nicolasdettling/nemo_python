@@ -217,6 +217,15 @@ def calc_timeseries_um (var, file_path):
     return data
 
 
+# Helper function to overwrite file
+# Make a temporary file and then rename it to the old file. This is safer than doing it in one line with .to_netcdf, because if that returns an error the original file will be deleted and data will be lost.
+def overwrite_file (ds_new, timeseries_file):
+    timeseries_file_tmp = timeseries_file.replace('.nc', '_tmp.nc')
+    ds_new.to_netcdf(timeseries_file_tmp, mode='w')
+    os.rename(timeseries_file_tmp, timeseries_file)
+    ds_new.close()
+
+
 # Precompute the given list of timeseries from the given xarray Dataset of NEMO output (or PP file if pp=True). Save in a NetCDF file which concatenates after each call to the function.
 def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True, 
                            domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc',
@@ -259,10 +268,7 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
         ds_old.close()
 
     # Save to file
-    timeseries_file_tmp = timeseries_file.replace('.nc', '_tmp.nc')
-    ds_new.to_netcdf(timeseries_file_tmp, mode='w')
-    os.rename(timeseries_file_tmp, timeseries_file)
-    ds_new.close()
+    overwrite_file(ds_new, timeseries_file)
 
 
 # Precompute timeseries from the given simulation, either from the beginning (timeseries_file does not exist) or picking up where it left off (timeseries_file does exist). Considers all NEMO output files stamped with suite_id in the given directory sim_dir on the given grid (gtype='T', 'U', etc), and assumes the timeseries file is in that directory too.
@@ -413,6 +419,45 @@ def calc_hovmoeller_region(var, region,
     region_var = (var_ocean*area_ocean).sum(dim=['x_grid_T','y_grid_T'])/(area_ocean.sum(dim=['x_grid_T','y_grid_T']))
 
     return region_var
+
+
+# Check the given timeseries file for missing months (this can happen if only one file type was used to create the timeseries and it was missing a file on MASS). Fill the missing months with NaN.
+# Consider case where 2 or more in a row are missing?
+def fix_missing_months (timeseries_file):
+
+    import cftime
+
+    ds = xr.open_dataset(timeseries_file)
+    t_start = 0
+    while True:
+        time = ds['time_centered']
+        for t in range(t_start, time.size-1):
+            # Check if the next time index is 1 month ahead
+            year_next, month_next = add_months(time[t].dt.year, time[t].dt.month, 1)
+            if year_next != time[t+1].dt.year or month_next != time[t+1].dt.month:
+                print('Missing data at '+str(year_next.data)+'-'+str(month_next.data).zfill(2))
+                # Create a new time index with NaN data
+                # First check data type - can't find a cleaner way to do this
+                if isinstance(time[t].data.item(), cftime.Datetime360Day):
+                    new_time = cftime.Datetime360Day(year=year_next, month=month_next, day=time[t].dt.day)
+                else:
+                    raise Exception('Time index uses data type '+type(time[t].data.item())+'; need to add this case to fix_missing_months()')
+                ds_tmp = ds.isel(time_centered=t).where(False).copy(deep=True)
+                ds_tmp.coords['time_centered'] = [new_time]                
+                # Splice into existing data
+                ds = xr.concat([ds.isel(time_centered=slice(0,t+1)), ds_tmp, ds.isel(time_centered=slice(t+1,None))], dim='time_centered')
+                # Now start a new loop with the larger array, from where we left off
+                t_start = t
+                break
+            if t == time.size-2:
+                # Got to the end successfully; set a flag
+                t_start = -1
+        if t_start == -1:
+            # All done
+            break
+    overwrite_file(ds, timeseries_file_tmp)
+            
+        
     
                                 
 
