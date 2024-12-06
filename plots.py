@@ -19,11 +19,17 @@ def finished_plot (fig, fig_name=None, dpi=None, print_out=True):
         fig.show()
         
 
-# Plot a 2D field (lat-lon) on a polar stereographic projection of Antarctica. Assumes it's a periodic grid covering all longitudes.
+# Plot a 2D field (lat-lon) on a polar stereographic projection of Antarctica (default) or Arctic. Assumes it's a periodic grid covering all longitudes.
 # Arguments:
 # data: an xarray DataArray of a 2D field (lat-lon)
-# grid: an xarray Dataset containing the fields (option 1:) nav_lon_grid_T, nav_lat_grid_T, bounds_nav_lon_grid_T, bounds_nav_lat_grid_T or (option 2): glamt, gphit, glamf, gphif or (option3): nav_lon, nav_lat, bounds_lon, bounds_lat
+# grid: an xarray Dataset containing the fields:
+#    1. nav_lon_grid_T, nav_lat_grid_T, bounds_nav_lon_grid_T, bounds_nav_lat_grid_T; or
+#    2. glamt, gphit, glamf, gphif; or
+#    3. nav_lon, nav_lat, bounds_lon, bounds_lat; or
+#    4. (if cice=True): TLON, TLAT, lont_bounds, latt_bounds
 # Optional keyword arguments:
+# pole: default 'S' (Antarctica), or 'N' (Arctic)
+# cice: whether to plot CICE data insetad of NEMO (default False)
 # ax: handle to Axes object to make the plot in
 # make_cbar: whether to make a colourbar (default True)
 # masked: whether data is already masked; if False (default) it will be masked wherever it's identically zero
@@ -35,12 +41,27 @@ def finished_plot (fig, fig_name=None, dpi=None, print_out=True):
 # ctype: colourmap type (see set_colours in plot_utils.py)
 # change_points: arguments to ismr colourmap (see above)
 # contour: list of levels to contour in black
-# shade_land: whether to shade the land mask in grey
+# shade_land: whether to shade the land mask in grey (default True unless cice=True)
 # lognorm: logarithmic colormap normalization
 # zoom_amundsen: boolean to activate a zoom on the Amundsen sea region
 
 # TODO contour ice front
-def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None, periodic=True, lat_max=None, contour=None, shade_land=True, lognorm=False, cbar_kwags={}, zoom_amundsen=False):
+def circumpolar_plot (data, grid, pole='S', cice=False, ax=None, make_cbar=True, masked=False, title=None, titlesize=16, fig_name=None, return_fig=False, vmin=None, vmax=None, ctype='viridis', change_points=None, periodic=True, lat_max=None, contour=None, shade_land=None, lognorm=False, cbar_kwags={}, zoom_amundsen=False):
+
+    import cf_xarray as cfxr
+
+    # shade_land only works if cice=False
+    if shade_land is None:
+        shade_land = not cice
+    if shade_land and cice:
+        raise Exception('shade_land can only be True if cice=False')
+
+    if pole == 'N':
+        lat_c = 71
+    elif pole == 'S':
+        lat_c = -71
+    else:
+        raise Exception('Invalid value for pole: '+str(pole))
 
     new_fig = ax is None
     if title is None:
@@ -59,26 +80,43 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
     elif 'nav_lat' in grid:
         lat_name = 'nav_lat'
         lon_name = 'nav_lon'
-    # Enforce northern boundary
+    elif 'TLAT' in grid:
+        lat_name = 'TLAT'
+        lon_name = 'TLON'
+    # Choose a northern/southern boundary if needed
+    # lat_max actually also works as a southern boundary if pole='N', despite the name
     if lat_max is None:
-        if grid[lat_name].max() > 0:
-            print('Warning: this grid includes the northern hemisphere. Can cause weirdness in plotting')
-        # Manually find northern boundary - careful with -1 used as missing values
-        lat_max = grid[lat_name].where(grid[lat_name]!=-1).max().item()
+        if cice:
+            if pole == 'N':
+                lat_max = 50 
+            elif pole == 'S':
+                lat_max = -50
+        else:
+            if pole == 'N':
+                if grid[lat_name].min() < 0:
+                    print('Warning: this grid includes the southern hemisphere. Can cause weirdness in plotting')
+                # Manually find southern boundary - careful with -1 used as missing values
+                lat_max = grid[lat_name].where(grid[lat_name]!=-1).min().item()
+            elif pole == 'S':   
+                if grid[lat_name].max() > 0:
+                    print('Warning: this grid includes the northern hemisphere. Can cause weirdness in plotting')
+                lat_max = grid[lat_name].where(grid[lat_name]!=-1).max().item()
 
     # Get cell edges in polar stereographic coordinates
     if lat_name == 'nav_lat_grid_T':
-        import cf_xarray as cfxr
+        
         lon_edges = cfxr.bounds_to_vertices(grid['bounds_nav_lon_grid_T'], 'nvertex_grid_T')
         lat_edges = cfxr.bounds_to_vertices(grid['bounds_nav_lat_grid_T'], 'nvertex_grid_T')
     elif lat_name == 'gphit':
         lon_edges = extend_grid_edges(grid['glamf'], 'f', periodic=True)
         lat_edges = extend_grid_edges(grid['gphif'], 'f', periodic=True)
     elif lat_name == 'nav_lat':
-        import cf_xarray as cfxr
         lon_edges = cfxr.bounds_to_vertices(grid['bounds_lon'], 'nvertex')
         lat_edges = cfxr.bounds_to_vertices(grid['bounds_lat'], 'nvertex')
-    x_edges, y_edges = polar_stereo(lon_edges, lat_edges)
+    elif lat_name == 'TLAT':
+        lon_edges = cfxr.bounds_to_vertices(grid['lont_bounds'], 'nvertices')
+        lat_edges = cfxr.bounds_to_vertices(grid['latt_bounds'], 'nvertices')
+    x_edges, y_edges = polar_stereo(lon_edges, lat_edges, lat_c=lat_c)
 
     # Get axes bounds
     if zoom_amundsen:
@@ -133,6 +171,7 @@ def circumpolar_plot (data, grid, ax=None, make_cbar=True, masked=False, title=N
         fig.show()
     else:
         return img
+        
 
 
 # Plot one or more timeseries on the same axis, with different colours and a legend if needed.

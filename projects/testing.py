@@ -151,7 +151,22 @@ def plot_bisicles_overview (base_dir='./', suite_id='dj515', fig_dir=None):
     else:
         fig_name = fig_dir+'/bisicles_timeseries.png'
     finished_plot(fig, fig_name=fig_name)
-        
+
+
+# Plot a single CICE 2D variable for each decade in the wonky dj515 simulation, showing Arctic and Antarctic projections.
+def plot_cice_decades (var, fig_name=None, ctype='viridis'):
+
+    suite = 'dj515'
+    num_decades = 3
+    
+    # Read all files at once
+    ds = xr.open_mfdataset(suite+'/cice_'+suite+'i_1m_*.nc')
+    
+    fig = plt.figure(figsize=(8,6))
+    gs = plt.GridSpec(2, num_decades)
+    gs.update(left=0.05, right=0.9, bottom=0.05, top=0.9, hspace=0.2, wspace=0.05)
+    
+    
             
             
             
