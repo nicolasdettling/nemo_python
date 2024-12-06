@@ -337,7 +337,6 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
     nemo_files.sort()
 
     # Loop through each date code and process
-    print(file_pattern)
     for file_pattern in nemo_files:
         print('Processing '+file_pattern)
         has_isfT = os.path.isfile(f"{sim_dir}/{file_pattern.replace('*','_isf')}")
