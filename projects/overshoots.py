@@ -391,7 +391,7 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
             # Trim the two timeseries to line up and be the same length
             data, gw_level = align_timeseries(data, gw_level)
             if data.size != gw_level.size:
-                print('Warning: timeseries do not align for suite '+suite+'. Removing suite from plot')
+                print('Warning: timeseries do not align for suite '+suite+'. Removing suite from plot. Try running fix_missing_months()')
                 num_ens -= 1
                 continue
             # Smooth in time
@@ -917,6 +917,8 @@ def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
                 tip_time = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
                 # Find the global warming level at that time index
                 tip_warming = warming.isel(time_centered=tip_time)
+                if np.isnan(tip_warming):
+                    break
                 # Save the global warming anomalies relative to tipping time
                 warming_at_tip.append(tip_warming)
                 suites_tipped.append(suite_strings[n])
@@ -1070,7 +1072,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
         plt.text(0.5, 0.99-0.45*v, var_titles[v], fontsize=16, ha='center', va='top', transform=fig.transFigure)
     #plt.suptitle(var_titles[v], fontsize=16)
     ax.legend(loc='center left', bbox_to_anchor=(-0.6,-0.32), fontsize=11, ncol=3)
-    finished_plot(fig) #, fig_name='figures/temp_massloss_by_gw_panels.png', dpi=300)
+    finished_plot(fig, fig_name='figures/temp_massloss_by_gw_panels.png', dpi=300)
 
 
 # Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS. To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.

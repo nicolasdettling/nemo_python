@@ -306,6 +306,9 @@ def moving_average (data, window, dim='time_centered'):
     if window == 0:
         return data
 
+    # Fill NaNs or they will mess up the smoothing
+    data = data.interpolate_na(dim=dim)
+
     # Find axis number of dimension
     dim_axis = 0
     for var in data.sizes:
