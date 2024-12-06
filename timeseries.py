@@ -455,7 +455,7 @@ def fix_missing_months (timeseries_file):
         if t_start == -1:
             # All done
             break
-    overwrite_file(ds, timeseries_file_tmp)
+    overwrite_file(ds, timeseries_file)
             
         
     
