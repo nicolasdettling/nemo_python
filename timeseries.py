@@ -330,13 +330,14 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
                 # Skip it
                 continue
         # Now construct wildcard string and add to list if it's not already there
-        file_pattern = f'{file_head}{date_code[0]}-{date_code[1]}*{file_tail}'
+        file_pattern = f'{file_head}{date_code[0]}?{date_code[1]}*{file_tail}'
         if file_pattern not in nemo_files:
             nemo_files.append(file_pattern)        
     # Now sort alphabetically - i.e. by ascending date code
     nemo_files.sort()
 
     # Loop through each date code and process
+    print(file_pattern)
     for file_pattern in nemo_files:
         print('Processing '+file_pattern)
         has_isfT = os.path.isfile(f"{sim_dir}/{file_pattern.replace('*','_isf')}")
