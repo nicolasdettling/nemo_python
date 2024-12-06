@@ -31,13 +31,13 @@ suites_by_scenario = {'piControl' : ['cs495'],
                       '2K_restabilise' : ['dc163'],
                       '2.5K_stabilise' : ['cz374','cz859'],
                       '3K_stabilise' : ['cz375','db587','db597'],
-                      '3K_ramp_down' : ['db223', 'dc032', 'dc249', 'df453', 'de620', 'df028', 'df023'],  #TODO add these back in after single copy unavailable and merge error fixed , 'df021', 'de621'],
+                      '3K_ramp_down' : ['db223', 'dc032', 'dc249', 'df453', 'de620', 'df028', 'df023', 'df021', 'de621'],
                       '4K_stabilise' : ['cz376','db723','db733'],
-                      '4K_ramp_down' : ['da892', 'dc123', 'dh859'], #, 'dd210', 'dh541'],
+                      '4K_ramp_down' : ['da892', 'dc123', 'dh859', 'dd210', 'dh541'],
                       '5K_stabilise' : ['cz377','db731','dc324'],
                       '5K_ramp_down' : ['dc251', 'dc130'],
                       '6K_stabilise' : ['cz378'],
-                      '6K_ramp_down' : ['de943', 'de962']} #, 'de963']}
+                      '6K_ramp_down' : ['de943', 'de962', 'de963']}
 
 # Dictionary of which suites branch from which. None means it's a ramp-up suite (so branched from a piControl run, but we don't care about that for the purposes of integrated GW)
 suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'cz944':'cy838', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'db223':'cz375', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'dc163':'cz944', 'di335':'cy838', 'df453':'cz375', 'de620':'cz375', 'dc565':'cy838', 'dd210':'cz376', 'df028':'cz375', 'de621':'cz375', 'df025':'cy838', 'df027':'cy838', 'df021':'cz375', 'df023':'cz375', 'dh541':'cz376', 'dh859':'cz376', 'de943':'cz378', 'de962':'cz378', 'de963':'cz378'}
