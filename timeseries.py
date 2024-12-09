@@ -421,7 +421,7 @@ def calc_hovmoeller_region(var, region,
     return region_var
 
 
-# Check the given timeseries file for missing months (this can happen if only one file type was used to create the timeseries and it was missing a file on MASS). Fill the missing months with NaN.
+# Check the given timeseries file for missing months (this can happen sometimes when files are missing in MASS). Fill the missing months with NaN.
 # Consider case where 2 or more in a row are missing?
 def fix_missing_months (timeseries_file):
 

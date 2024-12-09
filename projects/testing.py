@@ -7,6 +7,7 @@ import netCDF4 as nc
 from ..grid import region_mask
 from ..plots import circumpolar_plot, finished_plot
 from ..plot_utils import set_colours
+from ..constants import months_per_year
 
 
 def find_cgrid_issues (grid_file='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA025_v3.nc'):
@@ -151,7 +152,47 @@ def plot_bisicles_overview (base_dir='./', suite_id='dj515', fig_dir=None):
     else:
         fig_name = fig_dir+'/bisicles_timeseries.png'
     finished_plot(fig, fig_name=fig_name)
+
+
+# Plot a single CICE 2D variable for each decade in the wonky dj515 simulation, showing Arctic and Antarctic projections.
+def plot_cice_decades (var, fig_name=None, ctype='viridis'):
+
+    suite = 'dj515'
+    num_decades = 3
+    months_per_decade = months_per_year*10
+    
+    # Read all files at once
+    ds = xr.open_mfdataset(suite+'/cice_'+suite+'i_1m_*.nc')
+    start_year = ds['time'].dt.year.item()
+    decade_titles = [str(start_year+n*10)+'-'+str(start_year*(n+1)*10) for n in range(num_decades)]
+
+    # Get decadal averages
+    data_avg = []
+    for n in range(num_decades):
+        data_avg.append(ds[var].isel(time=slice(months_per_decade*n, months_per_decade*(n+1))).mean(dim=time))
+    # Get global vmin and vmax
+    vmin = np.amin([data.min() for data in data_avg])
+    vmax = np.amax([data.max() for data in data_avg])
+    
+    fig = plt.figure(figsize=(8,6))
+    gs = plt.GridSpec(2, num_decades)
+    gs.update(left=0.05, right=0.9, bottom=0.05, top=0.9, hspace=0.2, wspace=0.05)
+    for n in range(num_decades):
+        # Arctic
+        ax = plt.subplot(gs[0,n])
+        circumpolar_plot(data_NH[n], ds, pole='N', cice=True, ax=ax, make_cbar=False, title=decade_titles[n], vmin=vmin, vmax=vmax, ctype=ctype)
+        # Antarctic
+        ax = plt.subplot(gs[1,n])
+        img = circumpolar_plot(data_SH[n], ds, pole='S', cice=True, ax=ax, make_cbar=False, title=decade_titles[n], vmin=vmin, vmax=vmax, ctype=ctype)
+        if n == num_decades:
+            cax = fig.add_axes([0.3, 0.02, 0.5, 0.02])
+            plt.colorbar(img, cax=cax, orientation='horizontal')
+        plt.suptitle(ds[var].name, fontsize=18)
+    finished_plot(fig, fig_name=fig_name)
+            
         
+    
+    
             
             
             
