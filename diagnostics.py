@@ -1,7 +1,7 @@
 import xarray as xr
 
 from .utils import closest_point, remove_disconnected, rotate_vector
-from .constants import ross_gyre_point0
+from .constants import ross_gyre_point0, region_bounds
 from .interpolation import interp_grid
 
 # Calculate zonal or meridional transport across the given section. The code will choose a constant slice in x or y corresponding to a constant value of latitude or longitude - so maybe not appropriate in highly rotated regions.
@@ -72,3 +72,14 @@ def ross_gyre_eastern_extent (ds_u, ds_v, ds_domcfg, periodic=True, halo=True):
     # Return the easternmost point
     return gyre_lon.max(dim={'x','y'})
 
+# Calculate the Weddell Gyre transport: absolute value of the most negative streamfunction within the Weddell Gyre bounds.
+def weddell_gyre_transport(ds_u, ds_v, ds_domcfg, periodic=True, halo=True):
+
+    strf = barotropic_streamfunction(ds_u, ds_v, ds_domcfg, periodic=periodic, halo=halo)
+    # Identify Weddell Gyre region:
+    [xmin, xmax, ymin, ymax] = region_bounds['weddell_gyre']
+    region_mask = (ds_domcfg.nav_lon < xmax) & (ds_domcfg.nav_lon > xmin) & (ds_domcfg.nav_lat < ymax) & (ds_domcfg.nav_lat > ymin)
+    # Find the most negative streamfunction within the Weddell Gyre bounds
+    vmin = strf.where(region_mask).min()
+
+    return -1*vmin

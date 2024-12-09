@@ -42,7 +42,8 @@ region_bounds = {
     'bear_ridge_N': [-112.05, -109.05, -73.8791, -72.7314],
     'pine_island_bay': [-104, -100.5, -75.2, -74.2],
     'dotson_bay': [-114, -110.5, -74.3, -73.5],
-    'amundsen_west_shelf_break': [-115, -112, -72, -71]
+    'amundsen_west_shelf_break': [-115, -112, -72, -71],
+    'weddell_gyre': [-60., 30., -90., -50.],
 }
 # Isobaths restricting some regions
 region_bathy_bounds = {
