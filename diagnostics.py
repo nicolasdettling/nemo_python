@@ -80,6 +80,6 @@ def weddell_gyre_transport(ds_u, ds_v, ds_domcfg, periodic=True, halo=True):
     [xmin, xmax, ymin, ymax] = region_bounds['weddell_gyre']
     region_mask = (ds_domcfg.nav_lon < xmax) & (ds_domcfg.nav_lon > xmin) & (ds_domcfg.nav_lat < ymax) & (ds_domcfg.nav_lat > ymin)
     # Find the most negative streamfunction within the Weddell Gyre bounds
-    vmin = strf.where(region_mask).min()
+    vmin = strf.where(region_mask).min(dim=['x','y'])
 
     return -1*vmin
