@@ -189,7 +189,7 @@ def plot_cice_decades (var, fig_name=None, ctype='viridis'):
     for n in range(num_decades):
         ds = xr.open_dataset(suite+'/'+file_names[n])
         data_avg.append(ds[var])
-        decade_titles.append(file_names[n].index('cice_')+len('cice_'):file_names[n].index('_avg.nc'))        
+        decade_titles.append(file_names[n][file_names[n].index('cice_')+len('cice_'):file_names[n].index('_avg.nc')])        
     # Get global vmin and vmax
     vmin = np.amin([data.min() for data in data_avg])
     vmax = np.amax([data.max() for data in data_avg])
