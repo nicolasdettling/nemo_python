@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import netCDF4 as nc
+import os
 
 from ..grid import region_mask
 from ..plots import circumpolar_plot, finished_plot
