@@ -192,6 +192,11 @@ def plot_cice_decades (var, fig_name=None, ctype='viridis'):
 
     suite = 'dj515'
 
+    # Read variable attributes from single file - they somehow got lost in precomputing above.
+    ds = xr.open_dataset(suite+'/cice_'+suite+'i_1m_19820101-19820201.nc')
+    title = ds[var].long_name+' ('+ds[var].units+')'
+    ds.close()
+
     file_names = []
     for f in os.listdir(suite):
         if f.startswith('cice_') and f.endswith('_avg.nc'):
@@ -215,14 +220,14 @@ def plot_cice_decades (var, fig_name=None, ctype='viridis'):
     for n in range(num_decades):
         for row, pole in zip(range(2), ['N', 'S']):
             ax = plt.subplot(gs[row,n])
-            circumpolar_plot(data_avg[n], ds, pole=pole, cice=True, ax=ax, make_cbar=False, title=decade_titles[n], titlesize=14, vmin=vmin, vmax=vmax, ctype=ctype)
+            img = circumpolar_plot(data_avg[n], ds, pole=pole, cice=True, ax=ax, make_cbar=False, title=decade_titles[n], titlesize=14, vmin=vmin, vmax=vmax, ctype=ctype)
             ax.axis('on')
             ax.set_xticks([])
             ax.set_yticks([])
         if n == num_decades-1:
             cax = fig.add_axes([0.3, 0.04, 0.4, 0.03])
             plt.colorbar(img, cax=cax, orientation='horizontal')
-        plt.suptitle(ds[var].long_name+' ('+ds[var].units+')', fontsize=18)
+        plt.suptitle(title, fontsize=18)
     finished_plot(fig, fig_name=fig_name)
             
         
