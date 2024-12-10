@@ -70,6 +70,8 @@ def circumpolar_plot (data, grid, pole='S', cice=False, ax=None, make_cbar=True,
     if not masked:
         # Mask where identically zero
         data = data.where(data!=0)
+    # Remove any singleton time dimension
+    data = data.squeeze()
 
     if 'nav_lat_grid_T' in grid:
         lat_name = 'nav_lat_grid_T'
@@ -88,9 +90,11 @@ def circumpolar_plot (data, grid, pole='S', cice=False, ax=None, make_cbar=True,
     if lat_max is None:
         if cice:
             if pole == 'N':
-                lat_max = 50 
+                lat_max = 50
+                data = data.where(grid[lat_name]>0)
             elif pole == 'S':
                 lat_max = -50
+                data = data.where(grid[lat_name]<0)
         else:
             if pole == 'N':
                 if grid[lat_name].min() < 0:
@@ -125,7 +129,7 @@ def circumpolar_plot (data, grid, pole='S', cice=False, ax=None, make_cbar=True,
     else:
         lon_bounds = np.array([0, 90, 180, -90])
         lat_bounds = np.array([lat_max]*4)
-    x_bounds, y_bounds = polar_stereo(lon_bounds, lat_bounds)
+    x_bounds, y_bounds = polar_stereo(lon_bounds, lat_bounds, lat_c=lat_c)
     xlim = [x_bounds[3], x_bounds[1]]
     ylim = [y_bounds[2], y_bounds[0]]
 

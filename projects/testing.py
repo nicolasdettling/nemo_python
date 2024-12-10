@@ -154,22 +154,42 @@ def plot_bisicles_overview (base_dir='./', suite_id='dj515', fig_dir=None):
     finished_plot(fig, fig_name=fig_name)
 
 
-# Plot a single CICE 2D variable for each decade in the wonky dj515 simulation, showing Arctic and Antarctic projections.
-def plot_cice_decades (var, fig_name=None, ctype='viridis'):
+# Precompute decadal averages for plot_cice_decades and save to NetCDF.
+def precompute_cice_decades ():
 
     suite = 'dj515'
     num_decades = 3
     months_per_decade = months_per_year*10
-    
-    # Read all files at once
-    ds = xr.open_mfdataset(suite+'/cice_'+suite+'i_1m_*.nc')
-    start_year = ds['time'].dt.year.item()
-    decade_titles = [str(start_year+n*10)+'-'+str(start_year*(n+1)*10) for n in range(num_decades)]
 
-    # Get decadal averages
-    data_avg = []
+    # Read all files at once
+    print('Reading data')
+    ds = xr.open_mfdataset(suite+'/cice_'+suite+'i_1m_*.nc')
+    start_year = ds['time'][0].dt.year.item()
+    decade_titles = [str(start_year+n*10)+'-'+str(start_year+(n+1)*10) for n in range(num_decades)]
     for n in range(num_decades):
-        data_avg.append(ds[var].isel(time=slice(months_per_decade*n, months_per_decade*(n+1))).mean(dim=time))
+        print('Computing '+decade_titles[n]+' average')
+        ds_avg = ds.isel(time=slice(months_per_decade*n, months_per_decade*(n+1))).mean(dim='time')
+        ds_avg.to_netcdf(suite+'/cice_'+decade_titles[n]+'_avg.nc')
+
+
+# Plot a single CICE 2D variable for each decade in the wonky dj515 simulation, showing Arctic and Antarctic projections.
+def plot_cice_decades (var, fig_name=None, ctype='viridis'):
+
+    suite = 'dj515'
+
+    file_names = []
+    for f in os.listdir(suite):
+        if f.startswith('cice_') and f.endswith('_avg.nc'):
+            file_names.append(f)
+    file_names.sort()
+    num_decades = len(file_names)
+
+    data_avg = []
+    decade_titles = []
+    for n in range(num_decades):
+        ds = xr.open_dataset(suite+'/'+file_names[n])
+        data_avg.append(ds[var])
+        decade_titles.append(file_names[n].index('cice_')+len('cice_'):file_names[n].index('_avg.nc'))        
     # Get global vmin and vmax
     vmin = np.amin([data.min() for data in data_avg])
     vmax = np.amax([data.max() for data in data_avg])
