@@ -188,7 +188,7 @@ def precompute_cice_decades ():
 
 
 # Plot a single CICE 2D variable for each decade in the wonky dj515 simulation, showing Arctic and Antarctic projections.
-def plot_cice_decades (var, fig_name=None, ctype='viridis'):
+def plot_cice_decades (var, fig_name=None, ctype='viridis', vmin=None, vmax=None):
 
     suite = 'dj515'
 
@@ -211,8 +211,10 @@ def plot_cice_decades (var, fig_name=None, ctype='viridis'):
         data_avg.append(ds[var])
         decade_titles.append(file_names[n][file_names[n].index('cice_')+len('cice_'):file_names[n].index('_avg.nc')])        
     # Get global vmin and vmax
-    vmin = np.amin([data.min() for data in data_avg])
-    vmax = np.amax([data.max() for data in data_avg])
+    if vmin is None:
+        vmin = np.amin([data.min() for data in data_avg])
+    if vmax is None:
+        vmax = np.amax([data.max() for data in data_avg])
     
     fig = plt.figure(figsize=(7,6))
     gs = plt.GridSpec(2, num_decades)
