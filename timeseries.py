@@ -5,7 +5,7 @@ import glob
 from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year, deg_string, gkg_string, drake_passage_lon0, drake_passage_lat_bounds
 from .utils import add_months, closest_point, month_convert
 from .grid import single_cavity_mask, region_mask, calc_geometry
-from .diagnostics import transport
+from .diagnostics import transport, weddell_gyre_transport
 
 # Calculate a timeseries of the given preset variable from an xarray Dataset of NEMO output (must have halo removed). Returns DataArrays of the timeseries data, the associated time values, and the variable title. Specify whether there is a halo (true for periodic boundaries in NEMO 3.6).
 # Preset variables include:
@@ -19,7 +19,7 @@ from .diagnostics import transport
 # name_remapping: optional dictionary of dimensions and variable names that need to be remapped to match the code below (depends on the runset)
 # nemo_mesh: optional string of the location of a bathymetry meshmask file for calculating the region masks (otherwise calculates it from ds_nemo)
 def calc_timeseries (var, ds_nemo, name_remapping='', nemo_mesh='', 
-                     domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc', halo=True):
+                     domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc', halo=True, periodic=True):
 
     # Remap NetCDF variable names to match the generalized case:
     if name_remapping:
@@ -104,6 +104,10 @@ def calc_timeseries (var, ds_nemo, name_remapping='', nemo_mesh='',
         option = 'transport'
         units = 'Sv'
         title = 'Drake Passage Transport'
+    elif var == 'weddell_gyre_transport':
+        option = 'weddell_transport'
+        units = 'Sv'
+        title = 'Weddell Gyre Transport'
 
     if var == 'drake_passage_transport' and 'e2u' not in ds_nemo:
         # Need to add e2u from domain_cfg
@@ -173,7 +177,20 @@ def calc_timeseries (var, ds_nemo, name_remapping='', nemo_mesh='',
     elif option == 'transport':
         # Calculate zonal or meridional transport
         data = transport(ds_nemo, lon0=lon0, lat0=lat0, lon_bounds=lon_bounds, lat_bounds=lat_bounds)
-        
+    elif option == 'weddell_transport':
+        ds_domcfg = xr.open_dataset(domain_cfg).squeeze()
+        if ds_nemo.sizes['y'] < ds_domcfg.sizes['y']:
+            # The NEMO dataset was trimmed (eg by MOOSE for UKESM) to the southernmost latitudes. Do the same for domain_cfg.
+            ds_domcfg = ds_domcfg.isel(y=slice(0, ds_nemo.sizes['y']))
+        if halo:
+            ds_domcfg = ds_domcfg.isel(x=slice(1,-1))
+
+        if 'thkcello' in ds_nemo:
+            # dataset already contains thkcello (cell thickness) so don't need to rename e3u/v to thkcello
+            data = weddell_gyre_transport(ds_nemo, ds_nemo, ds_domcfg, periodic=periodic, halo=halo)
+        else:
+            data = weddell_gyre_transport(ds_nemo.rename({'e3u':name_remapping['e3u']}), ds_nemo.rename({'e3v':name_remapping['e3v']}), ds_domcfg, periodic=periodic, halo=halo)
+       
     data *= factor
     data = data.assign_attrs(long_name=title, units=units)
 
@@ -227,7 +244,7 @@ def overwrite_file (ds_new, timeseries_file):
 
 
 # Precompute the given list of timeseries from the given xarray Dataset of NEMO output (or PP file if pp=True). Save in a NetCDF file which concatenates after each call to the function.
-def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True, 
+def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True, periodic=True, 
                            domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc',
                            name_remapping='', nemo_mesh='', pp=False):
 
@@ -242,7 +259,7 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
             data = calc_timeseries_um(var, ds_nemo)
         else:
             try:
-                data, ds_nemo = calc_timeseries(var, ds_nemo, domain_cfg=domain_cfg, halo=halo, 
+                data, ds_nemo = calc_timeseries(var, ds_nemo, domain_cfg=domain_cfg, halo=halo, periodic=periodic,
                                             name_remapping=name_remapping, nemo_mesh=nemo_mesh)
             except(KeyError):
                 # Incomplete dataset missing some crucial variables. This can happen when grid-T is present but isf-T is missing, or vice versa. Return a masked value.
@@ -273,7 +290,7 @@ def precompute_timeseries (ds_nemo, timeseries_types, timeseries_file, halo=True
 
 # Precompute timeseries from the given simulation, either from the beginning (timeseries_file does not exist) or picking up where it left off (timeseries_file does exist). Considers all NEMO output files stamped with suite_id in the given directory sim_dir on the given grid (gtype='T', 'U', etc), and assumes the timeseries file is in that directory too.
 def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='timeseries.nc', config='', 
-                                  sim_dir='./', freq='m', halo=True, gtype='T', name_remapping='', nemo_mesh='',
+                                  sim_dir='./', freq='m', halo=True, periodic=True, gtype='T', name_remapping='', nemo_mesh='',
                                   domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
     import re
     from datetime import datetime
@@ -351,9 +368,17 @@ def update_simulation_timeseries (suite_id, timeseries_types, timeseries_file='t
                 break
             else:
                 print('Timeseries file will have some NaNs at this index.')
-        ds_nemo = xr.open_mfdataset(f'{sim_dir}/{file_pattern}')
+
+        if 'weddell_gyre_transport' in timeseries_types: # need to load both gridU and grid V files to be able to calculate this; not currently the neatest approach
+            if gtype not in ['U', 'V']:
+                raise Exception('Grid type must be specified as either U or V when calculating Weddell Gyre Transport') # should be U and V:
+            dsU = xr.open_dataset(glob.glob(f'{sim_dir}/{file_pattern}'.replace('V.nc', 'U.nc'))[0])[['e3u','uo']].rename({'nav_lon':'nav_lon_grid_U','nav_lat':'nav_lat_grid_U'})
+            dsV = xr.open_dataset(glob.glob(f'{sim_dir}/{file_pattern}'.replace('U.nc', 'V.nc'))[0])[['e3v','vo']].rename({'nav_lon':'nav_lon_grid_V','nav_lat':'nav_lat_grid_V'})
+            ds_nemo = dsU.merge(dsV)
+        else:
+            ds_nemo = xr.open_mfdataset(f'{sim_dir}/{file_pattern}')
         ds_nemo.load()
-        precompute_timeseries(ds_nemo, timeseries_types, f'{sim_dir}/{timeseries_file}', halo=halo, domain_cfg=domain_cfg,
+        precompute_timeseries(ds_nemo, timeseries_types, f'{sim_dir}/{timeseries_file}', halo=halo, periodic=periodic, domain_cfg=domain_cfg,
                               name_remapping=name_remapping, nemo_mesh=nemo_mesh)
         ds_nemo.close()
 
