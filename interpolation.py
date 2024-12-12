@@ -603,6 +603,7 @@ def interp_grid (A, gtype_in, gtype_out, periodic=True, halo=True):
         A = A.where(A!=0)
     nx = A.sizes['x']
     ny = A.sizes['y']
+    A  = A.assign_coords({'x':A.x}) # x is not a coordinate always by default (whether this line is necessary might depend on xarray version)
     if gtype_in == 'u' and gtype_out == 't':
         if periodic:
             if halo:
