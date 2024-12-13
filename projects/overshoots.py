@@ -1585,7 +1585,7 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
     else:
         ds_2D = None
         # Select the middle month of each 12 year chunk of timeseries data
-        for t in range(5, 126, 12): #massloss.sizes['time_centered'], 12):
+        for t in range(massloss.sizes['time_centered'], 12):
             # What year is it?
             year = massloss.coords['time_centered'][t].dt.year.item()
             print('...'+str(year))
@@ -1646,8 +1646,8 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
             else:
                 ds_2D = xr.concat([ds_2D, ds_2D_tmp], dim='time_centered')
         # Save data for precomputing next time
-        #print('Writing '+precomputed_file)
-        #ds_2D.to_netcdf(precomputed_file)
+        print('Writing '+precomputed_file)
+        ds_2D.to_netcdf(precomputed_file)
     var_plot_2D = ['bwsalt', 'bwtemp', 'ismr']
     titles_2D = ['Bottom salinity (psu)', 'Bottom temperature ('+deg_string+'C)', 'Ice shelf melt rate (m/y)']
     # Calculate variable min/max over all years
@@ -1655,7 +1655,7 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
     vmax = [ds_2D[var].max() for var in var_plot_2D]
     ctype = ['viridis', 'viridis', 'ismr']
     cmap = [set_colours(ds_2D[var_plot_2D[n]].isel(time_centered=0), ctype=ctype[n], vmin=vmin[n], vmax=vmax[n])[0] for n in range(3)]
-    num_years = ds_2D.sizes('time_centered')
+    num_years = ds_2D.sizes['time_centered']
 
     if only_precompute:
         return
