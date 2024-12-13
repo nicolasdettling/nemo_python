@@ -95,12 +95,13 @@ def ismr_cmap (vmin, vmax, change_points=None):
 def set_colours (data, ctype='viridis', vmin=None, vmax=None, change_points=None):
 
     # Work out bounds
-    if isinstance(data, xr.DataArray):
-        data_min = data.min()
-        data_max = data.max()
-    elif isinstance(data, np.array):
-        data_min = np.amin(data)
-        data_max = np.amax(data)
+    if vmin is None or vmax is None:
+        if isinstance(data, xr.DataArray):
+            data_min = data.min()
+            data_max = data.max()
+        elif isinstance(data, np.array):
+            data_min = np.amin(data)
+            data_max = np.amax(data)
     if vmin is None:
         vmin = data_min
     if vmax is None:
