@@ -1455,8 +1455,7 @@ def plot_amundsen_temp_velocity (base_dir='./'):
     finished_plot(fig, fig_name='figures/amundsen_temp_velocity.png', dpi=300)
 
 
-def dashboard_animation (suite_string, out_dir='animations/'):
-
+#def dashboard_animation (suite_string, out_dir='animations/'):
     
 
     
