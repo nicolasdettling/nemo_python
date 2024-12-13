@@ -1566,8 +1566,8 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
     # (trimming in longitude is harder with periodic boundary)
     lat_min = grid['nav_lat'].where(plot_mask).min()
     lat_max = grid['nav_lat'].where(plot_mask).max()
-    jmin = np.argwhere(grid['nav_lat'].min(dim='x') > lat_min)[0][0] - 1
-    jmax = np.argwhere(grid['nav_lat'].max(dim='x') > lat_max)[0][0]
+    jmin = np.argwhere(grid['nav_lat'].min(dim='x').data > lat_min.item())[0][0] - 1
+    jmax = np.argwhere(grid['nav_lat'].max(dim='x').data > lat_max.item())[0][0]
     grid = grid.isel(y=slice(jmin,jmax))
     plot_mask = plot_mask.isel(y=slice(jmin,jmax))
     # Set up plotting coordinates
@@ -1579,76 +1579,82 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
 
     # Calculate annual means of bwtemp, bwsalt, ismr within the plotting region.
     print('Reading 2D data')
-    bwsalt_2D = []
-    bwtemp_2D = []
-    ismr_2D = []
-    # Select the middle month of each 12 year chunk of timeseries data
-    for t in range(5, massloss.sizes['time_centered'], 12):
-        # What year is it?
-        year = massloss.coords['time_centered'][t].dt.year.item()
-        print('...'+str(year))
-        # What stage in the simulation is it?
-        stype = massloss.coords['scenario_type'][t].item()
-        stype_mapping = [1, 0, 3, 2]
-        suite = suite_list[stype_mapping[stype]]
-        sim_dir = base_dir+'/'+suite
-        # Build list of the file patterns we're going to read for this year
-        nemo_files = []
-        for f in os.listdir(sim_dir):
-            if os.path.isdir(f'{sim_dir}/{f}'): continue
-            if f.startswith('nemo_'+suite+'o_1m_'+str(year)) and f.endswith('-T.nc'):
-                # Extract date codes
-                date_codes = re.findall(r'\d{4}\d{2}\d{2}', f)
-                file_pattern = sim_dir+'/nemo_'+suite+'o_1m_'+date_codes[0]+'-'+date_codes[1]+'*-T.nc'
-                if file_pattern not in nemo_files:
-                    nemo_files.append(file_pattern)
-        nemo_files.sort()
-        # Expect 12 file patterns (one for each month), each containing 2 files (grid-T and isf-T)
-        if len(nemo_files) > months_per_year:
-            raise Exception('Too many NEMO files for '+suite+', '+str(year))
-        if len(nemo_files) < months_per_year:
-            print('Warning: incomplete year for '+suite+', '+str(year))
-        # Now read each month
-        bwsalt_accum = None
-        bwtemp_accum = None
-        ismr_accum = None
-        for file_pattern in nemo_files:
-            ds = xr.open_mfdataset(file_pattern).isel(y=slice(jmin,jmax))
-            if os.path.isfile(file_pattern.replace('*','_grid')):
-                bwsalt_tmp = ds['sob'].where(ds['sob']>0).where(plot_mask)
-                bwtemp_tmp = ds['tob'].where(ds['sob']>0).where(plot_mask)
-                if bwsalt_accum is None:
-                    bwsalt_accum = bwsalt_tmp
+    precomputed_file = out_dir+'/precomputed/'+suite_string+'.nc'
+    if os.path.isfile(precomputed_file):
+        ds_2D = xr.open_dataset(precomputed_file)
+    else:
+        ds_2D = None
+        # Select the middle month of each 12 year chunk of timeseries data
+        for t in range(5, massloss.sizes['time_centered'], 12):
+            # What year is it?
+            year = massloss.coords['time_centered'][t].dt.year.item()
+            print('...'+str(year))
+            # What stage in the simulation is it?
+            stype = int(massloss.coords['scenario_type'][t].item())
+            stype_mapping = [1, 0, 3, 2]
+            suite = suite_list[stype_mapping[stype]]
+            sim_dir = base_dir+'/'+suite
+            # Build list of the file patterns we're going to read for this year
+            nemo_files = []
+            for f in os.listdir(sim_dir):
+                if os.path.isdir(f'{sim_dir}/{f}'): continue
+                if f.startswith('nemo_'+suite+'o_1m_'+str(year)) and f.endswith('-T.nc'):
+                    # Extract date codes
+                    date_codes = re.findall(r'\d{4}\d{2}\d{2}', f)
+                    file_pattern = sim_dir+'/nemo_'+suite+'o_1m_'+date_codes[0]+'-'+date_codes[1]+'*-T.nc'
+                    if file_pattern not in nemo_files:
+                        nemo_files.append(file_pattern)
+            nemo_files.sort()
+            # Expect 12 file patterns (one for each month), each containing 2 files (grid-T and isf-T)
+            if len(nemo_files) > months_per_year:
+                raise Exception('Too many NEMO files for '+suite+', '+str(year))
+            if len(nemo_files) < months_per_year:
+                print('Warning: incomplete year for '+suite+', '+str(year))
+            # Now read each month
+            bwsalt_accum = None
+            bwtemp_accum = None
+            ismr_accum = None
+            for file_pattern in nemo_files:
+                ds = xr.open_mfdataset(file_pattern).isel(y=slice(jmin,jmax))
+                ds = ds.swap_dims({'time_counter':'time_centered'}).drop_vars(['time_counter'])
+                if os.path.isfile(file_pattern.replace('*','_grid')):
+                    bwsalt_tmp = ds['sob'].where(ds['sob']>0).where(plot_mask)
+                    bwtemp_tmp = ds['tob'].where(ds['sob']>0).where(plot_mask)
+                    if bwsalt_accum is None:
+                        bwsalt_accum = bwsalt_tmp
+                        bwtemp_accum = bwtemp_tmp
+                    else:
+                        bwsalt_accum = xr.concat([bwsalt_accum, bwsalt_tmp], dim='time_centered')
+                        bwtemp_accum = xr.concat([bwtemp_accum, bwtemp_tmp], dim='time_centered')
                 else:
-                    bwsalt_accum = xr.concat([bwsalt_accum, bwsalt_tmp], dim='time_centered')
-                    bwtemp_accum = xr.concat([bwtemp_accum, bwtemp_tmp], dim='time_centered')
-            else:
-                print('Warning: missing '+file_pattern.replace('*','_grid'))
-            if os.path.isfile(file_pattern.replace('*','_isf')):
-                ismr_tmp = convert_ismr(ds['sowflisf'].where(ds['sowflisf']!=0)).where(plot_mask)
-                if ismr_accum is None:
-                    ismr_accum = ismr_tmp
+                    print('Warning: missing '+file_pattern.replace('*','_grid'))
+                if os.path.isfile(file_pattern.replace('*','_isf')):
+                    ismr_tmp = convert_ismr(ds['sowflisf'].where(ds['sowflisf']!=0)).where(plot_mask).drop_vars({'time_counter'})
+                    if ismr_accum is None:
+                        ismr_accum = ismr_tmp
+                    else:
+                        ismr_accum = xr.concat([ismr_accum, ismr_tmp], dim='time_centered')
                 else:
-                    ismr_accum = xr.concat([ismr_accum, ismr_tmp], dim='time_centered')
+                    print('Warning: missing '+file_pattern.replace('*','_isf'))
+                ds.close()
+            # Calculate (annual) means and save
+            ds_2D_tmp = xr.Dataset({'bwsalt':bwsalt_accum, 'bwtemp':bwtemp_accum, 'ismr':ismr_accum}).mean(dim='time_centered')
+            ds_2D_tmp = ds_2D_tmp.assign_coords(time_centered=bwsalt_accum.coords['time_centered'][6]).expand_dims('time_centered')
+            if ds_2D is None:
+                ds_2D = ds_2D_tmp
             else:
-                print('Warning: missing '+file_pattern.replace('*','_isf'))
-            ds.close()
-        # Calculate (annual) means and save
-        bwsalt_2D.append(bwsalt_accum.mean(dim='time_centered'))
-        bwtemp_2D.append(bwtemp_accum.mean(dim='time_centered'))
-        ismr_2D.append(ismr_accum.mean(dim='time_centered'))
-    data_plot_2D = [bwsalt_2D, bwtemp_2D, ismr_2D]
+                ds_2D = xr.concat([ds_2D, ds_2D_tmp], dim='time_centered')
+        # Save data for precomputing next time
+        ds_2D.to_netcdf(precomputed_file)
+    var_plot_2D = ['bwsalt', 'bwtemp', 'ismr']
     # Calculate variable min/max over all years
-    vmin = []
-    vmax = []
-    for data_var in data_plot_2D:
-        vmin.append(np.amin([data_year.min() for data_year in data_var]))
-        vmax.append(np.amax([data_year.max() for data_year in data_var]))
+    vmin = [ds_2D[var].min() for var in var_plot_2D]
+    vmax = [ds_2D[var].max() for var in var_plot_2D]
     ctype = ['viridis', 'viridis', 'ismr']
     cmap = []
     for n in range(len(data_plot_2D)):
-        cmap.append(set_colours(data_plot_2D[n], ctype=ctype[n], vmin=vmin[n], vmax=vmax[n])[0])
-    num_years = len(bwsalt_2D)
+        cmap.append(set_colours(ds_2D[var_plot_2D[n]], ctype=ctype[n], vmin=vmin[n], vmax=vmax[n])[0])
+    num_years = ds_2D.sizes('time_centered')
             
     # Initialise the plot
     fig = plt.figure(figsize=(8,6))
