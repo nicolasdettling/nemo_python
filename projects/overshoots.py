@@ -2,7 +2,7 @@
 
 import xarray as xr
 import matplotlib.pyplot as plt
-import matplotlib.colours as cl
+import matplotlib.colors as cl
 import os
 import numpy as np
 import cf_xarray as cfxr
