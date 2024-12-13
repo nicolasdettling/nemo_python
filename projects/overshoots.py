@@ -1585,7 +1585,7 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
     else:
         ds_2D = None
         # Select the middle month of each 12 year chunk of timeseries data
-        for t in range(massloss.sizes['time_centered'], 12):
+        for t in range(6, massloss.sizes['time_centered'], 12):
             # What year is it?
             year = massloss.coords['time_centered'][t].dt.year.item()
             print('...'+str(year))
