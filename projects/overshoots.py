@@ -1466,7 +1466,7 @@ def plot_amundsen_temp_velocity (base_dir='./'):
 
 
 # Make an animation showing all sorts of things for the given trajectory.
-def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/'):
+def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/', only_precompute=False):
 
     import matplotlib.animation as animation
 
@@ -1579,7 +1579,7 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
 
     # Calculate annual means of bwtemp, bwsalt, ismr within the plotting region.
     print('Reading 2D data')
-    precomputed_file = out_dir+'/precomputed/'+suite_string+'.nc'
+    precomputed_file = out_dir+'/precomputed/'+suite_string+'_'+region+'.nc'
     if os.path.isfile(precomputed_file):
         ds_2D = xr.open_dataset(precomputed_file)
     else:
@@ -1645,6 +1645,7 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
             else:
                 ds_2D = xr.concat([ds_2D, ds_2D_tmp], dim='time_centered')
         # Save data for precomputing next time
+        print('Writing '+precomputed_file)
         ds_2D.to_netcdf(precomputed_file)
     var_plot_2D = ['bwsalt', 'bwtemp', 'ismr']
     # Calculate variable min/max over all years
@@ -1655,6 +1656,9 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
     for n in range(len(data_plot_2D)):
         cmap.append(set_colours(ds_2D[var_plot_2D[n]], ctype=ctype[n], vmin=vmin[n], vmax=vmax[n])[0])
     num_years = ds_2D.sizes('time_centered')
+
+    if only_precompute:
+        return
             
     # Initialise the plot
     fig = plt.figure(figsize=(8,6))
@@ -1747,6 +1751,14 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
     anim = animation.FuncAnimation(fig, func=animate, frames=list(range(num_years)))
     writer = animation.FFMpegWriter(bitrate=2000, fps=2)
     anim.save(out_dir+'/'+suite_string+'_'+region+'.mp4', writer=writer)
+
+
+def precompute_all_animations (base_dir='./', out_dir='animations/'):
+
+    for suite_list in all_suite_trajectories():
+        for region in ['ross', 'filchner_ronne']:
+            print('Processing '+'-'.join(suite_list)+', '+region)
+            dashboard_animation(suite_list, region, base_dir=base_dir, out_dir=out_dir, only_precompute=True)
 
     
     
