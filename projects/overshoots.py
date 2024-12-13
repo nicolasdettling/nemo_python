@@ -1585,7 +1585,7 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
     else:
         ds_2D = None
         # Select the middle month of each 12 year chunk of timeseries data
-        for t in range(5, massloss.sizes['time_centered'], 12):
+        for t in range(5, 126, 12): #massloss.sizes['time_centered'], 12):
             # What year is it?
             year = massloss.coords['time_centered'][t].dt.year.item()
             print('...'+str(year))
@@ -1645,16 +1645,15 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
             else:
                 ds_2D = xr.concat([ds_2D, ds_2D_tmp], dim='time_centered')
         # Save data for precomputing next time
-        print('Writing '+precomputed_file)
-        ds_2D.to_netcdf(precomputed_file)
+        #print('Writing '+precomputed_file)
+        #ds_2D.to_netcdf(precomputed_file)
     var_plot_2D = ['bwsalt', 'bwtemp', 'ismr']
+    titles_2D = ['Bottom salinity (psu)', 'Bottom temperature ('+deg_string+'C)', 'Ice shelf melt rate (m/y)']
     # Calculate variable min/max over all years
     vmin = [ds_2D[var].min() for var in var_plot_2D]
     vmax = [ds_2D[var].max() for var in var_plot_2D]
     ctype = ['viridis', 'viridis', 'ismr']
-    cmap = []
-    for n in range(len(data_plot_2D)):
-        cmap.append(set_colours(ds_2D[var_plot_2D[n]], ctype=ctype[n], vmin=vmin[n], vmax=vmax[n])[0])
+    cmap = [set_colours(ds_2D[var_plot_2D[n]], ctype=ctype[n], vmin=vmin[n], vmax=vmax[n])[0] for n in range(3)]
     num_years = ds_2D.sizes('time_centered')
 
     if only_precompute:
@@ -1706,7 +1705,7 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
                 ax.set_ylabel(units, fontsize=10)
                 ax.set_title(title, fontsize=12)
         # Bottom three panels: maps of 2D data
-        for n, data_2D, title in zip(range(3), data_plot_2D, ['Bottom salinity (psu)', 'Bottom temperature ('+deg_string+'C)', 'Ice shelf melt rate (m/y)']):
+        for n in range(3):
             # This time clear all previous plotting data - we're not adding to it
             ax[n+3].cla()
             # Shade land in grey
@@ -1715,12 +1714,12 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
             ax[n+3].pcolormesh(x_bg, y_bg, mask_bg, cmap=cl.ListedColormap(['DarkGrey']))
             ax[n+3].pcolormesh(x_edges, y_edges, ocean_mask, cmap=cl.ListedColormap(['white']))
             # Plot the data
-            img = ax[n+3].pcolormesh(x_edges, y_edges, data_2D[t], cmap=cmap[n], vmin=vmin[n], vmax=vmax[n])
+            img = ax[n+3].pcolormesh(x_edges, y_edges, ds_2D[var_plot_2D[n]].isel(time_centered=t), cmap=cmap[n], vmin=vmin[n], vmax=vmax[n])
             ax[n+3].set_xlim([xmin, xmax])
             ax[n+3].set_ylim([ymin, ymax])
             ax[n+3].set_xticks([])
             ax[n+3].set_yticks([])
-            ax[n+3].set_title(title, fontsize=12)
+            ax[n+3].set_title(titles_2D[n], fontsize=12)
             if t == 0:
                 cbar = plt.colorbar(img, cax=cax[n], orientation='horizontal')
         if t == 0:
