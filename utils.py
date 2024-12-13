@@ -1,6 +1,6 @@
 import numpy as np
 import xarray as xr
-from .constants import deg2rad, rho_fw, sec_per_hour, temp_C2K, Rdry, Rvap, vap_pres_c1, vap_pres_c3, vap_pres_c4, months_per_year, rEarth
+from .constants import deg2rad, rho_fw, sec_per_hour, temp_C2K, Rdry, Rvap, vap_pres_c1, vap_pres_c3, vap_pres_c4, months_per_year, rEarth, rho_ice, sec_per_year
 
 # Given an array containing longitude, make sure it's in the range (max_lon-360, max_lon). Default is (-180, 180). If max_lon is None, nothing will be done to the array.
 def fix_lon_range (lon, max_lon=180):
@@ -544,7 +544,13 @@ def convert_to_teos10(dataset, var='PracSal'):
         
         return consT.rename('ConsTemp')
     else:
-        raise Exception('Variable options are PracSal, InsituTemp, PotTemp')    
+        raise Exception('Variable options are PracSal, InsituTemp, PotTemp')
+
+
+# Convert freshwater flux into the ice shelf (sowflisf) (kg/m^2/s of water, positive means freezing) to ice shelf melt rate (m/y of ice, positive means melting).
+def convert_ismr (sowflisf):
+
+    return -sowflisf/rho_ice*sec_per_year
     
 
     

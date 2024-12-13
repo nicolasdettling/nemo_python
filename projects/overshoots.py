@@ -2,12 +2,16 @@
 
 import xarray as xr
 import matplotlib.pyplot as plt
+import matplotlib.colours as cl
 import os
 import numpy as np
+import cf_xarray as cfxr
+import re
+import datetime
 
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
 from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, timeseries_plot, circumpolar_plot
-from ..utils import moving_average, add_months, rotate_vector
+from ..utils import moving_average, add_months, rotate_vector, polar_stereo, convert_ismr
 from ..grid import region_mask, calc_geometry
 from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year
 from ..file_io import read_schmidtko, read_woa
@@ -38,6 +42,10 @@ suites_by_scenario = {'piControl' : ['cs495'],
                       '5K_ramp_down' : ['dc251', 'dc130'],
                       '6K_stabilise' : ['cz378'],
                       '6K_ramp_down' : ['de943', 'de962', 'de963']}
+# Dictionary of ramp-down rates
+suites_ramp_down_rates = {'8 Gt/y' : ['cz944', 'di335', 'da800', 'da697', 'da892', 'db223', 'df453', 'de620', 'dc251', 'de962'],
+                          '4 Gt/y' : ['dc051', 'dc052', 'dc248', 'dc249', 'dc565', 'dd210', 'dc032', 'df028', 'de621', 'dc123', 'dc130', 'de943'],
+                          '2 Gt/y' : ['df025', 'df027', 'df021', 'df023', 'dh541', 'dh859', 'de963']}
 
 # Dictionary of which suites branch from which. None means it's a ramp-up suite (so branched from a piControl run, but we don't care about that for the purposes of integrated GW)
 suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'cz944':'cy838', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'db223':'cz375', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'dc163':'cz944', 'di335':'cy838', 'df453':'cz375', 'de620':'cz375', 'dc565':'cy838', 'dd210':'cz376', 'df028':'cz375', 'de621':'cz375', 'df025':'cy838', 'df027':'cy838', 'df021':'cz375', 'df023':'cz375', 'dh541':'cz376', 'dh859':'cz376', 'de943':'cz378', 'de962':'cz378', 'de963':'cz378'}
@@ -824,7 +832,7 @@ def all_suite_trajectories (static_ice=False):
 
 
 # Helper function to assemble a timeseries for the given trajectory and variable (precomputed).
-def build_timeseries_trajectory (suite_list, var_name, base_dir='./', timeseries_file='timeseries.nc', static_ice=False, offset=0):
+def build_timeseries_trajectory (suite_list, var_name, base_dir='./', timeseries_file='timeseries.nc', offset=0):
 
     for suite in suite_list:
         # Figure out whether it's a ramp-up (1), stabilisation (0), or ramp-down (-1) simulation
@@ -833,6 +841,8 @@ def build_timeseries_trajectory (suite_list, var_name, base_dir='./', timeseries
             if suite in suites_by_scenario[scenario]:
                 if 'ramp_up' in scenario:
                     stype = 1
+                elif 'restabilise' in scenario:
+                    stype = -2
                 elif 'stabilise' in scenario:
                     stype = 0
                 elif 'ramp_down' in scenario:
@@ -868,7 +878,7 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
     suite_strings = []
     # Loop over each suite trajectory and build the timeseries
     for suite_list in suite_sequences:
-        data = build_timeseries_trajectory(suite_list, var_name, base_dir=base_dir, timeseries_file=timeseries_file, static_ice=static_ice, offset=offset)
+        data = build_timeseries_trajectory(suite_list, var_name, base_dir=base_dir, timeseries_file=timeseries_file, offset=offset)
         suite_strings.append('-'.join(suite_list))
         timeseries.append(data)
     return timeseries, suite_strings
@@ -1455,8 +1465,282 @@ def plot_amundsen_temp_velocity (base_dir='./'):
     finished_plot(fig, fig_name='figures/amundsen_temp_velocity.png', dpi=300)
 
 
-#def dashboard_animation (suite_string, out_dir='animations/'):
-    
+# Make an animation showing all sorts of things for the given trajectory.
+def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/'):
+
+    import matplotlib.animation as animation
+
+    pi_suite = 'cs495'
+    timeseries_file = 'timeseries.nc'
+    timeseries_file_um = 'timeseries_um.nc'
+    smooth = 5*months_per_year
+    tipping_threshold = -1.9
+    suite_string = '-'.join(suite_list)
+    if region not in ['ross', 'filchner_ronne']:
+        raise Exception('Invalid region '+region)
+
+    # Assemble main title of plot, to describe the trajectory
+    sim_title = ''
+    for suite in suite_list:
+        # Figure out what type of trajectory it is
+        for scenario in suites_by_scenario:
+            if suite in suites_by_scenario[scenario]:
+                if 'ramp_up' in scenario:
+                    sim_title += 'ramp up'
+                elif 'stabilise' in scenario:
+                    if 'restabilise' in scenario:
+                        sim_title += 'restabilise '
+                    else:
+                        sim_title += 'stabilise '
+                    sim_title += scenario[:scenario.index('K_')]+deg_string+'C'
+                elif 'ramp_down' in scenario:
+                    sim_title += 'ramp down '
+                    for rate in suites_ramp_down_rates:
+                        if suite in suites_ramp_down_rates[rate]:
+                            sim_title += rate
+                else:
+                    raise Exception('Invalid scenario '+scenario)
+                sim_title += ', '                    
+    # Trim final comma
+    sim_title = sim_title[:-2]
+
+    print('Reading timeseries')
+    # Assemble timeseries, 5-year smoothed
+    # First get preindustrial baseline temp
+    ds = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
+    baseline_temp = ds['global_mean_sat'].mean()
+    ds.close()
+    # Global mean warming
+    warming = build_timeseries_trajectory(suite_list, 'global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, offset=-1*baseline_temp)
+    warming = moving_average(warming, smooth)
+    # Inner function for oceanographic timeseries
+    def process_timeseries (var_name):
+        data = build_timeseries_trajectory(suite_list, var_name, base_dir=base_dir, timeseries_file = timeseries_file)
+        data = moving_average(data, smooth)
+        # Align with warming timeseries
+        data, warming_tmp = align_timeseries(data, warming)
+        return data, warming_tmp
+    shelf_bwsalt = process_timeseries(region+'_shelf_bwsalt')[0]
+    bwtemp = process_timeseries(region+'_bwtemp')[0]
+    cavity_temp = process_timeseries(region+'_cavity_temp')[0]
+    # For the last one, overwrite warming timeseries (now aligned)
+    massloss, warming = process_timeseries(region+'_massloss')
+
+    # Identify if/when cavity tips or recovers
+    if cavity_temp.max() > tipping_threshold:
+        tip_time = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
+        tip_string = 'Tips in '+str(cavity_temp.coords['time_centered'][tip_time].dt.year.item())+' ('+str(round(warming[tip_time].item(),2))+deg_string+'C)'
+        # Now consider the time post-tipping, to see if it ever recovers (goes back down below tipping_threshold and stays that way)
+        temp_post = cavity_temp.isel(time_centered=slice(tip_time,None))
+        warming_post = warming.isel(time_centered=slice(tip_time,None))
+        recovers = temp_post.isel(time_centered=-1) < tipping_threshold
+        if recovers:
+            for t in range(temp_post.sizes['time_centered']):
+                if temp_post.isel(time_centered=slice(t,None)).max() < tipping_threshold:
+                    recover_string = 'Recovers in '+str(temp_post.coords['time_centered'][t].dt.year.item())+' ('+str(round(warming_post[t].item(),2))+deg_string+'C)'
+                    recover_time = t
+        else:
+            recover_string = 'Does not recover'
+            recover_time = None                
+    else:
+        tip_string = 'Does not tip'
+        recover_string = ''
+        tip_time = None
+        recover_time = None
+
+    # Set up maps
+    # Open one file just to get coordinates
+    for f in os.listdir(base_dir+'/'+suite_list[0]):
+        if f.startswith('nemo_'+suite_list[0]+'o_1m_') and f.endswith('_grid-T.nc'):
+            break
+    grid = xr.open_dataset(base_dir+'/'+suite_list[0]+'/'+f)
+    # Choose bounds of map to show
+    mask = region_mask(region, grid)[0]
+    x, y = polar_stereo(grid['nav_lon'], grid['nav_lat'])
+    xmin = x.where(mask).min()
+    xmax = x.where(mask).max()
+    ymin = y.where(mask).min()
+    ymax = y.where(mask).max()    
+    plot_mask = (x >= xmin)*(x <= xmax)*(y >= ymin)*(y <= ymax)
+    # Trim in latitude direction to save memory: find bounds
+    # (trimming in longitude is harder with periodic boundary)
+    lat_min = grid['nav_lat'].where(plot_mask).min()
+    lat_max = grid['nav_lat'].where(plot_mask).max()
+    jmin = np.argwhere(grid['nav_lat'].min(dim='x') > lat_min)[0][0] - 1
+    jmax = np.argwhere(grid['nav_lat'].max(dim='x') > lat_max)[0][0]
+    grid = grid.isel(y=slice(jmin,jmax))
+    plot_mask = plot_mask.isel(y=slice(jmin,jmax))
+    # Set up plotting coordinates
+    lon_edges = cfxr.bounds_to_vertices(grid['bounds_lon'], 'nvertex')
+    lat_edges = cfxr.bounds_to_vertices(grid['bounds_lat'], 'nvertex')
+    x_edges, y_edges = polar_stereo(lon_edges, lat_edges)
+    x_bg, y_bg = np.meshgrid(np.linspace(x_edges.min(), x_edges.max()), np.linspace(y_edges.min(), y_edges.max()))
+    mask_bg = np.ones(x_bg.shape)
+
+    # Calculate annual means of bwtemp, bwsalt, ismr within the plotting region.
+    print('Reading 2D data')
+    bwsalt_2D = []
+    bwtemp_2D = []
+    ismr_2D = []
+    # Select the middle month of each 12 year chunk of timeseries data
+    for t in range(5, massloss.sizes['time_centered'], 12):
+        # What year is it?
+        year = massloss.coords['time_centered'][t].dt.year.item()
+        print('...'+str(year))
+        # What stage in the simulation is it?
+        stype = massloss.coords['scenario_type'][t].item()
+        stype_mapping = [1, 0, 3, 2]
+        suite = suite_list[stype_mapping[stype]]
+        sim_dir = base_dir+'/'+suite
+        # Build list of the file patterns we're going to read for this year
+        nemo_files = []
+        for f in os.listdir(sim_dir):
+            if os.path.isdir(f'{sim_dir}/{f}'): continue
+            if f.startswith('nemo_'+suite+'o_1m_'+str(year)) and f.endswith('-T.nc'):
+                # Extract date codes
+                date_codes = re.findall(r'\d{4}\d{2}\d{2}', f)
+                file_pattern = sim_dir+'/nemo_'+suite+'o_1m_'+date_codes[0]+'-'+date_codes[1]+'*-T.nc'
+                if file_pattern not in nemo_files:
+                    nemo_files.append(file_pattern)
+        nemo_files.sort()
+        # Expect 12 file patterns (one for each month), each containing 2 files (grid-T and isf-T)
+        if len(nemo_files) > months_per_year:
+            raise Exception('Too many NEMO files for '+suite+', '+str(year))
+        if len(nemo_files) < months_per_year:
+            print('Warning: incomplete year for '+suite+', '+str(year))
+        # Now read each month
+        bwsalt_accum = None
+        bwtemp_accum = None
+        ismr_accum = None
+        for file_pattern in nemo_files:
+            ds = xr.open_mfdataset(file_pattern).isel(y=slice(jmin,jmax))
+            if os.path.isfile(file_pattern.replace('*','_grid')):
+                bwsalt_tmp = ds['sob'].where(ds['sob']>0).where(plot_mask)
+                bwtemp_tmp = ds['tob'].where(ds['sob']>0).where(plot_mask)
+                if bwsalt_accum is None:
+                    bwsalt_accum = bwsalt_tmp
+                else:
+                    bwsalt_accum = xr.concat([bwsalt_accum, bwsalt_tmp], dim='time_centered')
+                    bwtemp_accum = xr.concat([bwtemp_accum, bwtemp_tmp], dim='time_centered')
+            else:
+                print('Warning: missing '+file_pattern.replace('*','_grid'))
+            if os.path.isfile(file_pattern.replace('*','_isf')):
+                ismr_tmp = convert_ismr(ds['sowflisf'].where(ds['sowflisf']!=0)).where(plot_mask)
+                if ismr_accum is None:
+                    ismr_accum = ismr_tmp
+                else:
+                    ismr_accum = xr.concat([ismr_accum, ismr_tmp], dim='time_centered')
+            else:
+                print('Warning: missing '+file_pattern.replace('*','_isf'))
+            ds.close()
+        # Calculate (annual) means and save
+        bwsalt_2D.append(bwsalt_accum.mean(dim='time_centered'))
+        bwtemp_2D.append(bwtemp_accum.mean(dim='time_centered'))
+        ismr_2D.append(ismr_accum.mean(dim='time_centered'))
+    data_plot_2D = [bwsalt_2D, bwtemp_2D, ismr_2D]
+    # Calculate variable min/max over all years
+    vmin = []
+    vmax = []
+    for data_var in data_plot_2D:
+        vmin.append(np.amin([data_year.min() for data_year in data_var]))
+        vmax.append(np.amax([data_year.max() for data_year in data_var]))
+    ctype = ['viridis', 'viridis', 'ismr']
+    cmap = []
+    for n in range(len(data_plot_2D)):
+        cmap.append(set_colours(data_plot_2D[n], ctype=ctype[n], vmin=vmin[n], vmax=vmax[n])[0])
+    num_years = len(bwsalt_2D)
+            
+    # Initialise the plot
+    fig = plt.figure(figsize=(8,6))
+    gs = plt.GridSpec(2,3)
+    gs.update(left=0.05, right=0.98, bottom=0.1, top=0.9, wspace=0.1, hspace=0.3)
+    cax = [fig.add_axes([0.08+0.3*n, 0.04, 0.2, 0.03]) for n in range(3)]
+    ax = []
+    for n in range(2):
+        for m in range(3):
+            ax.append(plt.subplot(gs[n,m]))
+
+    # Inner function to plot a frame
+    def plot_one_frame (t, year_text=None, temp_text=None):
+        if t == 0:
+            # Trajectory information at the top
+            plt.suptitle(suite_string+'\n'+sim_title, fontsize=16)
+        # Top row: timeseries: plot 12 months at a time, colour-coded by simulation type
+        t_start = t*months_per_year
+        t_end = t_start + months_per_year
+        stype = massloss.coords[scenario_type][t_start+6].item()
+        if stype == 1:
+            colour = 'Crimson'
+        elif stype in [0, -2]:
+            colour = 'Grey'
+        elif stype == -1:
+            colour = 'DodgerBlue'
+        # Top left panel: temperature in cavity vs bottom salinity on continental shelf
+        ax[0].plot(shelf_bwsalt[t_start:t_end], cavity_temp[t_start:t_end], color=colour, linewidth=1)
+        ax[0].set_xlim([shelf_bwsalt.min()-0.02, shelf_bwsalt.max()+0.02])
+        ax[0].set_ylim([cavity_temp.min()-0.02, max(tipping_threshold, cavity_temp.max())+0.02])
+        if t == 0:
+            ax.grid(linestyle='dotted')
+            ax.axhline(tipping_threshold, color='black', linestyle='dashed')
+            ax.set_xlabel('Bottom salinity on continental shelf (psu)', fontsize=10)
+            ax.set_ylabel(deg_string+'C', fontsize=10)
+            ax.set_title('Temperature in ice shelf cavity', fontsize=12)
+        # Other two top panels: bottom temperature (shelf+cavity) and massloss vs global warming level
+        for n, ts_data, title, units in zip(range(2), [bwtemp, massloss], ['Bottom temperature on shelf and in cavity', 'Basal mass loss'], [deg_string+'C', 'Gt/y']):
+            ax[n].plot(warming[t_start:t_end], ts_data[t_start:t_end], color=colour, linewidth=1)
+            ax[1].set_xlim([warming.min()-0.02, warming.max()+0.02])
+            ax[1].set_ylim([ts_data.min()-0.02, ts_data.max()+0.02])
+            if t == 0:
+                ax.grid(linestyle='dotted')
+                ax.set_xlabel('Global warming relative to preindustrial ('+deg_string+'C)', fontsize=10)
+                ax.set_ylabel(units, fontsize=10)
+                ax.set_title(title, fontsize=12)
+        # Bottom three panels: maps of 2D data
+        for n, data_2D, title in zip(range(3), data_plot_2D, ['Bottom salinity (psu)', 'Bottom temperature ('+deg_string+'C)', 'Ice shelf melt rate (m/y)']):
+            # This time clear all previous plotting data - we're not adding to it
+            ax[n+3].cla()
+            # Shade land in grey
+            ocean_mask = xr.where(bwsalt_2D[t]>0, 1, 0)
+            ocean_mask = ocean_mask.where(ocean_mask)
+            ax[n+3].pcolormesh(x_bg, y_bg, mask_bg, cmap=cl.ListedColormap(['DarkGrey']))
+            ax[n+3].pcolormesh(x_edges, y_edges, ocean_mask, cmap=cl.ListedColormap(['white']))
+            # Plot the data
+            img = ax[n+3].pcolormesh(x_edges, y_edges, data_2D[t], cmap=cmap[n], vmin=vmin[n], vmax=vmax[n])
+            ax[n+3].set_xlim([xmin, xmax])
+            ax[n+3].set_ylim([ymin, ymax])
+            ax[n+3].set_xticks([])
+            ax[n+3].set_yticks([])
+            ax[n+3].set_title(title, fontsize=12)
+            if t == 0:
+                cbar = plt.colorbar(img, cax=cax[n], orientation='horizontal')
+        if t == 0:
+            # Print tipping information
+            plt.text(0.6, 0.08, tip_string, fontsize=12, ha='left', va='top', transform=fig.transFigure)
+            plt.text(0.6, 0.04, recover_string, fontsize=12, ha='left', va='top', transform=fig.transFigure)
+        # Bottom: print the year and global warming level
+        year_string = str(massloss.coords[time_centered][t_start+6].dt.year.item())
+        temp_string = str(round(warming[t_start+6].item(),2))        
+        if year_text is None:
+            year_text = plt.text(0.1, 0.08, year_string, fontsize=12, ha='left', va='top', transform=fig.transFigure)
+            temp_text = plt.text(0.1, 0.04, temp_string, fontsize=12, ha='left', va='top', transform=fig.transFigure)
+            return year_text, temp_text
+        else:
+            year_text.set_text(year_string)
+            temp_text.set_text(temp_string)
+
+        
+    # First frame
+    year_text, temp_text = plot_one_frame(0)
+
+    # Function to update figure with the given frame
+    def animate(t):
+        print('Frame '+str(t+1)+' of '+str(num_years))
+        plot_one_frame(t, year_text=year_text, temp_text=temp_text)
+
+    # Call this for each frame
+    anim = animation.FuncAnimation(fig, func=animate, frames=list(range(num_years)))
+    writer = animation.FFMpegWriter(bitrate=2000, fps=2)
+    anim.save(out_dir+'/'+suite_string+'_'+region+'.mp4', writer=writer)
 
     
     
