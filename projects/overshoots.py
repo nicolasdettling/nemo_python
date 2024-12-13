@@ -823,6 +823,42 @@ def all_suite_trajectories (static_ice=False):
     return suite_sequences
 
 
+# Helper function to assemble a timeseries for the given trajectory and variable (precomputed).
+def build_timeseries_trajectory (suite_list, var_name, base_dir='./', timeseries_file='timeseries.nc', static_ice=False, offset=0):
+
+    for suite in suite_list:
+        # Figure out whether it's a ramp-up (1), stabilisation (0), or ramp-down (-1) simulation
+        stype = None
+        for scenario in suites_by_scenario:
+            if suite in suites_by_scenario[scenario]:
+                if 'ramp_up' in scenario:
+                    stype = 1
+                elif 'stabilise' in scenario:
+                    stype = 0
+                elif 'ramp_down' in scenario:
+                    stype = -1
+                else:
+                    raise Exception('invalid scenario type')
+                break
+        if stype is None:
+            raise Exception('Simulation type not found')
+        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+        data = ds[var_name] + offset
+        data = data.assign_coords(scenario_type=('time_centered', np.ones(data.size)*stype))
+        if suite != suite_list[0]:
+            # Find the starting date of the current suite
+            start_date = data.time_centered[0]
+            if data_prev.time_centered[-1].data > start_date.data:
+                # Trim the previous timeseries to just before that date
+                time_branch = np.argwhere(data_prev.time_centered.data == start_date.data)[0][0]
+                data_prev = data_prev.isel(time_centered=slice(0,time_branch))
+            # Concatenate with the previous timeseries
+            data = xr.concat([data_prev, data], dim='time_centered')
+        # Prepare for next iteration of loop
+        data_prev = data
+    return data    
+
+
 # Assemble a list of all possible trajectories of the given timeseries variable (precomputed).
 # Can add an offset if needed (eg the negative of the preindustrial baseline temperature).
 def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='timeseries.nc', static_ice=False, offset=0):
@@ -832,40 +868,8 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
     suite_strings = []
     # Loop over each suite trajectory and build the timeseries
     for suite_list in suite_sequences:
-        for suite in suite_list:
-            # Figure out whether it's a ramp-up (1), stabilisation (0), or ramp-down (-1) simulation
-            stype = None
-            for scenario in suites_by_scenario:
-                if suite in suites_by_scenario[scenario]:
-                    if 'ramp_up' in scenario:
-                        stype = 1
-                    elif 'stabilise' in scenario:
-                        stype = 0
-                    elif 'ramp_down' in scenario:
-                        stype = -1
-                    else:
-                        raise Exception('invalid scenario type')
-                    break
-            if stype is None:
-                raise Exception('Simulation type not found')
-            ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
-            data = ds[var_name] + offset
-            data = data.assign_coords(scenario_type=('time_centered', np.ones(data.size)*stype))
-            if suite == suite_list[0]:
-                suite_string = suite
-            else:
-                suite_string += '-'+suite
-                # Find the starting date of the current suite
-                start_date = data.time_centered[0]
-                if data_prev.time_centered[-1].data > start_date.data:
-                    # Trim the previous timeseries to just before that date
-                    time_branch = np.argwhere(data_prev.time_centered.data == start_date.data)[0][0]
-                    data_prev = data_prev.isel(time_centered=slice(0,time_branch))
-                # Concatenate with the previous timeseries
-                data = xr.concat([data_prev, data], dim='time_centered')
-            # Prepare for next iteration of loop
-            data_prev = data
-        suite_strings.append(suite_string)
+        data = build_timeseries_trajectory(suite_list, var_name, base_dir=base_dir, timeseries_file=timeseries_file, static_ice=static_ice, offset=offset)
+        suite_strings.append('-'.join(suite_list))
         timeseries.append(data)
     return timeseries, suite_strings
 
@@ -1449,6 +1453,13 @@ def plot_amundsen_temp_velocity (base_dir='./'):
             ax.quiverkey(q, 0.9, 0.05, 0.01, '1 cm/s', labelpos='E', coordinates='figure')            
     plt.suptitle('West Antarctic ocean temperature (500m)\nand barotropic velocity', fontsize=15)
     finished_plot(fig, fig_name='figures/amundsen_temp_velocity.png', dpi=300)
+
+
+def dashboard_animation (suite_string, out_dir='animations/'):
+
+    
+
+    
     
 
 
