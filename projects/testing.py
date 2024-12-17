@@ -159,10 +159,10 @@ def plot_bisicles_overview (base_dir='./', suite_id='dj515', fig_dir=None):
 # Precompute decadal averages for plot_cice_decades and save to NetCDF.
 def precompute_cice_decades ():
 
-    suite = 'dj515'
+    suite = 'dl286' #'dj515'
     num_decades = 3
     months_per_decade = months_per_year*10
-    start_year = 1982
+    start_year = 1995 #1982
     decade_titles = [str(start_year+n*10)+'-'+str(start_year+(n+1)*10) for n in range(num_decades)]
 
     for n in range(num_decades):
@@ -190,10 +190,11 @@ def precompute_cice_decades ():
 # Plot a single CICE 2D variable for each decade in the wonky dj515 simulation, showing Arctic and Antarctic projections.
 def plot_cice_decades (var, fig_name=None, ctype='viridis', vmin=None, vmax=None):
 
-    suite = 'dj515'
+    suite = 'dl286' #'dj515'
+    start_year = 1995 #1982
 
     # Read variable attributes from single file - they somehow got lost in precomputing above.
-    ds = xr.open_dataset(suite+'/cice_'+suite+'i_1m_19820101-19820201.nc')
+    ds = xr.open_dataset(suite+'/cice_'+suite+'i_1m_'+str(start_year)+'0101-'+str(start_year)+'0201.nc')
     title = ds[var].long_name+' ('+ds[var].units+')'
     ds.close()
 
