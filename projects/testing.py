@@ -95,7 +95,7 @@ def plot_bisicles_overview (base_dir='./', suite_id='dj515', fig_dir=None):
     ds_2D = []
     ds_ts = []
     for domain in domains:
-        file_head = 'bisicles_'+suite_id+'c_1y_'
+        file_head = 'bisicles_'+suite_id+'c_' #1y_'
         file_tail = '_plot-'+domain+'.hdf5'
         ds_domain = read_bisicles_all(base_dir+'/'+suite_id+'/', file_head, file_tail, var_names, level=0, order=0)
         # Mask where initial thickness is 0
