@@ -1721,7 +1721,7 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
 
     # Call this for each frame
     anim = animation.FuncAnimation(fig, func=animate, frames=list(range(num_years)))
-    writer = animation.FFMpegWriter(bitrate=5000, fps=2)
+    writer = animation.FFMpegWriter(bitrate=5000, fps=5)
     anim.save(out_dir+'/'+suite_string+'_'+region+'.mp4', writer=writer)
 
 
