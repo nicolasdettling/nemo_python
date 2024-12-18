@@ -1639,6 +1639,8 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
     cmap = [set_colours(ds_2D[var_plot_2D[n]].isel(time_centered=0), ctype=ctype[n], vmin=vmin[n], vmax=vmax[n])[0] for n in range(3)]
     num_years = ds_2D.sizes['time_centered']
 
+    print('Setting up plot')
+
     # Initialise the plot
     fig = plt.figure(figsize=(9,7))
     gs = plt.GridSpec(2,3)
@@ -1722,6 +1724,7 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
     # Call this for each frame
     anim = animation.FuncAnimation(fig, func=animate, frames=list(range(num_years)))
     writer = animation.FFMpegWriter(bitrate=5000, fps=5)
+    print('Saving animation')
     anim.save(out_dir+'/'+suite_string+'_'+region+'.mp4', writer=writer)
 
 
