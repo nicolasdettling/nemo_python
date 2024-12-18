@@ -50,27 +50,6 @@ suites_ramp_down_rates = {'8 Gt/y' : ['cz944', 'di335', 'da800', 'da697', 'da892
 # Dictionary of which suites branch from which. None means it's a ramp-up suite (so branched from a piControl run, but we don't care about that for the purposes of integrated GW)
 suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'cz944':'cy838', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'db223':'cz375', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'dc163':'cz944', 'di335':'cy838', 'df453':'cz375', 'de620':'cz375', 'dc565':'cy838', 'dd210':'cz376', 'df028':'cz375', 'de621':'cz375', 'df025':'cy838', 'df027':'cy838', 'df021':'cz375', 'df023':'cz375', 'dh541':'cz376', 'dh859':'cz376', 'de943':'cz378', 'de962':'cz378', 'de963':'cz378'}
 
-'''# Old versions for now
-suites_by_scenario = {'piControl' : ['cs495'],
-                      'piControl_static_ice' : ['cs568'],
-                      'ramp_up' : ['cx209', 'cw988', 'cw989', 'cw990'],
-                      'ramp_up_static_ice': ['cz826'],
-                      '1.5K_stabilise': ['cy837','cz834','da087'],
-                      '1.5K_ramp_down': ['da697', 'dc052', 'dc248'],
-                      '2K_stabilise': ['cy838','cz855','da266'],
-                      '2K_ramp_down': ['cz944', 'dc051', 'da800'],
-                      '2K_restabilise' : ['dc163'],
-                      '2.5K_stabilise' : ['cz374','cz859'],
-                      '3K_stabilise' : ['cz375','db587','db597'],
-                      '3K_ramp_down' : ['db223', 'dc032', 'dc249'],
-                      '4K_stabilise' : ['cz376','db723','db733'],
-                      '4K_ramp_down' : ['da892', 'dc123'],
-                      '5K_stabilise' : ['cz377','db731','dc324'],
-                      '5K_ramp_down' : ['dc251', 'dc130'],
-                      '6K_stabilise' : ['cz378']}
-# Dictionary of which suites branch from which. None means it's a ramp-up suite (so branched from a piControl run, but we don't care about that for the purposes of integrated GW)
-suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'cz944':'cy838', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'db223':'cz375', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'dc163':'cz944'}'''
-
 # End global vars
 
 
@@ -1648,6 +1627,7 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
         # Save data for precomputing next time
         print('Writing '+precomputed_file)
         ds_2D.to_netcdf(precomputed_file)
+        
     var_plot_2D = ['bwsalt', 'bwtemp', 'ismr']
     titles_2D = ['Bottom salinity (psu)', 'Bottom temperature ('+deg_string+'C)', 'Ice shelf melt rate (m/y)']
     # Calculate variable min/max over all years
@@ -1661,10 +1641,10 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
         return
             
     # Initialise the plot
-    fig = plt.figure(figsize=(8,6))
+    fig = plt.figure(figsize=(9,7))
     gs = plt.GridSpec(2,3)
-    gs.update(left=0.05, right=0.98, bottom=0.1, top=0.9, wspace=0.1, hspace=0.3)
-    cax = [fig.add_axes([0.08+0.3*n, 0.04, 0.2, 0.03]) for n in range(3)]
+    gs.update(left=0.07, right=0.98, bottom=0.08, top=0.86, wspace=0.22, hspace=0.4)
+    cax = [fig.add_axes([0.095+0.33*n, 0.04, 0.2, 0.02]) for n in range(3)]
     ax = []
     for n in range(2):
         for m in range(3):
@@ -1672,13 +1652,14 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
 
     # Inner function to plot a frame
     def plot_one_frame (t, year_text=None, temp_text=None):
+        print('Frame '+str(t+1)+' of '+str(num_years))
         if t == 0:
             # Trajectory information at the top
-            plt.suptitle(suite_string+'\n'+sim_title, fontsize=16)
+            plt.suptitle(suite_string+'\n'+sim_title, fontsize=14)
         # Top row: timeseries: plot 12 months at a time, colour-coded by simulation type
         t_start = t*months_per_year
         t_end = t_start + months_per_year
-        stype = massloss.coords[scenario_type][t_start+6].item()
+        stype = massloss.coords['scenario_type'][t_start+6].item()
         if stype == 1:
             colour = 'Crimson'
         elif stype in [0, -2]:
@@ -1690,27 +1671,25 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
         ax[0].set_xlim([shelf_bwsalt.min()-0.02, shelf_bwsalt.max()+0.02])
         ax[0].set_ylim([cavity_temp.min()-0.02, max(tipping_threshold, cavity_temp.max())+0.02])
         if t == 0:
-            ax.grid(linestyle='dotted')
-            ax.axhline(tipping_threshold, color='black', linestyle='dashed')
-            ax.set_xlabel('Bottom salinity on continental shelf (psu)', fontsize=10)
-            ax.set_ylabel(deg_string+'C', fontsize=10)
-            ax.set_title('Temperature in ice shelf cavity', fontsize=12)
+            ax[0].grid(linestyle='dotted')
+            ax[0].axhline(tipping_threshold, color='black', linestyle='dashed')
+            ax[0].set_xlabel('Bottom salinity on shelf (psu)', fontsize=10)
+            ax[0].set_title('Temperature in cavity ('+deg_string+'C)', fontsize=12)
         # Other two top panels: bottom temperature (shelf+cavity) and massloss vs global warming level
-        for n, ts_data, title, units in zip(range(2), [bwtemp, massloss], ['Bottom temperature on shelf and in cavity', 'Basal mass loss'], [deg_string+'C', 'Gt/y']):
-            ax[n].plot(warming[t_start:t_end], ts_data[t_start:t_end], color=colour, linewidth=1)
-            ax[1].set_xlim([warming.min()-0.02, warming.max()+0.02])
-            ax[1].set_ylim([ts_data.min()-0.02, ts_data.max()+0.02])
+        for n, ts_data, title in zip(range(2), [bwtemp, massloss], ['Bottom temp, shelf+cavity ('+deg_string+'C)', 'Basal mass loss (Gt/y)']):
+            ax[n+1].plot(warming[t_start:t_end], ts_data[t_start:t_end], color=colour, linewidth=1)
+            ax[n+1].set_xlim([warming.min()-0.02, warming.max()+0.02])
+            ax[n+1].set_ylim([ts_data.min()-0.02, ts_data.max()+0.02])
             if t == 0:
-                ax.grid(linestyle='dotted')
-                ax.set_xlabel('Global warming relative to preindustrial ('+deg_string+'C)', fontsize=10)
-                ax.set_ylabel(units, fontsize=10)
-                ax.set_title(title, fontsize=12)
+                ax[n+1].grid(linestyle='dotted')
+                ax[n+1].set_xlabel('Global warming ('+deg_string+'C)', fontsize=10)
+                ax[n+1].set_title(title, fontsize=12)
         # Bottom three panels: maps of 2D data
         for n in range(3):
             # This time clear all previous plotting data - we're not adding to it
             ax[n+3].cla()
             # Shade land in grey
-            ocean_mask = xr.where(bwsalt_2D[t]>0, 1, 0)
+            ocean_mask = xr.where(ds_2D['bwsalt'].isel(time_centered=t)>0, 1, 0)
             ocean_mask = ocean_mask.where(ocean_mask)
             ax[n+3].pcolormesh(x_bg, y_bg, mask_bg, cmap=cl.ListedColormap(['DarkGrey']))
             ax[n+3].pcolormesh(x_edges, y_edges, ocean_mask, cmap=cl.ListedColormap(['white']))
@@ -1725,14 +1704,14 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
                 cbar = plt.colorbar(img, cax=cax[n], orientation='horizontal')
         if t == 0:
             # Print tipping information
-            plt.text(0.6, 0.08, tip_string, fontsize=12, ha='left', va='top', transform=fig.transFigure)
-            plt.text(0.6, 0.04, recover_string, fontsize=12, ha='left', va='top', transform=fig.transFigure)
-        # Bottom: print the year and global warming level
-        year_string = str(massloss.coords[time_centered][t_start+6].dt.year.item())
-        temp_string = str(round(warming[t_start+6].item(),2))        
+            plt.text(0.99, 0.99, tip_string, fontsize=14, ha='right', va='top', transform=fig.transFigure)
+            plt.text(0.99, 0.95, recover_string, fontsize=14, ha='right', va='top', transform=fig.transFigure)
+        # Print the year and global warming level
+        year_string = str(massloss.coords['time_centered'][t_start+6].dt.year.item())
+        temp_string = str(round(warming[t_start+6].item(),2))+deg_string+'C'        
         if year_text is None:
-            year_text = plt.text(0.1, 0.08, year_string, fontsize=12, ha='left', va='top', transform=fig.transFigure)
-            temp_text = plt.text(0.1, 0.04, temp_string, fontsize=12, ha='left', va='top', transform=fig.transFigure)
+            year_text = plt.text(0.01, 0.99, year_string, fontsize=14, ha='left', va='top', transform=fig.transFigure)
+            temp_text = plt.text(0.01, 0.95, temp_string, fontsize=14, ha='left', va='top', transform=fig.transFigure)
             return year_text, temp_text
         else:
             year_text.set_text(year_string)
@@ -1743,11 +1722,10 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
 
     # Function to update figure with the given frame
     def animate(t):
-        print('Frame '+str(t+1)+' of '+str(num_years))
         plot_one_frame(t, year_text=year_text, temp_text=temp_text)
 
     # Call this for each frame
-    anim = animation.FuncAnimation(fig, func=animate, frames=list(range(num_years)))
+    anim = animation.FuncAnimation(fig, func=animate, frames=list(range(10))) #num_years)))
     writer = animation.FFMpegWriter(bitrate=2000, fps=2)
     anim.save(out_dir+'/'+suite_string+'_'+region+'.mp4', writer=writer)
 
@@ -1761,6 +1739,7 @@ def precompute_all_animations ():
         suite_string = '-'.join(suite_list)
         for region in ['ross', 'filchner_ronne']:
             command = 'sbatch --export=SUITES='+suite_string+',CAVITY='+region+' precompute_animation.sh'
+            print(command)
             sbatch_id = subprocess.check_output(command, shell=True, text=True)
             print(sbatch_id)
 
