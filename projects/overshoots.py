@@ -1466,7 +1466,7 @@ def plot_amundsen_temp_velocity (base_dir='./'):
 
 
 # Make an animation showing all sorts of things for the given trajectory.
-def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/', only_precompute=False):
+def dashboard_animation (suite_string, region, base_dir='./', out_dir='animations/', only_precompute=False):
 
     import matplotlib.animation as animation
 
@@ -1475,7 +1475,7 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
     timeseries_file_um = 'timeseries_um.nc'
     smooth = 5*months_per_year
     tipping_threshold = -1.9
-    suite_string = '-'.join(suite_list)
+    suite_list = suite_string.split('-')
     if region not in ['ross', 'filchner_ronne']:
         raise Exception('Invalid region '+region)
 
@@ -1737,7 +1737,6 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
         else:
             year_text.set_text(year_string)
             temp_text.set_text(temp_string)
-
         
     # First frame
     year_text, temp_text = plot_one_frame(0)
@@ -1753,12 +1752,17 @@ def dashboard_animation (suite_list, region, base_dir='./', out_dir='animations/
     anim.save(out_dir+'/'+suite_string+'_'+region+'.mp4', writer=writer)
 
 
-def precompute_all_animations (base_dir='./', out_dir='animations/'):
+# Call the batch script precompute_animations.sh for every trajectory. Assumes base_dir and out_dir are default values.
+def precompute_all_animations ():
+
+    import subprocess
 
     for suite_list in all_suite_trajectories():
+        suite_string = '-'.join(suite_list)
         for region in ['ross', 'filchner_ronne']:
-            print('Processing '+'-'.join(suite_list)+', '+region)
-            dashboard_animation(suite_list, region, base_dir=base_dir, out_dir=out_dir, only_precompute=True)
+            command = 'sbatch --export=SUITES='+suite_string+',CAVITY='+region+' precompute_animation.sh'
+            sbatch_id = subprocess.check_output(command, shell=True, text=True)
+            print(sbatch_id)
 
     
     
