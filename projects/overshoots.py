@@ -1627,6 +1627,8 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
         # Save data for precomputing next time
         print('Writing '+precomputed_file)
         ds_2D.to_netcdf(precomputed_file)
+    if only_precompute:
+        return
         
     var_plot_2D = ['bwsalt', 'bwtemp', 'ismr']
     titles_2D = ['Bottom salinity (psu)', 'Bottom temperature ('+deg_string+'C)', 'Ice shelf melt rate (m/y)']
@@ -1637,9 +1639,6 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
     cmap = [set_colours(ds_2D[var_plot_2D[n]].isel(time_centered=0), ctype=ctype[n], vmin=vmin[n], vmax=vmax[n])[0] for n in range(3)]
     num_years = ds_2D.sizes['time_centered']
 
-    if only_precompute:
-        return
-            
     # Initialise the plot
     fig = plt.figure(figsize=(9,7))
     gs = plt.GridSpec(2,3)
@@ -1651,14 +1650,16 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
             ax.append(plt.subplot(gs[n,m]))
 
     # Inner function to plot a frame
-    def plot_one_frame (t, year_text=None, temp_text=None):
-        print('Frame '+str(t+1)+' of '+str(num_years))
+    def plot_one_frame (t):
         if t == 0:
             # Trajectory information at the top
             plt.suptitle(suite_string+'\n'+sim_title, fontsize=14)
         # Top row: timeseries: plot 12 months at a time, colour-coded by simulation type
         t_start = t*months_per_year
         t_end = t_start + months_per_year
+        if t != 0:
+            # Make sure to connect to lines from before
+            t_start -= 1
         stype = massloss.coords['scenario_type'][t_start+6].item()
         if stype == 1:
             colour = 'Crimson'
@@ -1676,10 +1677,10 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
             ax[0].set_xlabel('Bottom salinity on shelf (psu)', fontsize=10)
             ax[0].set_title('Temperature in cavity ('+deg_string+'C)', fontsize=12)
         # Other two top panels: bottom temperature (shelf+cavity) and massloss vs global warming level
-        for n, ts_data, title in zip(range(2), [bwtemp, massloss], ['Bottom temp, shelf+cavity ('+deg_string+'C)', 'Basal mass loss (Gt/y)']):
+        for n, ts_data, title, offset in zip(range(2), [bwtemp, massloss], ['Bottom temp, shelf+cavity ('+deg_string+'C)', 'Basal mass loss (Gt/y)'], [0.02, 5]):
             ax[n+1].plot(warming[t_start:t_end], ts_data[t_start:t_end], color=colour, linewidth=1)
             ax[n+1].set_xlim([warming.min()-0.02, warming.max()+0.02])
-            ax[n+1].set_ylim([ts_data.min()-0.02, ts_data.max()+0.02])
+            ax[n+1].set_ylim([ts_data.min()-offset, ts_data.max()+offset])
             if t == 0:
                 ax[n+1].grid(linestyle='dotted')
                 ax[n+1].set_xlabel('Global warming ('+deg_string+'C)', fontsize=10)
@@ -1702,31 +1703,25 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
             ax[n+3].set_title(titles_2D[n], fontsize=12)
             if t == 0:
                 cbar = plt.colorbar(img, cax=cax[n], orientation='horizontal')
-        if t == 0:
-            # Print tipping information
-            plt.text(0.99, 0.99, tip_string, fontsize=14, ha='right', va='top', transform=fig.transFigure)
-            plt.text(0.99, 0.95, recover_string, fontsize=14, ha='right', va='top', transform=fig.transFigure)
+        # Print tipping information
+        plt.text(0.99, 0.99, tip_string, fontsize=14, ha='right', va='top', transform=fig.transFigure)
+        plt.text(0.99, 0.95, recover_string, fontsize=14, ha='right', va='top', transform=fig.transFigure)
         # Print the year and global warming level
         year_string = str(massloss.coords['time_centered'][t_start+6].dt.year.item())
         temp_string = str(round(warming[t_start+6].item(),2))+deg_string+'C'        
-        if year_text is None:
-            year_text = plt.text(0.01, 0.99, year_string, fontsize=14, ha='left', va='top', transform=fig.transFigure)
-            temp_text = plt.text(0.01, 0.95, temp_string, fontsize=14, ha='left', va='top', transform=fig.transFigure)
-            return year_text, temp_text
-        else:
-            year_text.set_text(year_string)
-            temp_text.set_text(temp_string)
+        year_text = plt.text(0.01, 0.99, year_string, fontsize=14, ha='left', va='top', transform=fig.transFigure)
+        temp_text = plt.text(0.01, 0.95, temp_string, fontsize=14, ha='left', va='top', transform=fig.transFigure)
         
     # First frame
-    year_text, temp_text = plot_one_frame(0)
+    plot_one_frame(0)
 
     # Function to update figure with the given frame
     def animate(t):
-        plot_one_frame(t, year_text=year_text, temp_text=temp_text)
+        plot_one_frame(t)
 
     # Call this for each frame
-    anim = animation.FuncAnimation(fig, func=animate, frames=list(range(10))) #num_years)))
-    writer = animation.FFMpegWriter(bitrate=2000, fps=2)
+    anim = animation.FuncAnimation(fig, func=animate, frames=list(range(num_years)))
+    writer = animation.FFMpegWriter(bitrate=5000, fps=2)
     anim.save(out_dir+'/'+suite_string+'_'+region+'.mp4', writer=writer)
 
 
