@@ -1536,7 +1536,7 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
             file_list.append(f)
     file_list.sort()
     f = file_list[-1]
-    grid = xr.open_dataset(base_dir+'/'+suite_list[0]+'/'+f)
+    grid = xr.open_dataset(base_dir+'/cx209/'+f)
     # Choose bounds of map to show
     mask = region_mask(region, grid)[0]
     x, y = polar_stereo(grid['nav_lon'], grid['nav_lat'])
