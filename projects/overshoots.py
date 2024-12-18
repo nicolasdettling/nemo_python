@@ -1532,7 +1532,7 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
     # Use the file with the most retreated GL - end of ramp up
     file_list = []
     for f in os.listdir(base_dir+'/cx209'):
-        if f.startswith('nemo_'+suite_list[0]+'o_1m_') and f.endswith('_grid-T.nc'):
+        if f.startswith('nemo_cx209o_1m_') and f.endswith('_grid-T.nc'):
             file_list.append(f)
     file_list.sort()
     f = file_list[-1]
