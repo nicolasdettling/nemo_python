@@ -32,7 +32,7 @@ suites_by_scenario = {'piControl' : ['cs495'],
                       '1.5K_ramp_down': ['da697', 'dc052', 'dc248'],
                       '2K_stabilise': ['cy838','cz855','da266'],
                       '2K_ramp_down': ['cz944','di335','dc051', 'da800', 'dc565', 'df025', 'df027'],
-                      '2K_restabilise' : ['dc163'],
+                      '1.5K_restabilise' : ['dc163'],
                       '2.5K_stabilise' : ['cz374','cz859'],
                       '3K_stabilise' : ['cz375','db587','db597'],
                       '3K_ramp_down' : ['db223', 'dc032', 'dc249', 'df453', 'de620', 'df028', 'df023', 'df021', 'de621'],
@@ -1518,6 +1518,7 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
                 if temp_post.isel(time_centered=slice(t,None)).max() < tipping_threshold:
                     recover_string = 'Recovers in '+str(temp_post.coords['time_centered'][t].dt.year.item())+' ('+str(round(warming_post[t].item(),2))+deg_string+'C)'
                     recover_time = t
+                    break
         else:
             recover_string = 'Does not recover'
             recover_time = None                
@@ -1756,6 +1757,7 @@ def animate_all (out_dir='animations/'):
             region = f[f.index('_')+1:f.index('.nc')]
             print('Processing '+suite_string+' '+region)
             dashboard_animation(suite_string, region, out_dir=out_dir)
+            plt.close('all')
 
     
     
