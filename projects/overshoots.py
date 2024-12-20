@@ -1749,7 +1749,7 @@ def precompute_all_animations ():
 # Call dashboard_animation for every precomputed file.
 def animate_all (out_dir='animations/'):
 
-    for f in os.path.listdir(out_dir+'/precomputed/'):
+    for f in os.listdir(out_dir+'/precomputed/'):
         if f.endswith('.nc'):
             # Extract suite string and region name
             suite_string = f[:f.index('_')]
