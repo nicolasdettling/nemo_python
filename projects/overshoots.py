@@ -1745,6 +1745,18 @@ def precompute_all_animations ():
             sbatch_id = subprocess.check_output(command, shell=True, text=True)
             print(sbatch_id)
 
+
+# Call dashboard_animation for every precomputed file.
+def animate_all (out_dir='animations/'):
+
+    for f in os.path.listdir(out_dir+'/precomputed/'):
+        if f.endswith('.nc'):
+            # Extract suite string and region name
+            suite_string = f[:f.index('_')]
+            region = f[f.index('_')+1:f.index('.nc')]
+            print('Processing '+suite_string+' '+region)
+            dashboard_animation(suite_string, region, out_dir=out_dir)
+
     
     
 
