@@ -199,9 +199,9 @@ def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year,
         str_format = '%Y%m'
  
     if expt=='LE2':
-        file_list  = glob.glob(f'{base_dir}{expt}/{start_stub}{expt}-{ensemble_member}{domain_stub}{var_name}*')
+        file_list  = glob.glob(f'{base_dir}{expt}/raw/{start_stub}{expt}-{ensemble_member}{domain_stub}{var_name}*')
     elif expt=='piControl':
-        file_list  = glob.glob(f'{base_dir}{expt}/{start_stub}-{expt}.001{domain_stub}{var_name}*')    
+        file_list  = glob.glob(f'{base_dir}{expt}/raw/{start_stub}-{expt}.001{domain_stub}{var_name}*')    
 
     found_date = False
     for file in file_list:
@@ -216,9 +216,9 @@ def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year,
         raise Exception('File for requested year not found, double-check that it exists?')
 
     if expt=='LE2':
-        file_path = f'{base_dir}{expt}/{start_stub}{expt}-{ensemble_member}{domain_stub}{var_name}.{date_range}.nc'
+        file_path = f'{base_dir}{expt}/raw/{start_stub}{expt}-{ensemble_member}{domain_stub}{var_name}.{date_range}.nc'
     elif expt=='piControl':
-        file_path = f'{base_dir}{expt}/{start_stub}-{expt}.001{domain_stub}{var_name}.{date_range}.nc'
+        file_path = f'{base_dir}{expt}/raw/{start_stub}-{expt}.001{domain_stub}{var_name}.{date_range}.nc'
 
     return file_path
 
