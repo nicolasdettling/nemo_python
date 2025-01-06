@@ -243,7 +243,7 @@ def UBOT_to_U10_wind(UBOT, VBOT, U10):
 
 # Process atmospheric forcing from CESM2 scenarios (LE2, etc.) for a single variable and single ensemble member.
 # expt='LE2', var='PRECT', ens='1011.001' etc.
-def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, year_ens_start=1750,
+def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, year_ens_start=1750, shift_wind=False,
                        land_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/LE2/b.e21.BHISTsmbb.f09_g17.LE2-1011.001.cam.h0.LANDFRAC.185001-185912.nc'):
 
     if expt not in ['LE2', 'piControl']:
@@ -299,9 +299,10 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, 
                 data_UBOT = data_UBOT.isel(lev=-1) # bottom wind is the last entry (992 hPa)
                 data_VBOT = data_VBOT.isel(lev=-1)
             # Convert the wind to the corrected height
-            Ux, Uy = UBOT_to_U10_wind(data_UBOT, data_VBOT, data_U10)
-            data_UBOT = Ux.rename('U10x')
-            data_VBOT = Uy.rename('U10y')
+            if shift_wind:
+                Ux, Uy = UBOT_to_U10_wind(data_UBOT, data_VBOT, data_U10)
+                data_UBOT = Ux.rename('U10x')
+                data_VBOT = Uy.rename('U10y')
 
         if var=='wind':
             data_arrays = [data_UBOT, data_VBOT]
