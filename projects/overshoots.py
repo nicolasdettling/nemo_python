@@ -933,14 +933,12 @@ def tipping_stats (base_dir='./', fig_name=None):
         # Print some statistics about which ones tipped and recovered
         print('\n'+region+':')
         print(str(len(suites_tipped))+' trajectories tip, '+str(len(warming_at_tip))+' unique')
-        print('Global warming at time of tipping has mean '+str(np.mean(warming_at_tip))+'K, standard deviation '+str(np.std(warming_at_tip))+'K')
-        print('with correction: mean '+str(np.mean(warming_at_tip)+temp_correction[r])+'K')
+        print('Global warming at time of tipping has mean '+str(np.mean(warming_at_tip)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_tip))+'K')
         if len(suites_recovered) == 0:
             print('No tipped trajectories recover')
         else:
             print(str(len(suites_recovered))+' tipped trajectories recover ('+str(len(suites_recovered)/len(suites_tipped)*100)+'%), '+str(len(warming_at_recovery))+' unique')
-            print('Global warming at time of recovery has mean '+str(np.mean(warming_at_recovery))+'K, standard deviation '+str(np.std(warming_at_recovery))+'K')
-            print('with correction: mean '+str(np.mean(warming_at_recovery)+temp_correction[r])+'K')
+            print('Global warming at time of recovery has mean '+str(np.mean(warming_at_recovery)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery))+'K')
         # Save results for plotting
         all_temp_tip.append(warming_at_tip)
         all_temp_recover.append(warming_at_recovery)
