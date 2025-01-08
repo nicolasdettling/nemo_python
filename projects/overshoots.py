@@ -998,7 +998,7 @@ def tipping_stats (base_dir='./', fig_name=None):
         ax.set_yticks(np.arange(1,4))
         ax.set_yticklabels(['peak warming', 'at time of recovery', 'at time of tipping'])
         ax.grid(linestyle='dotted')       
-    ax.set_xlabel('Global warming level ('+deg_string+'C), corrected', fontsize=12)
+    ax.set_xlabel('global warming level ('+deg_string+'C), corrected', fontsize=10)
     # Manual legend
     colours = ['Crimson', 'DodgerBlue']
     labels = ['tips', 'does not tip']
