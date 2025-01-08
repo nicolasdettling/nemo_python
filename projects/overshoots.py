@@ -22,8 +22,6 @@ from ..plot_utils import set_colours, latlon_axes
 # Global dictionaries of suites - update these as more suites become available!
 
 # Dictionary of which suites correspond to which scenario
-# TODO: choose whether to differentiate between 4 Gt/C and 8 Gt/C ramp-down, and whether to include 8 Gt/C at all
-# TODO: cs495 is too many files to pull at once; split this command up into multiples somehow (only matters for final calculation of PI baseline - or do I only use the static ice one?)
 suites_by_scenario = {'piControl' : ['cs495'],
                       'piControl_static_ice' : ['cs568'],
                       'ramp_up' : ['cx209', 'cw988', 'cw989', 'cw990'],
@@ -864,7 +862,7 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
 
 
 # Analyse the cavity temperature beneath Ross and FRIS to see which scenarios tip and/or recover, under which global warming levels. Also plot this.
-def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
+def tipping_thresholds (base_dir='./', fig_name=None):
 
     from matplotlib.lines import Line2D
 
@@ -890,7 +888,8 @@ def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
     # Loop over regions
     all_temp_tip = []
     all_temp_recover = []
-    threshold_range = []
+    all_tips = []
+    threshold_bounds = []
     for r in range(len(regions)):
         region = regions[r]
         
@@ -924,96 +923,90 @@ def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
                         warming_at_recovery.append(warming.isel(time_centered=t))
                         suites_recovered.append(suite_strings[n])
                         break
+
+        # Now throw out duplicates, eg if tipping happened before a suite branched into multiple trajectories, should only count it once for the statistics.
+        # Do this by only considering unique values of warming_at_tip and warming_at_recovery.
+        # This assumes it's impossible for two distinct suites to tip at exactly the same global warming level, to machine precision. I think I'm happy with this!
+        warming_at_tip = np.unique(warming_at_tip)
+        warming_at_recovery = np.unique(warming_at_recovery)
                 
         # Print some statistics about which ones tipped and recovered
         print('\n'+region+':')
-        print(str(len(suites_tipped))+' trajectories tip')
+        print(str(len(suites_tipped))+' trajectories tip, '+str(len(warming_at_tip))+' unique')
         print('Global warming at time of tipping has mean '+str(np.mean(warming_at_tip))+'K, standard deviation '+str(np.std(warming_at_tip))+'K')
+        print('with correction: mean '+str(np.mean(warming_at_tip)+temp_correction[r])+'K')
         if len(suites_recovered) == 0:
             print('No tipped trajectories recover')
         else:
-            print(str(len(suites_recovered))+' tipped trajectories recover ('+str(len(suites_recovered)/len(suites_tipped)*100)+'%)')
+            print(str(len(suites_recovered))+' tipped trajectories recover ('+str(len(suites_recovered)/len(suites_tipped)*100)+'%), '+str(len(warming_at_recovery))+' unique')
             print('Global warming at time of recovery has mean '+str(np.mean(warming_at_recovery))+'K, standard deviation '+str(np.std(warming_at_recovery))+'K')
+            print('with correction: mean '+str(np.mean(warming_at_recovery)+temp_correction[r])+'K')
         # Save results for plotting
         all_temp_tip.append(warming_at_tip)
         all_temp_recover.append(warming_at_recovery)
-        
-        # Risk of tipping eventually if max GW is within certain range
-        gw_targets = np.arange(1.5, 6, 0.5)
-        threshold_min = None
-        threshold_max = None
-        for n in range(len(gw_targets)):
-            warming_exceeds = gw_targets[n]
-            if n==len(gw_targets)-1:
-                warming_below = 1000
-            else:
-                warming_below = gw_targets[n+1]
-            # Find all trajectories with max warming in this range, and keep track of which ones do and don't tip
-            num_tip = 0
-            num_total = 0
-            for n in range(num_trajectories):
-                if warming_ts[n].max() > warming_exceeds and warming_ts[n].max() < warming_below:
-                    num_total += 1
-                    if suite_strings[n] in suites_tipped:
-                        num_tip += 1
-            if num_total > 0:
-                print('Maximum warming between '+str(warming_exceeds)+'-'+str(warming_below)+'K causes '+str(num_tip)+' of '+str(num_total)+' trajectories to eventually tip ('+str(num_tip/num_total*100)+'%)')
-                if num_tip > 0 and threshold_min is None:
-                    threshold_min = warming_exceeds
-                if num_tip == num_total and threshold_max is None:
-                    threshold_max = warming_below
-        threshold_range.append([threshold_min, threshold_max])
 
-    # Inner function to colour code markers based on scenario type at given time (saved as coordinate in DataArray)
-    def assign_colours (data):
-        colours = []
-        for x in data:
-            if x.scenario_type == 1:
-                colours.append('Crimson')
-            elif x.scenario_type == 0:
-                colours.append('Grey')
-            elif x.scenario_type == -1:
-                colours.append('DodgerBlue')
-        return colours
+        # Find maximum warming in each trajectory, and whether or not it tips
+        if n == 0:
+            max_warming = np.array([warming_ts[n].max() for n in range(num_trajectories)])
+        tips = np.array([suite_strings[n] in suites_tipped for n in range(num_trajectories)])
+        all_tips.append(tips)
+
+        # Find bounds on threshold
+        # Find coolest instance of tipping
+        first_tip = np.amin(max_warming[tips])
+        # Step down to one simulation cooler than that: lower bound on threshold
+        threshold_min = np.amax(max_warming[max_warming < first_tip]) + temp_correction[r]
+        # Find warmest instance of non-tipping
+        last_notip = np.amax(max_warming[~tips])
+        # Step up to one simulation warmer than that: upper bound on threshold
+        threshold_max = np.amin(max_warming[max_warming > last_notip]) + temp_correction[r]
+        threshold_bounds.append([threshold_min, threshold_max])
 
     # Plot
     fig = plt.figure(figsize=(6,5))
     gs = plt.GridSpec(2,1)
     gs.update(left=0.25, right=0.95, bottom=0.1, top=0.92, hspace=0.4)
-    for n in range(len(regions)):
-        ax = plt.subplot(gs[n,0])
-        # First line: warming at time of tipping
-        colours = assign_colours(all_temp_tip[n])
-        for temp, colour in zip(all_temp_tip[n], colours):
-            ax.plot(temp, 2, 'o', markersize=5, color=colour)
-        # Second line: warming at time of recovery
-        colours = assign_colours(all_temp_recover[n])
-        for temp, colour in zip(all_temp_recover[n], colours):
-            ax.plot(temp, 1, 'o', markersize=5, color=colour)
-        ax.set_title(region_names[regions[n]], fontsize=14)
-        ax.set_xlim([0, 6])
-        ax.set_ylim([0, 3])
-        ax.set_yticks([1, 2])
-        ax.set_yticklabels(['at time of recovery', 'at time of tipping'])
-        ax.grid(linestyle='dotted')
-        # Shade range of likely threshold to tip eventually
-        ax.axvspan(threshold_range[n][0], threshold_range[n][1], alpha=0.1, color='Crimson')
-        if n==0:
-            plt.text(np.mean(threshold_range[n]), 0.1, 'tipping threshold', ha='center', va='bottom', fontsize=9)
-        # Indicate temperature correction due to fresh bias in each region
-        x_start = bias_print_x[n]
-        x_end = bias_print_x[n] + temp_correction[n]
-        ax.plot([x_start, x_end], [bias_print_y]*2, color='black')
-        ax.plot([x_start]*2, [bias_print_y-0.05, bias_print_y+0.05], color='black')
-        ax.plot([x_end]*2, [bias_print_y-0.05, bias_print_y+0.05], color='black')
-        plt.text(0.5*(x_start+x_end), bias_print_y+0.4, '+'+str(np.round(temp_correction[n],1))+deg_string+'C\ncorrection', fontsize=10, color='black', ha='center', va='center')            
-    ax.set_xlabel('Global warming level relative to preindustrial ('+deg_string+'C)', fontsize=12)
+    for r in range(len(regions)):
+        ax = plt.subplot(gs[r,0])
+        # Violin plots: warming level at time of tipping (red), recovery (blue)
+        violin_data = [np.array(all_temp_tip[r])+temp_correction[r]]
+        y_pos = [3]
+        colours = ['Crimson']
+        # Check if there are instances of recovery to show - can streamline this once FRIS recovery starts
+        if len(all_temp_recover[r]) > 0:
+            violin_data.append(np.array(all_temp_recover[r])+temp_correction[r])
+            y_pos.append(2)
+            colours.append('MediumPurple')
+        violins = ax.violinplot(violin_data, y_pos, vert=False, showmeans=True)
+        # Set colours of violin bodies and lines
+        for pc, colour in zip(violins['bodies'], colours):
+            pc.set_facecolor(colour)
+        for bar in ['cmeans', 'cmins', 'cmaxes', 'cbars']:
+            violins[bar].set_colors(colours)
+        # Bottom row: peak warming in each trajectory, plotted in red (tips) or grey (doesn't tip)
+        # Start with the grey, to make sure the red is visible where they overlap
+        ax.plot(max_warming[~all_tips[r]]+temp_correction[r], np.ones(np.count_nonzero(~all_tips[r])), 'o', markersize=4, color='DodgerBlue')
+        ax.plot(max_warming[all_tips[r]]+temp_correction[r], np.ones(np.count_nonzero(all_tips[r])), 'o', markersize=4, color='Crimson')
+        # Plot bounds on threshold: vertical dashed lines with labels
+        ax.plot(threshold_bounds[r][0]*np.ones(2), [0, 0.9], color='black', linestyle='dashed', linewidth=1)
+        plt.text(threshold_bounds[r][0]-0.05, 0.5, 'never tips', ha='right', va='center', fontsize=9)
+        plt.arrow(threshold_bounds[r][0]-0.05, 0.2, -0.3, 0, head_width=0.1, head_length=0.08)
+        ax.plot(threshold_bounds[r][1]*np.ones(2), [0, 0.9], color='black', linestyle='dashed', linewidth=1)
+        plt.text(threshold_bounds[r][1]+0.05, 0.5, 'always tips', ha='left', va='center', fontsize=9)
+        plt.arrow(threshold_bounds[r][1]+0.05, 0.2, 0.3, 0, head_width=0.1, head_length=0.08)
+        ax.set_title(region_names[regions[r]], fontsize=14)
+        ax.set_xlim([2, 7])
+        ax.set_ylim([0, 4])
+        ax.set_yticks(np.arange(1,4))
+        ax.set_yticklabels(['peak warming', 'at time of recovery', 'at time of tipping'])
+        ax.grid(linestyle='dotted')       
+    ax.set_xlabel('Global warming level ('+deg_string+'C), corrected', fontsize=12)
     # Manual legend
-    colours = ['Crimson', 'Grey', 'DodgerBlue']
-    labels = ['ramp up', 'stabilise', 'ramp down']
+    colours = ['Crimson', 'DodgerBlue']
+    labels = ['tips', 'does not tip']
     handles = []
     for m in range(len(colours)):
-        handles.append(Line2D([0], [0], marker='o', markersize=5, color=colours[m], label=labels[m], linestyle=''))
+        handles.append(Line2D([0], [0], marker='o', markersize=4, color=colours[m], label=labels[m], linestyle=''))
     plt.legend(handles=handles, loc='center left', bbox_to_anchor=(-0.35, 1.2), fontsize=9)
     finished_plot(fig, fig_name=fig_name, dpi=300)
     
