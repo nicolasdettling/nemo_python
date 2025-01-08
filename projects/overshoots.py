@@ -862,7 +862,7 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
 
 
 # Analyse the cavity temperature beneath Ross and FRIS to see which scenarios tip and/or recover, under which global warming levels. Also plot this.
-def tipping_thresholds (base_dir='./', fig_name=None):
+def tipping_stats (base_dir='./', fig_name=None):
 
     from matplotlib.lines import Line2D
 
@@ -946,7 +946,7 @@ def tipping_thresholds (base_dir='./', fig_name=None):
         all_temp_recover.append(warming_at_recovery)
 
         # Find maximum warming in each trajectory, and whether or not it tips
-        if n == 0:
+        if r == 0:
             max_warming = np.array([warming_ts[n].max() for n in range(num_trajectories)])
         tips = np.array([suite_strings[n] in suites_tipped for n in range(num_trajectories)])
         all_tips.append(tips)
