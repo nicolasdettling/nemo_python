@@ -338,13 +338,16 @@ def create_animation (filenames, out_file='test.mp4'):
 # cmap       : (optional) colormap
 # nemo_mesh  : (optional) string of location of NEMO mesh mask file for grid
 # Output: jpg figures in animations/ directory within the run directory and an animation within an animations/ sub-directory
-def animate_2D_circumpolar(run_folder, var, stub, vlim=(0,100), cmap='viridis',
+def animate_2D_circumpolar(run_folder, var, stub, vlim=(0,100), cmap='viridis', out_folder='',
                            nemo_mesh='/gws/nopw/j04/terrafirma/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
     import glob
 
+    if not out_folder:
+        out_folder = f'{run_folder}animations/'
+
     # Load necessary NetCDF files:
     nemo_mesh_ds  = xr.open_dataset(nemo_mesh).isel(time_counter=0)
-    file_list     = glob.glob(f'{run_folder}files/*{stub}*.nc')
+    file_list     = glob.glob(f'{run_folder}/*{stub}*.nc')
     animate_ds    = xr.open_mfdataset(file_list)
 
     # Create figure for each timestep:
@@ -355,12 +358,12 @@ def animate_2D_circumpolar(run_folder, var, stub, vlim=(0,100), cmap='viridis',
                          title=f'{animate_ds[var].long_name} \n {time.dt.year.values}-{time.dt.month.values:02}-{time.dt.day.values:02}')
         fig.tight_layout()
         finished_plot(fig, print_out=False,
-                      fig_name=f'{run_folder}animations/frames/{var}-y{time.dt.year.values}m{time.dt.month.values:02}d{time.dt.day.values:02}.jpg')
+                      fig_name=f'{out_folder}frames/{var}-y{time.dt.year.values}m{time.dt.month.values:02}d{time.dt.day.values:02}.jpg')
         plt.close()
     
     # Create animation from frames:
-    filenames =np.sort(glob.glob(f'{run_folder}animations/frames/{var}-y????m??d??.jpg'))
-    create_animation(filenames, out_file=f'{run_folder}animations/animation_{var}.mp4')
+    filenames =np.sort(glob.glob(f'{out_folder}frames/{var}-y????m??d??.jpg'))
+    create_animation(filenames, out_file=f'{out_folder}animation_{var}.mp4')
 
     return
     
