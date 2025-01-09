@@ -443,7 +443,7 @@ def cesm2_ensemble_time_mean_forcing(expt, variable, year_start=1979, year_end=2
             year_mean = xr.concat([year_mean, ens_mean], dim='year')
             
     # and then calculate time-mean of all ensemble means:
-    time_mean = year_mean.mean(dim='year')
+    time_mean = year_mean.copy().mean(dim='year')
 
     # mask areas that are land:
     cesm2_mask = xr.open_dataset(land_mask).LANDFRAC
