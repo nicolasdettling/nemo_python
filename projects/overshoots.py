@@ -22,8 +22,6 @@ from ..plot_utils import set_colours, latlon_axes
 # Global dictionaries of suites - update these as more suites become available!
 
 # Dictionary of which suites correspond to which scenario
-# TODO: choose whether to differentiate between 4 Gt/C and 8 Gt/C ramp-down, and whether to include 8 Gt/C at all
-# TODO: cs495 is too many files to pull at once; split this command up into multiples somehow (only matters for final calculation of PI baseline - or do I only use the static ice one?)
 suites_by_scenario = {'piControl' : ['cs495'],
                       'piControl_static_ice' : ['cs568'],
                       'ramp_up' : ['cx209', 'cw988', 'cw989', 'cw990'],
@@ -332,9 +330,10 @@ def align_timeseries (data1, data2):
     return data1, data2
     
 
-# Plot the timeseries of one or more experiments/ensembles (expts can be a string, a list of strings, or a list of lists of string) and one variable against global warming level (relative to preindustrial mean in the given PI suite).
+# Plot the timeseries of one or more experiments/ensembles (expts can be a string, a list of strings, or a list of lists of string) and one variable against global warming level (relative to preindustrial mean in the given PI suite, unless offsets is not None).
 # If integrate=True, plot as a function of integrated global warming level (i.e. degree-years above preindustrial).
-def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None, integrate=False):
+# Can also set offsets as a list of the same shape as expts, with different global warming baselines for each - this is still on top of PI mean, so eg pass 3 for 3K above PI.
+def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None, integrate=False, offsets=None):
 
     new_ax = ax is None
 
@@ -353,23 +352,35 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
         ds_pi = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
         baseline_temp = ds_pi['global_mean_sat'].mean()
         ds_pi.close()
+
+    if offsets is None:
+        # Set up dummy list of 0s, same shape as expts
+        offsets = []
+        for expt in expts:
+            if isinstance(expt, str):
+                offsets.append([0])
+            else:
+                offsets.append([0]*len(expt))
     
     gw_levels = []
     datas = []
     labels_plot = []
     colours_plot = []
-    for expt, label, colour in zip(expts, labels, colours):
+    for expt, label, colour, expt_offsets in zip(expts, labels, colours, offsets):
         if isinstance(expt, str):
             # Generalise to ensemble of 1
             expt = [expt]
         num_ens = len(expt)
-        for suite in expt:
+        for suite, offset in zip(expt, expt_offsets):
+            if np.isnan(offset):
+                # Flag to skip this suite
+                continue
             if integrate:
                 gw_level = integrated_gw(suite, pi_suite=pi_suite, timeseries_file_um=timeseries_file_um, base_dir=base_dir)
             else:
                 # Read global mean SAT in this suite and convert to GW level
                 ds_um = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
-                gw_level = ds_um['global_mean_sat'] - baseline_temp
+                gw_level = ds_um['global_mean_sat'] - baseline_temp - offset
                 ds_um.close()
             # Read the variable
             ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
@@ -863,19 +874,21 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
     return timeseries, suite_strings
 
 
-# Analyse the cavity temperature beneath Ross and FRIS to see which scenarios tip and/or recover, under which global warming levels. Also plot this.
-def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
+# Helper function to identify trajectories which have tipped and/or recovered, and at what GW level, for the given region.
+# Returns:
+# (1) a list of tipped trajectories (each a suite string like 'cx209-cz375')
+# (2) a list of GW levels at the tipping points
+# (3) a list of recovered trajectories
+# (4) a list of GW levels at the recovery points
+# (5) a list of peak warming in each trajectory
+# (6) a list of booleans saying whether or not each trajectory tips
+def find_tipped_trajectories (region, base_dir='./'):
 
-    from matplotlib.lines import Line2D
-
-    regions = ['ross', 'filchner_ronne']
     pi_suite = 'cs495'
-    timeseries_file_um = 'timeseries_um.nc'
+    tipping_threshold = -1.9
     smooth = 5*months_per_year
-    tipping_threshold = -1.9  # If cavity mean temp is warmer than surface freezing point, it's tipped
-    temp_correction = [1.00753541, 0.80698273]  # Precomputed by warming_implied_by_salinity_bias() - update if needed before publication!
-    bias_print_x = [4.5, 2.5]
-    bias_print_y = 1.5
+    timeseries_file = 'timeseries.nc'
+    timeseries_file_um = 'timeseries_um.nc'
 
     # Assemble all possible trajectories of global mean temperature anomalies relative to preindustrial
     ds = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
@@ -887,137 +900,138 @@ def cold_cavity_hysteresis_stats (base_dir='./', fig_name=None):
     for n in range(num_trajectories):
         warming_ts[n] = moving_average(warming_ts[n], smooth)
 
+    # Assemble all possible trajectories of cavity mean temperature
+    cavity_temp_ts = all_timeseries_trajectories(region+'_cavity_temp', base_dir=base_dir, static_ice=False)[0]
+    # Now loop over them and find the ones that have tipped and/or recovered
+    suites_tipped = []
+    warming_at_tip = []
+    suites_recovered = []        
+    warming_at_recovery = []
+    for n in range(num_trajectories):
+        # Smooth and trim/align with warming timeseries
+        cavity_temp_ts[n] = moving_average(cavity_temp_ts[n], smooth)
+        cavity_temp, warming = align_timeseries(cavity_temp_ts[n], warming_ts[n])
+        if cavity_temp.max() > tipping_threshold:
+            # Find the time index of first tipping
+            tip_time = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
+            # Find the global warming level at that time index
+            tip_warming = warming.isel(time_centered=tip_time)
+            if np.isnan(tip_warming):
+                break
+            # Save the global warming anomalies relative to tipping time
+            warming_at_tip.append(tip_warming)
+            suites_tipped.append(suite_strings[n])
+            # Now consider the time after tipping
+            cavity_temp = cavity_temp.isel(time_centered=slice(tip_time,None))
+            warming = warming.isel(time_centered=slice(tip_time,None))
+            for t in range(cavity_temp.sizes['time_centered']):
+                # If the temperature has gone back down below the threshold and stays that way for the rest of the simulation, it's recovered
+                if cavity_temp.isel(time_centered=slice(t,None)).max() < tipping_threshold:
+                    warming_at_recovery.append(warming.isel(time_centered=t))
+                    suites_recovered.append(suite_strings[n])
+                    break
+    # Find maximum warming in each trajectory, and whether or not it tips
+    max_warming = np.array([warming_ts[n].max() for n in range(num_trajectories)])
+    tips = np.array([suite_strings[n] in suites_tipped for n in range(num_trajectories)])
+    return suites_tipped, warming_at_tip, suites_recovered, warming_at_recovery, max_warming, tips
+
+
+# Analyse the cavity temperature beneath Ross and FRIS to see which scenarios tip and/or recover, under which global warming levels. Also plot this.
+def tipping_stats (base_dir='./', fig_name=None):
+
+    from matplotlib.lines import Line2D
+
+    regions = ['ross', 'filchner_ronne']
+    temp_correction = [1.00753541, 0.80698273]  # Precomputed by warming_implied_by_salinity_bias() - update if needed before publication!
+    bias_print_x = [4.5, 2.5]
+    bias_print_y = 1.5
+
     # Loop over regions
     all_temp_tip = []
     all_temp_recover = []
-    threshold_range = []
+    all_tips = []
+    threshold_bounds = []
     for r in range(len(regions)):
-        region = regions[r]
-        
-        # Assemble all possible trajectories of cavity mean temperature
-        cavity_temp_ts = all_timeseries_trajectories(region+'_cavity_temp', base_dir=base_dir, static_ice=False)[0]
-        # Now loop over them and find the ones that have tipped and/or recovered
-        warming_at_tip = []
-        suites_tipped = []
-        warming_at_recovery = []
-        suites_recovered = []
-        for n in range(num_trajectories):
-            # Smooth and trim/align with warming timeseries
-            cavity_temp_ts[n] = moving_average(cavity_temp_ts[n], smooth)
-            cavity_temp, warming = align_timeseries(cavity_temp_ts[n], warming_ts[n])
-            if cavity_temp.max() > tipping_threshold:
-                # Find the time index of first tipping
-                tip_time = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
-                # Find the global warming level at that time index
-                tip_warming = warming.isel(time_centered=tip_time)
-                if np.isnan(tip_warming):
-                    break
-                # Save the global warming anomalies relative to tipping time
-                warming_at_tip.append(tip_warming)
-                suites_tipped.append(suite_strings[n])
-                # Now consider the time after tipping
-                cavity_temp = cavity_temp.isel(time_centered=slice(tip_time,None))
-                warming = warming.isel(time_centered=slice(tip_time,None))
-                for t in range(cavity_temp.sizes['time_centered']):
-                    # If the temperature has gone back down below the threshold and stays that way for the rest of the simulation, it's recovered
-                    if cavity_temp.isel(time_centered=slice(t,None)).max() < tipping_threshold:
-                        warming_at_recovery.append(warming.isel(time_centered=t))
-                        suites_recovered.append(suite_strings[n])
-                        break
+        suites_tipped, warming_at_tip, suites_recovered, warming_at_recovery, max_warming, tips = find_tipped_trajectories(regions[r])
+        # Now throw out duplicates, eg if tipping happened before a suite branched into multiple trajectories, should only count it once for the statistics.
+        # Do this by only considering unique values of warming_at_tip and warming_at_recovery.
+        # This assumes it's impossible for two distinct suites to tip at exactly the same global warming level, to machine precision. I think I'm happy with this!
+        warming_at_tip = np.unique(warming_at_tip)
+        warming_at_recovery = np.unique(warming_at_recovery)
                 
         # Print some statistics about which ones tipped and recovered
-        print('\n'+region+':')
-        print(str(len(suites_tipped))+' trajectories tip')
-        print('Global warming at time of tipping has mean '+str(np.mean(warming_at_tip))+'K, standard deviation '+str(np.std(warming_at_tip))+'K')
+        print('\n'+regions[r]+':')
+        print(str(len(suites_tipped))+' trajectories tip, '+str(len(warming_at_tip))+' unique')
+        print('Global warming at time of tipping has mean '+str(np.mean(warming_at_tip)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_tip))+'K')
         if len(suites_recovered) == 0:
             print('No tipped trajectories recover')
         else:
-            print(str(len(suites_recovered))+' tipped trajectories recover ('+str(len(suites_recovered)/len(suites_tipped)*100)+'%)')
-            print('Global warming at time of recovery has mean '+str(np.mean(warming_at_recovery))+'K, standard deviation '+str(np.std(warming_at_recovery))+'K')
+            print(str(len(suites_recovered))+' tipped trajectories recover ('+str(len(suites_recovered)/len(suites_tipped)*100)+'%), '+str(len(warming_at_recovery))+' unique')
+            print('Global warming at time of recovery has mean '+str(np.mean(warming_at_recovery)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery))+'K')
         # Save results for plotting
         all_temp_tip.append(warming_at_tip)
         all_temp_recover.append(warming_at_recovery)
-        
-        # Risk of tipping eventually if max GW is within certain range
-        gw_targets = np.arange(1.5, 6, 0.5)
-        threshold_min = None
-        threshold_max = None
-        for n in range(len(gw_targets)):
-            warming_exceeds = gw_targets[n]
-            if n==len(gw_targets)-1:
-                warming_below = 1000
-            else:
-                warming_below = gw_targets[n+1]
-            # Find all trajectories with max warming in this range, and keep track of which ones do and don't tip
-            num_tip = 0
-            num_total = 0
-            for n in range(num_trajectories):
-                if warming_ts[n].max() > warming_exceeds and warming_ts[n].max() < warming_below:
-                    num_total += 1
-                    if suite_strings[n] in suites_tipped:
-                        num_tip += 1
-            if num_total > 0:
-                print('Maximum warming between '+str(warming_exceeds)+'-'+str(warming_below)+'K causes '+str(num_tip)+' of '+str(num_total)+' trajectories to eventually tip ('+str(num_tip/num_total*100)+'%)')
-                if num_tip > 0 and threshold_min is None:
-                    threshold_min = warming_exceeds
-                if num_tip == num_total and threshold_max is None:
-                    threshold_max = warming_below
-        threshold_range.append([threshold_min, threshold_max])
+        all_tips.append(tips)
 
-    # Inner function to colour code markers based on scenario type at given time (saved as coordinate in DataArray)
-    def assign_colours (data):
-        colours = []
-        for x in data:
-            if x.scenario_type == 1:
-                colours.append('Crimson')
-            elif x.scenario_type == 0:
-                colours.append('Grey')
-            elif x.scenario_type == -1:
-                colours.append('DodgerBlue')
-        return colours
+        # Find bounds on threshold
+        # Find coolest instance of tipping
+        first_tip = np.amin(max_warming[tips])
+        # Step down to one simulation cooler than that: lower bound on threshold
+        threshold_min = np.amax(max_warming[max_warming < first_tip]) + temp_correction[r]
+        # Find warmest instance of non-tipping
+        last_notip = np.amax(max_warming[~tips])
+        # Step up to one simulation warmer than that: upper bound on threshold
+        threshold_max = np.amin(max_warming[max_warming > last_notip]) + temp_correction[r]
+        threshold_bounds.append([threshold_min, threshold_max])
 
     # Plot
     fig = plt.figure(figsize=(6,5))
     gs = plt.GridSpec(2,1)
     gs.update(left=0.25, right=0.95, bottom=0.1, top=0.92, hspace=0.4)
-    for n in range(len(regions)):
-        ax = plt.subplot(gs[n,0])
-        # First line: warming at time of tipping
-        colours = assign_colours(all_temp_tip[n])
-        for temp, colour in zip(all_temp_tip[n], colours):
-            ax.plot(temp, 2, 'o', markersize=5, color=colour)
-        # Second line: warming at time of recovery
-        colours = assign_colours(all_temp_recover[n])
-        for temp, colour in zip(all_temp_recover[n], colours):
-            ax.plot(temp, 1, 'o', markersize=5, color=colour)
-        ax.set_title(region_names[regions[n]], fontsize=14)
-        ax.set_xlim([0, 6])
-        ax.set_ylim([0, 3])
-        ax.set_yticks([1, 2])
-        ax.set_yticklabels(['at time of recovery', 'at time of tipping'])
-        ax.grid(linestyle='dotted')
-        # Shade range of likely threshold to tip eventually
-        ax.axvspan(threshold_range[n][0], threshold_range[n][1], alpha=0.1, color='Crimson')
-        if n==0:
-            plt.text(np.mean(threshold_range[n]), 0.1, 'tipping threshold', ha='center', va='bottom', fontsize=9)
-        # Indicate temperature correction due to fresh bias in each region
-        x_start = bias_print_x[n]
-        x_end = bias_print_x[n] + temp_correction[n]
-        ax.plot([x_start, x_end], [bias_print_y]*2, color='black')
-        ax.plot([x_start]*2, [bias_print_y-0.05, bias_print_y+0.05], color='black')
-        ax.plot([x_end]*2, [bias_print_y-0.05, bias_print_y+0.05], color='black')
-        plt.text(0.5*(x_start+x_end), bias_print_y+0.4, '+'+str(np.round(temp_correction[n],1))+deg_string+'C\ncorrection', fontsize=10, color='black', ha='center', va='center')            
-    ax.set_xlabel('Global warming level relative to preindustrial ('+deg_string+'C)', fontsize=12)
+    for r in range(len(regions)):
+        ax = plt.subplot(gs[r,0])
+        # Violin plots: warming level at time of tipping (red), recovery (blue)
+        violin_data = [np.array(all_temp_tip[r])+temp_correction[r]]
+        y_pos = [3]
+        colours = ['Crimson']
+        # Check if there are instances of recovery to show - can streamline this once FRIS recovery starts
+        if len(all_temp_recover[r]) > 0:
+            violin_data.append(np.array(all_temp_recover[r])+temp_correction[r])
+            y_pos.append(2)
+            colours.append('MediumPurple')
+        violins = ax.violinplot(violin_data, y_pos, vert=False, showmeans=True)
+        # Set colours of violin bodies and lines
+        for pc, colour in zip(violins['bodies'], colours):
+            pc.set_facecolor(colour)
+        for bar in ['cmeans', 'cmins', 'cmaxes', 'cbars']:
+            violins[bar].set_colors(colours)
+        # Bottom row: peak warming in each trajectory, plotted in red (tips) or grey (doesn't tip)
+        # Start with the grey, to make sure the red is visible where they overlap
+        ax.plot(max_warming[~all_tips[r]]+temp_correction[r], np.ones(np.count_nonzero(~all_tips[r])), 'o', markersize=4, color='DodgerBlue')
+        ax.plot(max_warming[all_tips[r]]+temp_correction[r], np.ones(np.count_nonzero(all_tips[r])), 'o', markersize=4, color='Crimson')
+        # Plot bounds on threshold: vertical dashed lines with labels
+        ax.plot(threshold_bounds[r][0]*np.ones(2), [0, 0.9], color='black', linestyle='dashed', linewidth=1)
+        plt.text(threshold_bounds[r][0]-0.05, 0.5, 'never tips', ha='right', va='center', fontsize=9)
+        plt.arrow(threshold_bounds[r][0]-0.05, 0.2, -0.3, 0, head_width=0.1, head_length=0.08)
+        ax.plot(threshold_bounds[r][1]*np.ones(2), [0, 0.9], color='black', linestyle='dashed', linewidth=1)
+        plt.text(threshold_bounds[r][1]+0.05, 0.5, 'always tips', ha='left', va='center', fontsize=9)
+        plt.arrow(threshold_bounds[r][1]+0.05, 0.2, 0.3, 0, head_width=0.1, head_length=0.08)
+        ax.set_title(region_names[regions[r]], fontsize=14)
+        ax.set_xlim([2, 7])
+        ax.set_ylim([0, 4])
+        ax.set_yticks(np.arange(1,4))
+        ax.set_yticklabels(['peak warming', 'at time of recovery', 'at time of tipping'])
+        ax.grid(linestyle='dotted')       
+    ax.set_xlabel('global warming level ('+deg_string+'C), corrected', fontsize=10)
     # Manual legend
-    colours = ['Crimson', 'Grey', 'DodgerBlue']
-    labels = ['ramp up', 'stabilise', 'ramp down']
+    colours = ['Crimson', 'DodgerBlue']
+    labels = ['tips', 'does not tip']
     handles = []
     for m in range(len(colours)):
-        handles.append(Line2D([0], [0], marker='o', markersize=5, color=colours[m], label=labels[m], linestyle=''))
+        handles.append(Line2D([0], [0], marker='o', markersize=4, color=colours[m], label=labels[m], linestyle=''))
     plt.legend(handles=handles, loc='center left', bbox_to_anchor=(-0.35, 1.2), fontsize=9)
     finished_plot(fig, fig_name=fig_name, dpi=300)
     
-
 
 # Plot: (1) bottom temperature on continental shelf and in cavities, and (2) ice shelf basal mass loss as a function of global warming level, for 2 different regions, showing ramp-up, stabilise, and ramp-down in different colours
 def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
@@ -1025,7 +1039,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
     pi_suite = 'cs495'
-    regions = ['ross', 'filchner_ronne'] #, 'west_antarctica', 'east_antarctica']
+    regions = ['ross', 'filchner_ronne']
     title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ', r'$\bf{c}$. ', r'$\bf{d}$. ']
     var_names = ['bwtemp', 'massloss']
     var_titles = ['Bottom temperature on continental shelf and in ice shelf cavities', 'Basal mass loss beneath ice shelves']
@@ -1037,20 +1051,48 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks
     ds = xr.open_dataset(sample_file).squeeze()
 
+    # Identify global temperature at the time of tipping (NaN flag if does not tip)
+    trajectories = all_suite_trajectories()
+    all_offsets = []
+    for region in regions:
+        offsets = []
+        suites_tipped, warming_at_tip = find_tipped_trajectories(region)[:2]
+        # Loop over simulation type (eg ramp-up, stabilise)
+        for sim_type in sim_dirs:
+            offsets_type = []
+            # Loop over suites of this type
+            for suite in sim_type:
+                # Find the trajectory ending in this suite
+                suite_string = None
+                for traj in trajectories:
+                    if traj[-1] == suite:
+                        suite_string = '-'.join(traj)
+                        break
+                if suite_string is None:
+                    raise Exception('Trajectory not found')
+                # Now see if it tips
+                if suite_string in suites_tipped:
+                    n = suites_tipped.index(suite_string)
+                    offsets_type.append(warming_at_tip[n])
+                else:
+                    offsets_type.append(np.nan)
+            offsets.append(offsets_type)
+        all_offsets.append(offsets)  # So this is a list of lists of lists (regions, simulation type, suite). I am sorry.         
+
     fig = plt.figure(figsize=(10,7.5))
     gs = plt.GridSpec(2,2)
-    gs.update(left=0.07, right=0.98, bottom=0.15, top=0.9, hspace=0.4, wspace=0.16)
+    gs.update(left=0.07, right=0.98, bottom=0.13, top=0.9, hspace=0.4, wspace=0.18)
     for v in range(num_var):
         for n in range(len(regions)):
             ax = plt.subplot(gs[v,n])
-            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=0.75, ax=ax)
+            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], offsets=all_offsets[n], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=0.75, ax=ax)
             ax.set_title(title_prefix[v*2+n]+region_names[regions[n]], fontsize=14)
             if n == 0:
                 ax.set_ylabel(var_units[v], fontsize=12)
             else:
                 ax.set_ylabel('')
-            if v == 1 and n == 0:
-                ax.set_xlabel('Global warming relative to preindustrial ('+deg_string+'C)', fontsize=12)
+            if v == 0 and n == 0:
+                ax.set_xlabel('Global temperature relative to tipping point ('+deg_string+'C)', fontsize=12)
             else:
                 ax.set_xlabel('')
             if v==0:
@@ -1063,9 +1105,8 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
                 ax2.set_xticks([])
                 ax2.set_yticks([])
         plt.text(0.5, 0.99-0.45*v, var_titles[v], fontsize=16, ha='center', va='top', transform=fig.transFigure)
-    #plt.suptitle(var_titles[v], fontsize=16)
     ax.legend(loc='center left', bbox_to_anchor=(-0.6,-0.32), fontsize=11, ncol=3)
-    finished_plot(fig, fig_name='figures/temp_massloss_by_gw_panels.png', dpi=300)
+    finished_plot(fig) #, fig_name='figures/temp_massloss_by_gw_panels.png', dpi=300)
 
 
 # Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS. To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
