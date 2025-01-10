@@ -1806,14 +1806,14 @@ def animate_all (out_dir='animations/'):
             plt.close('all')
 
 
-# Plot a histogram of how long after stabilisation tipping happens, for each region.
+# Plot a histogram of how long after stabilisation tipping happens, for each region. Also print some statistics.
 def tipping_time_histogram (base_dir='./', fig_name=None):
 
     regions = ['ross', 'filchner_ronne']
     tipping_threshold = -1.9
     smooth = 5*months_per_year
     timeseries_file = 'timeseries.nc'
-    num_bins = 30
+    num_bins = 10
 
     all_times = []
     for region in regions:
@@ -1821,10 +1821,13 @@ def tipping_time_histogram (base_dir='./', fig_name=None):
         # Find all trajectories of cavity temperature
         cavity_temp_ts = all_timeseries_trajectories(region+'_cavity_temp', base_dir=base_dir)[0]
         # Loop over them
-        for n in range(num_trajectories):
+        for n in range(len(cavity_temp_ts)):
             cavity_temp = moving_average(cavity_temp_ts[n], smooth)
             # Find time index of when stabilisation starts
-            stab_time = np.argwhere(cavity_temp.scenario_type==0)[0][0]
+            if cavity_temp.scenario_type.min() == 1:
+                # Perpetual ramp-up; skip it
+                continue
+            stab_time = np.argwhere(cavity_temp.scenario_type.data==0)[0][0]
             if cavity_temp.max() > tipping_threshold:
                 # Find the time index of first tipping
                 tip_time = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
@@ -1832,16 +1835,22 @@ def tipping_time_histogram (base_dir='./', fig_name=None):
                     # Tips after stabilisation
                     # Calculate years since emissions stabilised
                     times.append((tip_time-stab_time)/months_per_year)
-            # Throw away duplicates
-            times = np.unique(times)
-        all_times.append(time)
+        # Throw away duplicates
+        times = np.unique(times)
+        all_times.append(times)
+        # Print some statistics
+        print(region+':')
+        print(str(np.size(times))+' tips happen after stabilisation')
+        print('Range: '+str(np.amin(times))+' to '+str(np.amax(times))+' years')
+        print('Mean: '+str(np.mean(times))+' years')
+        print('Standard deviation: '+str(np.std(times))+' years')
     tmax = np.amax([np.amax(times) for times in all_times])
     bins = np.linspace(0, tmax, num=num_bins)
 
     # Plot
     fig = plt.figure(figsize=(5,5))
     gs = plt.GridSpec(2,1)
-    gs.update(left=0.05, right=0.99, bottom=0.1, top=0.9, hspace=0.2)
+    gs.update(left=0.05, right=0.99, bottom=0.1, top=0.85, hspace=0.4)
     for r in range(len(regions)):
         ax = plt.subplot(gs[r,0])
         ax.hist(all_times[r], bins=bins)
