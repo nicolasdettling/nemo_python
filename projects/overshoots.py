@@ -40,9 +40,23 @@ suites_by_scenario = {'piControl' : ['cs495'],
                       '5K_ramp_down' : ['dc251', 'dc130'],
                       '6K_stabilise' : ['cz378'],
                       '6K_ramp_down' : ['de943', 'de962', 'de963', 'dk554', 'dk555', 'dk556']}
+# Choose one ensemble member of each main scenario type for plotting a less-messy timeseries.
+suites_by_scenario_1ens = {'ramp_up': 'cx209',  # First ensemble member for ramp-up and all stabilisation
+                           '1.5K_stabilise': 'cy837', 
+                           '2K_stabilise': 'cy838',
+                           '3K_stabilise': 'cz375',
+                           '4K_stabilise': 'cz376',
+                           '5K_stabilise': 'cz377',
+                           '6K_stabilise': 'cz378',
+                           '1.5K_ramp_down': 'dc052',  # 50y overshoot, -4 Gt/y for all ramp-downs
+                           '2K_ramp_down': 'dc051',
+                           '3K_ramp_down': 'df028',
+                           '4K_ramp_down': 'dc123',
+                           '5K_ramp_down': 'dc130',
+                           '6K_ramp_down': 'de962'}
 # Dictionary of ramp-down rates
-suites_ramp_down_rates = {'8 Gt/y' : ['cz944', 'di335', 'da800', 'da697', 'da892', 'db223', 'df453', 'de620', 'dc251', 'de962', 'dk554'],
-                          '4 Gt/y' : ['dc051', 'dc052', 'dc248', 'dc249', 'dc565', 'dd210', 'dc032', 'df028', 'de621', 'dc123', 'dc130', 'de943', 'dk555'],
+suites_ramp_down_rates = {'8 Gt/y' : ['cz944', 'di335', 'da800', 'da697', 'da892', 'db223', 'df453', 'de620', 'dc251', 'de943', 'dk554'],
+                          '4 Gt/y' : ['dc051', 'dc052', 'dc248', 'dc249', 'dc565', 'dd210', 'dc032', 'df028', 'de621', 'dc123', 'dc130', 'de962', 'dk555'],
                           '2 Gt/y' : ['df025', 'df027', 'df021', 'df023', 'dh541', 'dh859', 'de963', 'dk556']}
 
 # Dictionary of which suites branch from which. None means it's a ramp-up suite (so branched from a piControl run, but we don't care about that for the purposes of integrated GW)
@@ -212,7 +226,12 @@ def set_expt_list (separate_stages=False, only_up=False, only_down=False):
 
 
 # Set the list of experiments, names for the legend, and timeseries to use - but only separating (by names/colours) the ramp-up, stabilise, and ramp-down scenarios, rather than showing all the different stabilisation targets individually. Also, do not include static ice cases.
-def minimal_expt_list ():
+def minimal_expt_list (one_ens=False):
+
+    if one_ens:
+        suite_list = suites_by_scenario_1ens
+    else:
+        suite_list = suites_by_scenario
 
     keys = ['ramp_up', '_stabilise', '_ramp_down']
     sim_names = ['Ramp up', 'Stabilise', 'Ramp down']
@@ -220,11 +239,11 @@ def minimal_expt_list ():
     sim_dirs = []
     for key in keys:
         dirs = []
-        for scenario in suites_by_scenario:
+        for scenario in suites_list:
             if 'static_ice' in scenario:
                 continue
             if key in scenario:
-                dirs += suites_by_scenario[scenario]
+                dirs += suite_list[scenario]
         sim_dirs.append(dirs)
 
     return sim_names, colours, sim_dirs
@@ -1047,7 +1066,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     num_var = len(var_names)
     timeseries_file = 'timeseries.nc'
     smooth = 10*months_per_year #5*months_per_year
-    sim_names, colours, sim_dirs = minimal_expt_list()
+    sim_names, colours, sim_dirs = minimal_expt_list(one_ens=True)
     sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks
     ds = xr.open_dataset(sample_file).squeeze()
 
