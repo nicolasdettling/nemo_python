@@ -353,8 +353,9 @@ def align_timeseries (data1, data2):
     
 
 # Plot the timeseries of one or more experiments/ensembles (expts can be a string, a list of strings, or a list of lists of string) and one variable against global warming level (relative to preindustrial mean in the given PI suite, unless offsets is not None).
+# Can also use an ocean variable to plot against instead of GW level (eg cavity temperature) with alternate_var='something' (assumed to be within timeseries_file).
 # Can also set offsets as a list of the same shape as expts, with different global warming baselines for each - this is still on top of PI mean, so eg pass 3 for 3K above PI.
-def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None, offsets=None):
+def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None, offsets=None, alternate_var=None):
 
     new_ax = ax is None
 
@@ -368,10 +369,11 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
     if labels is None:
         labels = [None]*num_expt            
 
-    # Get baseline global mean SAT
-    ds_pi = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
-    baseline_temp = ds_pi['global_mean_sat'].mean()
-    ds_pi.close()
+    if alternate_var is None:
+        # Get baseline global mean SAT
+        ds_pi = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
+        baseline_temp = ds_pi['global_mean_sat'].mean()
+        ds_pi.close()
 
     if offsets is None:
         # Set up dummy list of 0s, same shape as expts
@@ -401,7 +403,10 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
             else:
                 suite_list = [suite]
             # Read global mean SAT in this suite and convert to GW level
-            gw_level = build_timeseries_trajectory(suite_list, 'global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, offset=-baseline_temp-offset)
+            if alternate_var is None:
+                gw_level = build_timeseries_trajectory(suite_list, 'global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, offset=-baseline_temp-offset)
+            else:
+                gw_level = build_timeseries_trajectory(suite_list, alternate_var, base_dir=base_dir, timeseries_file=timeseries_file)
             # Read the variable
             data = build_timeseries_trajectory(suite_list, var_name, base_dir=base_dir, timeseries_file=timeseries_file)
             # Trim the two timeseries to line up and be the same length
@@ -442,10 +447,10 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
         units = datas[0].units
     ax.set_title(title, fontsize=16)
     ax.set_ylabel(units, fontsize=14)
-    if integrate:
-        ax.set_xlabel('Time-integrated global warming (K*years above preindustrial)', fontsize=14)
-    else:
+    if alternate_var is None:
         ax.set_xlabel('Global warming relative to preindustrial (K)', fontsize=14)
+    else:
+        ax.set_xlabel(gw_levels[0].long_name+' ('+gw_levels[0].units+')', fontsize=14)
     if labels is not None and new_ax:
         # Make legend
         box = ax.get_position()
@@ -1077,20 +1082,23 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks
     ds = xr.open_dataset(sample_file).squeeze()
 
-    fig = plt.figure(figsize=(10,7.5))
+    fig = plt.figure(figsize=(10,8))
     gs = plt.GridSpec(2,2)
-    gs.update(left=0.07, right=0.98, bottom=0.1, top=0.9, hspace=0.5, wspace=0.16)
+    gs.update(left=0.07, right=0.98, bottom=0.15, top=0.9, hspace=0.5, wspace=0.16)
     for v in range(num_var):
         for n in range(len(regions)):
             ax = plt.subplot(gs[v,n])
-            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=1, ax=ax)
+            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=1, ax=ax, alternate_var=regions[n]+'_cavity_temp' if v==1 else None)
             ax.set_title(title_prefix[v*2+n]+region_names[regions[n]], fontsize=14)
             if n == 0:
                 ax.set_ylabel(var_units[v], fontsize=12)
             else:
                 ax.set_ylabel('')
-            if v == 0 and n == 0:
-                ax.set_xlabel('Global warming relative to preindustrial ('+deg_string+'C)', fontsize=12)
+            if n==0:
+                if v==0:
+                    ax.set_xlabel('Global warming relative to preindustrial ('+deg_string+'C)', fontsize=12)
+                elif v==1:
+                    ax.set_xlabel('Temperature in ice shelf cavity ('+deg_string+'C)', fontsize=12)
             else:
                 ax.set_xlabel('')
             if v==0:
