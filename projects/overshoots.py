@@ -1805,6 +1805,55 @@ def animate_all (out_dir='animations/'):
             dashboard_animation(suite_string, region, out_dir=out_dir)
             plt.close('all')
 
+
+# Plot a histogram of how long after stabilisation tipping happens, for each region.
+def tipping_time_histogram (base_dir='./', fig_name=None):
+
+    regions = ['ross', 'filchner_ronne']
+    tipping_threshold = -1.9
+    smooth = 5*months_per_year
+    timeseries_file = 'timeseries.nc'
+    num_bins = 30
+
+    all_times = []
+    for region in regions:
+        times = []
+        # Find all trajectories of cavity temperature
+        cavity_temp_ts = all_timeseries_trajectories(region+'_cavity_temp', base_dir=base_dir)[0]
+        # Loop over them
+        for n in range(num_trajectories):
+            cavity_temp = moving_average(cavity_temp_ts[n], smooth)
+            # Find time index of when stabilisation starts
+            stab_time = np.argwhere(cavity_temp.scenario_type==0)[0][0]
+            if cavity_temp.max() > tipping_threshold:
+                # Find the time index of first tipping
+                tip_time = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
+                if tip_time >= stab_time:
+                    # Tips after stabilisation
+                    # Calculate years since emissions stabilised
+                    times.append((tip_time-stab_time)/months_per_year)
+            # Throw away duplicates
+            times = np.unique(times)
+        all_times.append(time)
+    tmax = np.amax([np.amax(times) for times in all_times])
+    bins = np.linspace(0, tmax, num=num_bins)
+
+    # Plot
+    fig = plt.figure(figsize=(5,5))
+    gs = plt.GridSpec(2,1)
+    gs.update(left=0.05, right=0.99, bottom=0.1, top=0.9, hspace=0.2)
+    for r in range(len(regions)):
+        ax = plt.subplot(gs[r,0])
+        ax.hist(all_times[r], bins=bins)
+        ax.set_title(region_names[regions[r]], fontsize=12)
+        if r==0:
+            ax.set_ylabel('# simulations', fontsize=10)
+        if r==1:
+            ax.set_xlabel('years since emissions stopped', fontsize=10)
+    plt.suptitle('Tipping points reached after climate stabilisation', fontsize=14)
+    finished_plot(fig, fig_name=fig_name)
+        
+
     
     
 
