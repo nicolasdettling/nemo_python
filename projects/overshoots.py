@@ -848,6 +848,8 @@ def all_suite_trajectories (static_ice=False):
 # Helper function to assemble a timeseries for the given trajectory and variable (precomputed).
 def build_timeseries_trajectory (suite_list, var_name, base_dir='./', timeseries_file='timeseries.nc', offset=0):
 
+    xr.set_options(keep_attrs=True)
+
     for suite in suite_list:
         # Figure out whether it's a ramp-up (1), stabilisation (0), or ramp-down (-1) simulation
         stype = None
@@ -1102,7 +1104,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
                 ax2.set_yticks([])
         plt.text(0.5, 0.99-0.5*v, var_titles[v], fontsize=16, ha='center', va='top', transform=fig.transFigure)
     ax.legend(loc='center left', bbox_to_anchor=(-0.6,-0.2), fontsize=11, ncol=3)
-    finished_plot(fig, fig_name='figures/temp_massloss_by_gw_panels.png', dpi=300)
+    finished_plot(fig) #, fig_name='figures/temp_massloss_by_gw_panels.png', dpi=300)
 
 
 # Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS. To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
