@@ -913,7 +913,10 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
 # (4) a list of GW levels at the recovery points
 # (5) a list of peak warming in each trajectory
 # (6) a list of booleans saying whether or not each trajectory tips
-def find_tipped_trajectories (region, base_dir='./'):
+# If bwsalt, instead return:
+# (1) a list of shelf bottom salinity at the tipping points
+# (2) a list of shelf bottom salinity at the recovery points
+def find_tipped_trajectories (region, base_dir='./', bwsalt=False):
 
     pi_suite = 'cs495'
     tipping_threshold = -1.9
@@ -921,50 +924,75 @@ def find_tipped_trajectories (region, base_dir='./'):
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
 
-    # Assemble all possible trajectories of global mean temperature anomalies relative to preindustrial
-    ds = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
-    baseline_temp = ds['global_mean_sat'].mean()
-    ds.close()
-    warming_ts, suite_strings = all_timeseries_trajectories('global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, static_ice=False, offset=-1*baseline_temp)
-    num_trajectories = len(warming_ts)
-    # Smooth each
-    for n in range(num_trajectories):
-        warming_ts[n] = moving_average(warming_ts[n], smooth)
+    if not bwsalt:
+        # Assemble all possible trajectories of global mean temperature anomalies relative to preindustrial
+        ds = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
+        baseline_temp = ds['global_mean_sat'].mean()
+        ds.close()
+        warming_ts, suite_strings = all_timeseries_trajectories('global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, static_ice=False, offset=-1*baseline_temp)
+        num_trajectories = len(warming_ts)
+        # Smooth each
+        for n in range(num_trajectories):
+            warming_ts[n] = moving_average(warming_ts[n], smooth)
 
     # Assemble all possible trajectories of cavity mean temperature
     cavity_temp_ts = all_timeseries_trajectories(region+'_cavity_temp', base_dir=base_dir, static_ice=False)[0]
+    if bwsalt:
+        # Assemble all possible trajectories of shelf mean bottom salinity
+        shelf_bwsalt_ts = all_timeseries_trajectories(region+'_shelf_bwsalt', base_dir=base_dir, static_ice=False)[0]
+        num_trajectories = len(shelf_bwsalt_ts)
     # Now loop over them and find the ones that have tipped and/or recovered
-    suites_tipped = []
-    warming_at_tip = []
-    suites_recovered = []        
-    warming_at_recovery = []
+    if bwsalt:
+        bwsalt_at_tip = []
+        bwsalt_at_recovery = []
+    else:
+        suites_tipped = []
+        warming_at_tip = []
+        suites_recovered = []        
+        warming_at_recovery = []
     for n in range(num_trajectories):
         # Smooth and trim/align with warming timeseries
-        cavity_temp_ts[n] = moving_average(cavity_temp_ts[n], smooth)
-        cavity_temp, warming = align_timeseries(cavity_temp_ts[n], warming_ts[n])
+        cavity_temp = moving_average(cavity_temp_ts[n], smooth)
+        if bwsalt:
+            shelf_bwsalt = moving_average(shelf_bwsalt_ts[n], smooth)
+        else:
+            cavity_temp, warming = align_timeseries(cavity_temp, warming_ts[n])
         if cavity_temp.max() > tipping_threshold:
             # Find the time index of first tipping
             tip_time = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
-            # Find the global warming level at that time index
-            tip_warming = warming.isel(time_centered=tip_time)
-            if np.isnan(tip_warming):
-                break
-            # Save the global warming anomalies relative to tipping time
-            warming_at_tip.append(tip_warming)
-            suites_tipped.append(suite_strings[n])
+            if bwsalt:
+                # Find the shelf salinity at that time index
+                bwsalt_at_tip.append(shelf_bwsalt.isel(time_centered=tip_time))
+            else:
+                # Find the global warming level at that time index
+                tip_warming = warming.isel(time_centered=tip_time)
+                if np.isnan(tip_warming):
+                    continue
+                # Save the global warming anomalies relative to tipping time
+                warming_at_tip.append(tip_warming)
+                suites_tipped.append(suite_strings[n])
             # Now consider the time after tipping
             cavity_temp = cavity_temp.isel(time_centered=slice(tip_time,None))
-            warming = warming.isel(time_centered=slice(tip_time,None))
+            if bwsalt:
+                shelf_bwsalt = shelf_bwsalt.isel(time_centered=slice(tip_time,None))
+            else:
+                warming = warming.isel(time_centered=slice(tip_time,None))
             for t in range(cavity_temp.sizes['time_centered']):
                 # If the temperature has gone back down below the threshold and stays that way for the rest of the simulation, it's recovered
                 if cavity_temp.isel(time_centered=slice(t,None)).max() < tipping_threshold:
-                    warming_at_recovery.append(warming.isel(time_centered=t))
+                    if bwsalt:
+                        bwsalt_at_recovery.append(shelf_bwsalt.isel(time_centered=t))
+                    else:
+                        warming_at_recovery.append(warming.isel(time_centered=t))
                     suites_recovered.append(suite_strings[n])
                     break
-    # Find maximum warming in each trajectory, and whether or not it tips
-    max_warming = np.array([warming_ts[n].max() for n in range(num_trajectories)])
-    tips = np.array([suite_strings[n] in suites_tipped for n in range(num_trajectories)])
-    return suites_tipped, warming_at_tip, suites_recovered, warming_at_recovery, max_warming, tips
+    if bwsalt:
+        return bwsalt_at_tip, bwsalt_at_recovery
+    else:
+        # Find maximum warming in each trajectory, and whether or not it tips
+        max_warming = np.array([warming_ts[n].max() for n in range(num_trajectories)])
+        tips = np.array([suite_strings[n] in suites_tipped for n in range(num_trajectories)])
+        return suites_tipped, warming_at_tip, suites_recovered, warming_at_recovery, max_warming, tips
 
 
 # Analyse the cavity temperature beneath Ross and FRIS to see which scenarios tip and/or recover, under which global warming levels. Also plot this.
