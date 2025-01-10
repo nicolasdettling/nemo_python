@@ -984,7 +984,7 @@ def find_tipped_trajectories (region, base_dir='./', bwsalt=False):
                         bwsalt_at_recovery.append(shelf_bwsalt.isel(time_centered=t))
                     else:
                         warming_at_recovery.append(warming.isel(time_centered=t))
-                    suites_recovered.append(suite_strings[n])
+                        suites_recovered.append(suite_strings[n])
                     break
     if bwsalt:
         return bwsalt_at_tip, bwsalt_at_recovery
