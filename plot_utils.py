@@ -8,7 +8,9 @@ from .constants import deg_string
 # Helper functions for colourmaps
 
 def truncate_colourmap (cmap, minval=0.0, maxval=1.0, n=-1):
-    
+
+    if isinstance(cmap, str):
+        cmap = plt.get_cmap(cmap)    
     # From https://stackoverflow.com/questions/40929467/how-to-use-and-plot-only-a-part-of-a-colorbar-in-matplotlib    
     if n== -1:
         n = cmap.N

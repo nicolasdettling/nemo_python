@@ -11,6 +11,7 @@ import datetime
 
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
 from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, timeseries_plot, circumpolar_plot
+from ..plot_utils import truncate_colourmap
 from ..utils import moving_average, add_months, rotate_vector, polar_stereo, convert_ismr
 from ..grid import region_mask, calc_geometry
 from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year
@@ -1305,6 +1306,7 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
 def plot_ross_fris_by_bwsalt (base_dir='./'):
 
     from matplotlib.collections import LineCollection
+    from matplotlib.lines import Line2D
     from scipy.stats import ttest_ind
 
     regions = ['ross', 'filchner_ronne']
@@ -1316,7 +1318,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     timeseries_file_um = 'timeseries_um.nc'
     smooth = 5*months_per_year
     pi_suite = 'cs495'
-    cmap = 'viridis'
+    cmap = ['Reds', 'Purples']
     p0 = 0.05
     tipping_temp = -1.9
 
@@ -1340,10 +1342,16 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
         data_bwsalt = []
         data_cavity_temp = []
         data_warming = []
+        direction = []
         for scenario in suites_by_scenario:
             if 'piControl' in scenario or 'static_ice' in scenario:
                 continue
             for suite in suites_by_scenario[scenario]:
+                # Flag whether temperature is going up (ramp-up or stabilisation) or down (ramp-down)
+                if 'ramp_down' in scenario or 'restabilise' in scenario:
+                    direction.append(-1)
+                elif 'ramp_up' in scenario or 'stabilise' in scenario:
+                    direction.append(0)
                 ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
                 bwsalt = ds[regions[n]+'_shelf_bwsalt']
                 cavity_temp = ds[regions[n]+'_cavity_temp']
@@ -1365,6 +1373,8 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
         all_warming.append(data_warming)
         # Now calculate mean salinity at tipping and recovery
         bwsalt_tip, bwsalt_recover = find_tipped_trajectories(regions[n], bwsalt=True, base_dir=base_dir)
+        bwsalt_tip = np.unique(bwsalt_tip)
+        bwsalt_recover = np.unique(bwsalt_recover)
         # Print some statistics
         print(regions[n])
         print('Shelf salinity at tipping has mean '+str(np.mean(bwsalt_tip))+' psu, std '+str(np.std(bwsalt_tip))+' psu')
@@ -1389,8 +1399,9 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     # Plot
     fig = plt.figure(figsize=(8,6))
     gs = plt.GridSpec(1,2)
-    gs.update(left=0.1, right=0.98, bottom=0.23, top=0.93, wspace=0.2)
-    cax = fig.add_axes([0.3, 0.08, 0.5, 0.03])
+    gs.update(left=0.1, right=0.98, bottom=0.25, top=0.93, wspace=0.2)
+    cax1 = fig.add_axes([0.1, 0.12, 0.4, 0.03])
+    cax2 = fig.add_axes([0.1, 0.075, 0.4, 0.03]) 
     for n in range(len(regions)):
         ax = plt.subplot(gs[0,n])
         for m in range(num_suites):
@@ -1398,16 +1409,20 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
             # Plot each line with colour varying by global warming level
             points = np.array([all_bwsalt[n][m].data, all_cavity_temp[n][m].data]).T.reshape(-1,1,2)
             segments = np.concatenate([points[:-1], points[1:]], axis=1)
-            lc = LineCollection(segments, cmap=cmap, norm=norm)
+            lc = LineCollection(segments, cmap=truncate_colourmap(cmap[direction[m]], minval=0.3), norm=norm)
             lc.set_array(all_warming[n][m].data)
             lc.set_linewidth(1)
             img = ax.add_collection(lc)
+            if direction[m] == 0:
+                img_up = img
+            else:
+                img_down = img
         ax.grid(linestyle='dotted')
         ax.axhline(tipping_temp, color='black', linestyle='dashed')
         # Plot threshold salinity stars
-        ax.plot(threshold_tip[n], tipping_temp, marker='*', markersize=5, markerfacecolor='Crimson', markeredgecolor='black')
+        ax.plot(threshold_tip[n], tipping_temp, marker='*', markersize=15, markerfacecolor='Crimson', markeredgecolor='black')
         if threshold_recover[n] is not None:
-            ax.plot(threshold_recover[n], tipping_temp, marker='*', markersize=5, markerfacecolor='DodgerBlue', markeredgecolor='black')
+            ax.plot(threshold_recover[n], tipping_temp, marker='*', markersize=15, markerfacecolor='MediumPurple', markeredgecolor='black')
         ax.set_title(title_prefix[n]+region_names[regions[n]], fontsize=16)
         if n==0:
             ax.set_xlabel('Bottom salinity on continental shelf (psu)', fontsize=12)
@@ -1419,8 +1434,20 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
         ax.plot([x_start]*2, [bias_print_y-0.05, bias_print_y+0.05], color='black')
         ax.plot([x_end]*2, [bias_print_y-0.05, bias_print_y+0.05], color='black')
         plt.text(0.5*(x_start+x_end), bias_print_y+0.3, 'Salinity bias of\n'+str(np.round(bwsalt_bias[n],3))+' psu', fontsize=10, color='black', ha='center', va='center')
-    plt.colorbar(img, cax=cax, orientation='horizontal')
-    plt.text(0.55, 0.02, 'Global warming relative to preindustrial ('+deg_string+'C)', ha='center', va='center', fontsize=12, transform=fig.transFigure)
+    # Two colour bars: red on the way up, purple on the way down
+    cbar = plt.colorbar(img_up, cax=cax1, orientation='horizontal')
+    cbar.set_ticklabels([])
+    plt.colorbar(img_down, cax=cax2, orientation='horizontal')
+    plt.text(0.3, 0.02, 'Global warming relative to preindustrial ('+deg_string+'C)', ha='center', va='center', fontsize=12, transform=fig.transFigure)
+    plt.text(0.51, 0.135, 'ramp-up + stabilise', ha='left', va='center', fontsize=10, transform=fig.transFigure)
+    plt.text(0.51, 0.09, 'ramp-down', ha='left', va='center', fontsize=10, transform=fig.transFigure)
+    # Manual legend
+    colours = ['Crimson', 'MediumPurple']
+    labels = ['mean tipping', 'mean recovery']
+    handles = []
+    for m in range(len(colours)):
+        handles.append(Line2D([0], [0], marker='*', markersize=15, markerfacecolor=colours[m], markeredgecolor='black', label=labels[m], linestyle=''))
+    plt.legend(handles=handles, loc='lower right', bbox_to_anchor=(0.85, -0.27))
     finished_plot(fig, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
 
 
