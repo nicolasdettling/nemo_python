@@ -1305,6 +1305,7 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
 def plot_ross_fris_by_bwsalt (base_dir='./'):
 
     from matplotlib.collections import LineCollection
+    from scipy.stats import ttest_ind
 
     regions = ['ross', 'filchner_ronne']
     title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ']
@@ -1316,6 +1317,8 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     smooth = 5*months_per_year
     pi_suite = 'cs495'
     cmap = 'viridis'
+    p0 = 0.05
+    tipping_temp = -1.9
 
     # Inner function to read global mean SAT from precomputed timeseries
     def global_mean_sat (suite):
@@ -1331,6 +1334,8 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     all_cavity_temp = []
     all_warming = []
     max_warming = 0
+    threshold_tip = []
+    threshold_recover = []
     for n in range(len(regions)):
         data_bwsalt = []
         data_cavity_temp = []
@@ -1358,6 +1363,24 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
         all_bwsalt.append(data_bwsalt)
         all_cavity_temp.append(data_cavity_temp)
         all_warming.append(data_warming)
+        # Now calculate mean salinity at tipping and recovery
+        bwsalt_tip, bwsalt_recover = find_tipped_trajectories(regions[n], bwsalt=True, base_dir=base_dir)
+        # Print some statistics
+        print(regions[n])
+        print('Shelf salinity at tipping has mean '+str(np.mean(bwsalt_tip))+' psu, std '+str(np.std(bwsalt_tip))+' psu')
+        threshold_tip.append(np.mean(bwsalt_tip))
+        if np.size(bwsalt_recover) > 0:
+            print('Shelf salinity at recovery has mean '+str(np.mean(bwsalt_recover))+' psu, std '+str(np.std(bwsalt_recover))+' psu')
+            threshold_recover.append(np.mean(bwsalt_recover))
+            # 2-sample t-test to check if they're significantly different
+            p_val = ttest_ind(bwsalt_tip, bwsalt_recover, equal_var=False)[1]
+            distinct = p_val < p0
+            if distinct:
+                print('Significant difference (p='+str(p_val)+')')
+            else:
+                print('No significant difference (p='+str(p_val)+')')
+        else:
+            threshold_recover.append(None)
 
     # Set up colour map to vary with global warming level
     norm = plt.Normalize(0, max_warming)
@@ -1371,6 +1394,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     for n in range(len(regions)):
         ax = plt.subplot(gs[0,n])
         for m in range(num_suites):
+            #ax.plot(all_bwsalt[n][m], all_cavity_temp[n][m], '-', linewidth=1)
             # Plot each line with colour varying by global warming level
             points = np.array([all_bwsalt[n][m].data, all_cavity_temp[n][m].data]).T.reshape(-1,1,2)
             segments = np.concatenate([points[:-1], points[1:]], axis=1)
@@ -1378,9 +1402,12 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
             lc.set_array(all_warming[n][m].data)
             lc.set_linewidth(1)
             img = ax.add_collection(lc)
-            #ax.plot(all_bwsalt[n][m], all_cavity_temp[n][m], '-', linewidth=1)
         ax.grid(linestyle='dotted')
-        ax.axhline(-1.9, color='black', linestyle='dashed')
+        ax.axhline(tipping_temp, color='black', linestyle='dashed')
+        # Plot threshold salinity stars
+        ax.plot(threshold_tip[n], tipping_temp, marker='*', markersize=5, markerfacecolor='Crimson', markeredgecolor='black')
+        if threshold_recover[n] is not None:
+            ax.plot(threshold_recover[n], tipping_temp, marker='*', markersize=5, markerfacecolor='DodgerBlue', markeredgecolor='black')
         ax.set_title(title_prefix[n]+region_names[regions[n]], fontsize=16)
         if n==0:
             ax.set_xlabel('Bottom salinity on continental shelf (psu)', fontsize=12)
