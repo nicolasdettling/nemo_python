@@ -239,11 +239,14 @@ def minimal_expt_list (one_ens=False):
     sim_dirs = []
     for key in keys:
         dirs = []
-        for scenario in suites_list:
+        for scenario in suite_list:
             if 'static_ice' in scenario:
                 continue
             if key in scenario:
-                dirs += suite_list[scenario]
+                if isinstance(suite_list[scenario], str):
+                    dirs += [suite_list[scenario]]
+                else:
+                    dirs += suite_list[scenario]
         sim_dirs.append(dirs)
 
     return sim_names, colours, sim_dirs
@@ -350,9 +353,8 @@ def align_timeseries (data1, data2):
     
 
 # Plot the timeseries of one or more experiments/ensembles (expts can be a string, a list of strings, or a list of lists of string) and one variable against global warming level (relative to preindustrial mean in the given PI suite, unless offsets is not None).
-# If integrate=True, plot as a function of integrated global warming level (i.e. degree-years above preindustrial).
 # Can also set offsets as a list of the same shape as expts, with different global warming baselines for each - this is still on top of PI mean, so eg pass 3 for 3K above PI.
-def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None, integrate=False, offsets=None):
+def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None, offsets=None):
 
     new_ax = ax is None
 
@@ -366,11 +368,10 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
     if labels is None:
         labels = [None]*num_expt            
 
-    if not integrate:
-        # Get baseline global mean SAT
-        ds_pi = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
-        baseline_temp = ds_pi['global_mean_sat'].mean()
-        ds_pi.close()
+    # Get baseline global mean SAT
+    ds_pi = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
+    baseline_temp = ds_pi['global_mean_sat'].mean()
+    ds_pi.close()
 
     if offsets is None:
         # Set up dummy list of 0s, same shape as expts
@@ -393,27 +394,31 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
         for suite, offset in zip(expt, expt_offsets):
             if np.isnan(offset):
                 # Flag to skip this suite
-                continue
-            if integrate:
-                gw_level = integrated_gw(suite, pi_suite=pi_suite, timeseries_file_um=timeseries_file_um, base_dir=base_dir)
+                continue            
+            # Join with the parent suite so there isn't a gap when simulations branch and smoothing is applied.
+            if suites_branched[suite] is not None:
+                suite_list = [suites_branched[suite], suite]
             else:
-                # Read global mean SAT in this suite and convert to GW level
-                ds_um = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
-                gw_level = ds_um['global_mean_sat'] - baseline_temp - offset
-                ds_um.close()
+                suite_list = [suite]
+            # Read global mean SAT in this suite and convert to GW level
+            gw_level = build_timeseries_trajectory(suite_list, 'global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, offset=-baseline_temp-offset)
             # Read the variable
-            ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
-            data = ds[var_name]
-            ds.close()
+            data = build_timeseries_trajectory(suite_list, var_name, base_dir=base_dir, timeseries_file=timeseries_file)
             # Trim the two timeseries to line up and be the same length
             data, gw_level = align_timeseries(data, gw_level)
             if data.size != gw_level.size:
                 print('Warning: timeseries do not align for suite '+suite+'. Removing suite from plot. Try running fix_missing_months()')
                 num_ens -= 1
                 continue
-            # Smooth in time
+            # Figure out the scenario type we're actually trying to plot
+            stype = data.scenario_type[-1]
+            # Smooth in time            
             gw_level = moving_average(gw_level, smooth)
             data = moving_average(data, smooth)
+            # Now trim off the parent suite, so we only keep the bit needed to smooth over the gap
+            t_start = np.where(data.scenario_type==stype)[0][0]
+            gw_level = gw_level.isel(time_centered=slice(t_start,None))
+            data = data.isel(time_centered=slice(t_start,None))
             gw_levels.append(gw_level)
             datas.append(data)
         if num_ens > 0:
@@ -1065,7 +1070,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     var_units = [deg_string+'C', 'Gt/y']
     num_var = len(var_names)
     timeseries_file = 'timeseries.nc'
-    smooth = 10*months_per_year #5*months_per_year
+    smooth = 10*months_per_year
     sim_names, colours, sim_dirs = minimal_expt_list(one_ens=True)
     sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks
     ds = xr.open_dataset(sample_file).squeeze()
@@ -1076,7 +1081,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     for v in range(num_var):
         for n in range(len(regions)):
             ax = plt.subplot(gs[v,n])
-            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=0.75, ax=ax)
+            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=1, ax=ax)
             ax.set_title(title_prefix[v*2+n]+region_names[regions[n]], fontsize=14)
             if n == 0:
                 ax.set_ylabel(var_units[v], fontsize=12)
@@ -1097,7 +1102,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
                 ax2.set_yticks([])
         plt.text(0.5, 0.99-0.5*v, var_titles[v], fontsize=16, ha='center', va='top', transform=fig.transFigure)
     ax.legend(loc='center left', bbox_to_anchor=(-0.6,-0.2), fontsize=11, ncol=3)
-    finished_plot(fig) #, fig_name='figures/temp_massloss_by_gw_panels.png', dpi=300)
+    finished_plot(fig, fig_name='figures/temp_massloss_by_gw_panels.png', dpi=300)
 
 
 # Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS. To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
