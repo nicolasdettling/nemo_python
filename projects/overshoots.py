@@ -39,14 +39,14 @@ suites_by_scenario = {'piControl' : ['cs495'],
                       '5K_stabilise' : ['cz377','db731','dc324'],
                       '5K_ramp_down' : ['dc251', 'dc130'],
                       '6K_stabilise' : ['cz378'],
-                      '6K_ramp_down' : ['de943', 'de962', 'de963']}
+                      '6K_ramp_down' : ['de943', 'de962', 'de963', 'dk554', 'dk555', 'dk556']}
 # Dictionary of ramp-down rates
-suites_ramp_down_rates = {'8 Gt/y' : ['cz944', 'di335', 'da800', 'da697', 'da892', 'db223', 'df453', 'de620', 'dc251', 'de962'],
-                          '4 Gt/y' : ['dc051', 'dc052', 'dc248', 'dc249', 'dc565', 'dd210', 'dc032', 'df028', 'de621', 'dc123', 'dc130', 'de943'],
-                          '2 Gt/y' : ['df025', 'df027', 'df021', 'df023', 'dh541', 'dh859', 'de963']}
+suites_ramp_down_rates = {'8 Gt/y' : ['cz944', 'di335', 'da800', 'da697', 'da892', 'db223', 'df453', 'de620', 'dc251', 'de962', 'dk554'],
+                          '4 Gt/y' : ['dc051', 'dc052', 'dc248', 'dc249', 'dc565', 'dd210', 'dc032', 'df028', 'de621', 'dc123', 'dc130', 'de943', 'dk555'],
+                          '2 Gt/y' : ['df025', 'df027', 'df021', 'df023', 'dh541', 'dh859', 'de963', 'dk556']}
 
 # Dictionary of which suites branch from which. None means it's a ramp-up suite (so branched from a piControl run, but we don't care about that for the purposes of integrated GW)
-suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'cz944':'cy838', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'db223':'cz375', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'dc163':'cz944', 'di335':'cy838', 'df453':'cz375', 'de620':'cz375', 'dc565':'cy838', 'dd210':'cz376', 'df028':'cz375', 'de621':'cz375', 'df025':'cy838', 'df027':'cy838', 'df021':'cz375', 'df023':'cz375', 'dh541':'cz376', 'dh859':'cz376', 'de943':'cz378', 'de962':'cz378', 'de963':'cz378'}
+suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'cz944':'cy838', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'db223':'cz375', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'dc163':'cz944', 'di335':'cy838', 'df453':'cz375', 'de620':'cz375', 'dc565':'cy838', 'dd210':'cz376', 'df028':'cz375', 'de621':'cz375', 'df025':'cy838', 'df027':'cy838', 'df021':'cz375', 'df023':'cz375', 'dh541':'cz376', 'dh859':'cz376', 'de943':'cz378', 'de962':'cz378', 'de963':'cz378', 'dk554':'cz378', 'dk555':'cz378', 'dk556':'cz378'}
 
 # End global vars
 
@@ -1046,53 +1046,25 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     var_units = [deg_string+'C', 'Gt/y']
     num_var = len(var_names)
     timeseries_file = 'timeseries.nc'
-    smooth = 5*months_per_year
+    smooth = 10*months_per_year #5*months_per_year
     sim_names, colours, sim_dirs = minimal_expt_list()
     sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks
     ds = xr.open_dataset(sample_file).squeeze()
 
-    # Identify global temperature at the time of tipping (NaN flag if does not tip)
-    trajectories = all_suite_trajectories()
-    all_offsets = []
-    for region in regions:
-        offsets = []
-        suites_tipped, warming_at_tip = find_tipped_trajectories(region)[:2]
-        # Loop over simulation type (eg ramp-up, stabilise)
-        for sim_type in sim_dirs:
-            offsets_type = []
-            # Loop over suites of this type
-            for suite in sim_type:
-                # Find the trajectory ending in this suite
-                suite_string = None
-                for traj in trajectories:
-                    if traj[-1] == suite:
-                        suite_string = '-'.join(traj)
-                        break
-                if suite_string is None:
-                    raise Exception('Trajectory not found')
-                # Now see if it tips
-                if suite_string in suites_tipped:
-                    n = suites_tipped.index(suite_string)
-                    offsets_type.append(warming_at_tip[n])
-                else:
-                    offsets_type.append(np.nan)
-            offsets.append(offsets_type)
-        all_offsets.append(offsets)  # So this is a list of lists of lists (regions, simulation type, suite). I am sorry.         
-
     fig = plt.figure(figsize=(10,7.5))
     gs = plt.GridSpec(2,2)
-    gs.update(left=0.07, right=0.98, bottom=0.13, top=0.9, hspace=0.4, wspace=0.18)
+    gs.update(left=0.07, right=0.98, bottom=0.1, top=0.9, hspace=0.5, wspace=0.16)
     for v in range(num_var):
         for n in range(len(regions)):
             ax = plt.subplot(gs[v,n])
-            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], offsets=all_offsets[n], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=0.75, ax=ax)
+            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth, labels=sim_names, colours=colours, linewidth=0.75, ax=ax)
             ax.set_title(title_prefix[v*2+n]+region_names[regions[n]], fontsize=14)
             if n == 0:
                 ax.set_ylabel(var_units[v], fontsize=12)
             else:
                 ax.set_ylabel('')
             if v == 0 and n == 0:
-                ax.set_xlabel('Global temperature relative to tipping point ('+deg_string+'C)', fontsize=12)
+                ax.set_xlabel('Global warming relative to preindustrial ('+deg_string+'C)', fontsize=12)
             else:
                 ax.set_xlabel('')
             if v==0:
@@ -1104,8 +1076,8 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
                 ax2.axis('on')
                 ax2.set_xticks([])
                 ax2.set_yticks([])
-        plt.text(0.5, 0.99-0.45*v, var_titles[v], fontsize=16, ha='center', va='top', transform=fig.transFigure)
-    ax.legend(loc='center left', bbox_to_anchor=(-0.6,-0.32), fontsize=11, ncol=3)
+        plt.text(0.5, 0.99-0.5*v, var_titles[v], fontsize=16, ha='center', va='top', transform=fig.transFigure)
+    ax.legend(loc='center left', bbox_to_anchor=(-0.6,-0.2), fontsize=11, ncol=3)
     finished_plot(fig) #, fig_name='figures/temp_massloss_by_gw_panels.png', dpi=300)
 
 
