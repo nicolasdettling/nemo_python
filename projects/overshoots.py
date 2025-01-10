@@ -39,7 +39,7 @@ suites_by_scenario = {'piControl' : ['cs495'],
                       '5K_stabilise' : ['cz377','db731','dc324'],
                       '5K_ramp_down' : ['dc251', 'dc130'],
                       '6K_stabilise' : ['cz378'],
-                      '6K_ramp_down' : ['de943', 'de962', 'de963', 'dk554', 'dk555', 'dk556']}
+                      '6K_ramp_down' : ['de943', 'de962', 'de963']} #, 'dk554', 'dk555', 'dk556']}  #TODO uncomment when MASS pull is done and timeseries calculated
 # Choose one ensemble member of each main scenario type for plotting a less-messy timeseries.
 suites_by_scenario_1ens = {'ramp_up': 'cx209',  # First ensemble member for ramp-up and all stabilisation
                            '1.5K_stabilise': 'cy837', 
@@ -973,7 +973,7 @@ def tipping_stats (base_dir='./', fig_name=None):
     from matplotlib.lines import Line2D
 
     regions = ['ross', 'filchner_ronne']
-    temp_correction = [1.00753541, 0.80698273]  # Precomputed by warming_implied_by_salinity_bias() - update if needed before publication!
+    temp_correction = [1.0087846842764405, 0.8065649751736049]  # Precomputed by warming_implied_by_salinity_bias()
     bias_print_x = [4.5, 2.5]
     bias_print_y = 1.5
 
@@ -1280,8 +1280,8 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
     title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ']
-    bwsalt_bias = [-0.13443893, -0.11137423]
-    bias_print_x = [34.3, 34]
+    bwsalt_bias = [-0.13443893, -0.11137423]  # Precomputed above
+    bias_print_x = [34.4, 34.1]
     bias_print_y = -1
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
@@ -1323,9 +1323,10 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 bwsalt = align_timeseries(bwsalt, warming)[0]
                 cavity_temp, warming = align_timeseries(cavity_temp, warming)
                 max_warming = max(max_warming, warming.max())
-                data_bwsalt.append(bwsalt)
-                data_cavity_temp.append(cavity_temp)
-                data_warming.append(warming)
+                # Throw away any ramp-down data where global temp has overshot preindustrial and gone into negative
+                data_bwsalt.append(bwsalt.where(warming>0))
+                data_cavity_temp.append(cavity_temp.where(warming>0))
+                data_warming.append(warming.where(warming>0))
         all_bwsalt.append(data_bwsalt)
         all_cavity_temp.append(data_cavity_temp)
         all_warming.append(data_warming)
