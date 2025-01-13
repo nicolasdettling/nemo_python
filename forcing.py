@@ -244,7 +244,7 @@ def UBOT_to_U10_wind(UBOT, VBOT, U10):
 # Process atmospheric forcing from CESM2 scenarios (LE2, etc.) for a single variable and single ensemble member.
 # expt='LE2', var='PRECT', ens='1011.001' etc.
 def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, year_ens_start=1750, shift_wind=False,
-                       land_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/LE2/raw/b.e21.BHISTsmbb.f09_g17.LE2-1011.001.cam.h0.LANDFRAC.185001-185912.nc'):
+                       land_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/LE2/b.e21.BHISTsmbb.f09_g17.LE2-1011.001.cam.h0.LANDFRAC.185001-185912.nc'):
 
     if expt not in ['LE2', 'piControl']:
         raise Exception('Invalid experiment {expt}')

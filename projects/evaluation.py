@@ -118,7 +118,7 @@ def circumpolar_Holland_tetraptych(run_folder, nemo_domain='/gws/nopw/j04/anthro
     from ..diagnostics import barotropic_streamfunction
 
     # Load NEMO gridT files for MLD and bottom T, S
-    gridT_files = glob.glob(f'{run_folder}files/*grid_T*')
+    gridT_files = glob.glob(f'{run_folder}*grid_T*')
     nemo_ds     = xr.open_mfdataset(gridT_files) # load all the gridT files in the run folder
     nemo_grid   = xr.open_dataset(gridT_files[0]) # for plotting for later 
     nemo_ds = nemo_ds.rename({'e3t':'thkcello', 'x_grid_T':'x', 'y_grid_T':'y', 'e3t':'thkcello',
@@ -145,8 +145,8 @@ def circumpolar_Holland_tetraptych(run_folder, nemo_domain='/gws/nopw/j04/anthro
        return data
 
     # Load velocity files for barotropic streamfunction calculation
-    gridU_files = glob.glob(f'{run_folder}files/*grid_U*')
-    gridV_files = glob.glob(f'{run_folder}files/*grid_V*')
+    gridU_files = glob.glob(f'{run_folder}*grid_U*')
+    gridV_files = glob.glob(f'{run_folder}*grid_V*')
     ds_u = xr.open_mfdataset(gridU_files, chunks='auto').squeeze().rename({'e3u':'thkcello'})[['uo','thkcello']]
     ds_v = xr.open_mfdataset(gridV_files, chunks='auto').squeeze().rename({'e3v':'thkcello'})[['vo','thkcello']]
     # Calculate barotropic streamfunction and average over the full time series
@@ -319,7 +319,7 @@ def regional_profile_TS_std(run_folder, region, option='shelf', fig_name=None, d
     # observations span 1994-2019, with mostly 2000-2019, so only take simulation files between 2000-2019 onwards
     yearly_Tobs = glob.glob(f'{dir_obs}ASEctd_griddedMean????_PT.nc')
     yearly_Sobs = glob.glob(f'{dir_obs}ASEctd_griddedMean????_S.nc')
-    yearly_TSsim = glob.glob(f'{run_folder}files/*1m*20[0-1][0-9]0101*grid_T*')
+    yearly_TSsim = glob.glob(f'{run_folder}*1m*20[0-1][0-9]0101*grid_T*')
 
     #----------- Figure ----------
     fig, ax = plt.subplots(1,4, figsize=(12,6), dpi=dpi, gridspec_kw={'width_ratios': [2, 1, 2, 1]})
@@ -386,7 +386,7 @@ def TS_diagrams_Amundsen (run_folder, show_obs=True, file_ind=None, time_slice=N
         obs = read_dutrieux(eos='teos10')
     
     # load nemo simulations
-    gridT_files = glob.glob(f'{run_folder}files/*grid_T*') # load all the gridT files in the run folder
+    gridT_files = glob.glob(f'{run_folder}*grid_T*') # load all the gridT files in the run folder
     if file_ind:
         nemo_ds = xr.open_dataset(gridT_files[file_ind]).rename({'x_grid_T':'x','y_grid_T':'y'})
     else: 
@@ -427,7 +427,7 @@ def animate_transect(run_folder, loc='shelf_west'):
     
     import tqdm
 
-    gridT_files  = glob.glob(f'{run_folder}/*grid_T*')
+    gridT_files  = glob.glob(f'{run_folder}*grid_T*')
     nemo_ds      = xr.open_mfdataset(gridT_files)
     for t, time in enumerate(nemo_ds.time_counter):
         print(t)
@@ -445,7 +445,7 @@ def frames_transect_Amundsen_sims(run_folder, savefig=False, transect_location='
     import warnings
     import gsw
 
-    gridT_files  = glob.glob(f'{run_folder}files/*grid_T*')
+    gridT_files  = glob.glob(f'{run_folder}*grid_T*')
     nemo_ds      = xr.open_mfdataset(gridT_files, engine='netcdf4').isel(x_grid_T=slice(580, 790), y_grid_T=slice(200,300), time_counter=slice(0,365))
     nemo_ds      = nemo_ds.rename({'x_grid_T':'x', 'y_grid_T':'y', 'nav_lon_grid_T':'nav_lon', 'nav_lat_grid_T':'nav_lat', 'deptht':'depth'}) 
     if add_rho:
@@ -513,7 +513,7 @@ def transects_Amundsen(run_folder, transect_locations=['Getz_left','Getz_right',
                        time_slice=slice(180,None), tmin=-2, tmax=0.5, smin=33, smax=35, savefig=False, ylim=(1300, -20), 
                        nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc', fig_name=''):
     # load nemo simulations
-    gridT_files  = glob.glob(f'{run_folder}files/*grid_T*')
+    gridT_files  = glob.glob(f'{run_folder}*grid_T*')
     nemo_ds      = xr.open_mfdataset(gridT_files) # load all the gridT files in the run folder
     nemo_ds      = nemo_ds.rename({'x_grid_T':'x', 'y_grid_T':'y', 'nav_lon_grid_T':'nav_lon', 'nav_lat_grid_T':'nav_lat', 'deptht':'depth'})
     if time_slice:

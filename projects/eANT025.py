@@ -60,7 +60,7 @@ def plot_SSH_trend(run_folder, fig_name, style='lineplot', dpi=None, nemo_mesh='
     mesh_ds    = xr.open_dataset(nemo_mesh)
 
     # Load SSH into dataset and calculate domain-wide average, minimum, maximum:
-    gridT_files = glob.glob(f'{run_folder}files/*grid_T*')
+    gridT_files = glob.glob(f'{run_folder}*grid_T*')
     SSH_ds      = xr.open_mfdataset(gridT_files) # load all the gridT files in the run folder
     ocean_area  = xr.where(mesh_ds.tmask.isel(time_counter=0, nav_lev=0).values==0, 0, SSH_ds.area_grid_T)
 
@@ -110,7 +110,7 @@ def plot_SSH_trend(run_folder, fig_name, style='lineplot', dpi=None, nemo_mesh='
 def plot_WOA_eval(run_folder, figname1, figname2, figname3, nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc', dpi=None):
 
     # Load gridT files into dataset:
-    gridT_files = glob.glob(f'{run_folder}files/*grid_T*')
+    gridT_files = glob.glob(f'{run_folder}*grid_T*')
     nemo_ds     = xr.open_mfdataset(gridT_files) # load all the gridT files in the run folder
 
     nemo_ds = nemo_ds.rename({'e3t':'thkcello', 'x_grid_T':'x', 'y_grid_T':'y', 'area_grid_T':'area', 'e3t':'thkcello',
@@ -235,7 +235,7 @@ def plot_hovmoeller_convect(run_folder, region, figname1, figname2, title='', tl
     return
 
 # Create animations of some standard variables that are useful to look at
-def animate_vars(run_folder, nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
+def animate_vars(run_folder, out_folder='', nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc'):
     import cmocean 
 
     var   = ['mldr10_1', 'siconc', 'zos', 'sbt', 'sbs', 'sosst', 'sosss']
@@ -244,7 +244,7 @@ def animate_vars(run_folder, nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS
     cmaps = ['viridis', 'viridis', cmocean.cm.balance, cmocean.cm.balance, cmocean.cm.haline, cmocean.cm.balance, cmocean.cm.haline]
 
     for v in range(len(var)):
-        animate_2D_circumpolar(run_folder, var[v], stub[v], vlim=vlims[v], cmap=cmaps[v], nemo_mesh=nemo_mesh)
+        animate_2D_circumpolar(run_folder, var[v], stub[v], vlim=vlims[v], cmap=cmaps[v], nemo_mesh=nemo_mesh, out_folder=out_folder)
 
     return
 
@@ -297,7 +297,7 @@ def plot_Amundsen_2d_slices(nemo_ds, var_name='thetao', vlim=(-1.5, 0.5), savefi
 
 def frames_Amundsen_shelf_T_slices(run_folder, region='', savefig=True, vlim=(-1.5, 0.5)):
     
-    gridT_files  = glob.glob(f'{run_folder}files/*grid_T*')
+    gridT_files  = glob.glob(f'{run_folder}*grid_T*')
     nemo_ds      = xr.open_mfdataset(gridT_files, engine='netcdf4')
     nemo_ds      = nemo_ds.rename({'x_grid_T':'x', 'y_grid_T':'y', 'nav_lon_grid_T':'nav_lon', 'nav_lat_grid_T':'nav_lat', 'deptht':'depth'})
     if region=='crosson':
@@ -310,7 +310,7 @@ def frames_Amundsen_shelf_T_slices(run_folder, region='', savefig=True, vlim=(-1
         month = time.dt.month.values
         day   = time.dt.day.values
         plot_Amundsen_2d_slices(nemo_ds.sel(time_counter=time), var_name='thetao', vlim=vlim, savefig=savefig, region=region,
-                                figname=f'{run_folder}animations/frames/amundsen_{region}_T_y{year}m{month:02}d{day:02}.jpg')
+                                figname=f'{run_folder}../animations/frames/amundsen_{region}_T_y{year}m{month:02}d{day:02}.jpg')
     
     return
 
