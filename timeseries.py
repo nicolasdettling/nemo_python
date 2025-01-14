@@ -15,6 +15,10 @@ from .diagnostics import transport, weddell_gyre_transport
 # <region>_temp, <region>_salt: volume-averaged temperature or salinity from the given region or cavity
 # <region>_temp_btw_xxx_yyy_m, <region>_salt_btw_xxx_yyy_m: volume-averaged temperature or salinity from the given region or cavity, between xxx and yyy metres (positive integers, shallowest first)
 # drake_passage_transport: zonal transport across Drake Passage (need to pass path to domain_cfg)
+# <region>_iceberg_melt: iceberg melt flux integrated over the given region
+# <region>_pminuse: precipitation minus evaporation integrated over the given region
+# <region>_runoff: runoff integrated over the given region
+# <region>_seaice_meltfreeze: sea ice to ocean water flux (melting minus freezing) integrated over the given region
 # Inputs:
 # name_remapping: optional dictionary of dimensions and variable names that need to be remapped to match the code below (depends on the runset)
 # nemo_mesh: optional string of the location of a bathymetry meshmask file for calculating the region masks (otherwise calculates it from ds_nemo)
@@ -108,6 +112,35 @@ def calc_timeseries (var, ds_nemo, name_remapping='', nemo_mesh='',
         option = 'weddell_transport'
         units = 'Sv'
         title = 'Weddell Gyre Transport'
+    elif var.endswith('_iceberg_melt'):
+        option = 'area_int'
+        region = var[:var.index('_iceberg_melt')]
+        nemo_var = 'ficeberg'
+        # Convert from kg/s to m^3/y
+        factor = 1e-3*sec_per_year
+        units = 'm^3/y'
+        title = 'Iceberg melt'
+    elif var.endswith('_pminuse'):
+        option = 'area_int'
+        region = var[:var.index('_pminuse')]
+        nemo_var = 'pminuse'  # Will trigger special case to do pr+prsn-evs
+        factor = 1e-3*sec_per_year
+        units = 'm^3/y'
+        title = 'Precipitation minus evaporation'
+    elif var.endswith('_runoff'):
+        option = 'area_int'
+        region = var[:var.index('_runoff')]
+        nemo_var = 'friver'
+        factor = 1e-3*sec_per_year
+        units = 'm^3/y'
+        title = 'Runoff'
+    elif var.endswith('_seaice_meltfreeze'):
+        option = 'area_int'
+        region = var[:var.index('_seaice_meltfreeze')]
+        nemo_var = 'fsitherm'
+        factor = 1e-3*sec_per_year
+        units = 'm^3/y'
+        title = 'Sea ice melting minus freezing'
 
     if var == 'drake_passage_transport' and 'e2u' not in ds_nemo:
         # Need to add e2u from domain_cfg
@@ -149,7 +182,11 @@ def calc_timeseries (var, ds_nemo, name_remapping='', nemo_mesh='',
     if option == 'area_int':
         # Area integral
         dA = ds_nemo['area']*mask
-        data = (ds_nemo[nemo_var]*dA).sum(dim=['x','y'])
+        if nemo_var == 'pminuse':
+            data_xy = ds_nemo['pr'] + ds_nemo['prsn'] - ds_nemo['evs']
+        else:
+            data_xy = ds_nemo[nemo_var]
+        data = (data_xy*dA).sum(dim=['x','y'])
     elif option == 'area_avg':
         # Area average
         dA = ds_nemo['area']*mask
