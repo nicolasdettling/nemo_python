@@ -115,6 +115,7 @@ def calc_timeseries (var, ds_nemo, name_remapping='', nemo_mesh='',
     elif var.endswith('_iceberg_melt'):
         option = 'area_int'
         region = var[:var.index('_iceberg_melt')]
+        region_type = 'shelf'
         nemo_var = 'ficeberg'
         # Convert from kg/s to m^3/y
         factor = 1e-3*sec_per_year
@@ -123,6 +124,7 @@ def calc_timeseries (var, ds_nemo, name_remapping='', nemo_mesh='',
     elif var.endswith('_pminuse'):
         option = 'area_int'
         region = var[:var.index('_pminuse')]
+        region_type = 'shelf'
         nemo_var = 'pminuse'  # Will trigger special case to do pr+prsn-evs
         factor = 1e-3*sec_per_year
         units = 'm^3/y'
@@ -130,6 +132,7 @@ def calc_timeseries (var, ds_nemo, name_remapping='', nemo_mesh='',
     elif var.endswith('_runoff'):
         option = 'area_int'
         region = var[:var.index('_runoff')]
+        region_type = 'shelf'
         nemo_var = 'friver'
         factor = 1e-3*sec_per_year
         units = 'm^3/y'
@@ -137,6 +140,7 @@ def calc_timeseries (var, ds_nemo, name_remapping='', nemo_mesh='',
     elif var.endswith('_seaice_meltfreeze'):
         option = 'area_int'
         region = var[:var.index('_seaice_meltfreeze')]
+        region_type = 'shelf'
         nemo_var = 'fsitherm'
         factor = 1e-3*sec_per_year
         units = 'm^3/y'
