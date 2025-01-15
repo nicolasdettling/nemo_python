@@ -1943,6 +1943,23 @@ def tipping_time_histogram (base_dir='./', fig_name=None):
             ax.set_xlabel('years since emissions stopped', fontsize=10)
     plt.suptitle('Tipping points reached after climate stabilisation', fontsize=14)
     finished_plot(fig, fig_name=fig_name)
+
+
+# After downloading some more variables from MASS for one suite, merge these files (in a subdirectory) into the main files.
+def merge_sfc_files (suite='cx209', subdir='sfc'):
+
+    for f in os.listdir(suite+'/'+subdir):
+        if not f.endswith('.nc'):
+            continue
+        print('Processing '+f)
+        ds1 = xr.open_dataset(suite+'/'+f)
+        ds2 = xr.open_dataset(suite+'/'+subdir+'/'+f)
+        ds = xr.merge([ds1, ds2])
+        ds.to_netcdf(suite+'/'+f+'_tmp')
+        ds.close()
+        ds1.close()
+        ds2.close()
+        os.rename(suite+'/'+f+'_tmp', suite+'/'+f)    
         
 
     
