@@ -1960,7 +1960,12 @@ def merge_sfc_files (suite='cx209', subdir='sfc'):
         ds1.close()
         ds2.close()
         os.rename(suite+'/'+f+'_tmp', suite+'/'+f)    
-        
+
+
+# Calculate some extra timeseries for one suite
+def sfc_FW_timeseries (suite='cx209', base_dir='./'):
+
+    update_simulation_timeseries(suite, ['all_iceberg_melt', 'all_pminuse', 'all_runoff', 'all_seaice_meltfreeze'], timeseries_file='timeseries_sfc.nc', sim_dir=base_dir+'/'+suite+'/', freq='m', halo=True, gtype='T')
 
     
     
