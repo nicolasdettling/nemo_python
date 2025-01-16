@@ -37,9 +37,9 @@ suites_by_scenario = {'piControl' : ['cs495'],
                       '4K_stabilise' : ['cz376','db723','db733'],
                       '4K_ramp_down' : ['da892', 'dc123', 'dh859', 'dd210', 'dh541'],
                       '5K_stabilise' : ['cz377','db731','dc324'],
-                      '5K_ramp_down' : ['dc251', 'dc130', 'dg093', 'dg094', 'dg095'],
+                      '5K_ramp_down' : ['dc251', 'dc130'], #'dg093', 'dg094', 'dg095'],
                       '6K_stabilise' : ['cz378'],
-                      '6K_ramp_down' : ['de943', 'de962', 'de963', 'dm357', 'dm358', 'dm359']}
+                      '6K_ramp_down' : ['de943', 'de962', 'de963']} #'dm357', 'dm358', 'dm359']}
 # Choose one ensemble member of each main scenario type for plotting a less-messy timeseries.
 suites_by_scenario_1ens = {'ramp_up': 'cx209',  # First ensemble member for ramp-up and all stabilisation
                            '1.5K_stabilise': 'cy837', 
@@ -1057,7 +1057,7 @@ def tipping_stats (base_dir='./', fig_name=None):
         if len(all_temp_recover[r]) > 0:
             violin_data.append(np.array(all_temp_recover[r])+temp_correction[r])
             y_pos.append(2)
-            colours.append('MediumPurple')
+            colours.append('DodgerBlue')
         violins = ax.violinplot(violin_data, y_pos, vert=False, showmeans=True)
         # Set colours of violin bodies and lines
         for pc, colour in zip(violins['bodies'], colours):
@@ -1066,7 +1066,7 @@ def tipping_stats (base_dir='./', fig_name=None):
             violins[bar].set_colors(colours)
         # Bottom row: peak warming in each trajectory, plotted in red (tips) or grey (doesn't tip)
         # Start with the grey, to make sure the red is visible where they overlap
-        ax.plot(max_warming[~all_tips[r]]+temp_correction[r], np.ones(np.count_nonzero(~all_tips[r])), 'o', markersize=4, color='DodgerBlue')
+        ax.plot(max_warming[~all_tips[r]]+temp_correction[r], np.ones(np.count_nonzero(~all_tips[r])), 'o', markersize=4, color='DarkGrey')
         ax.plot(max_warming[all_tips[r]]+temp_correction[r], np.ones(np.count_nonzero(all_tips[r])), 'o', markersize=4, color='Crimson')
         # Plot bounds on threshold: vertical dashed lines with labels
         ax.plot(threshold_bounds[r][0]*np.ones(2), [0, 0.9], color='black', linestyle='dashed', linewidth=1)
@@ -1083,7 +1083,7 @@ def tipping_stats (base_dir='./', fig_name=None):
         ax.grid(linestyle='dotted')       
     ax.set_xlabel('global warming level ('+deg_string+'C), corrected', fontsize=10)
     # Manual legend
-    colours = ['Crimson', 'DodgerBlue']
+    colours = ['Crimson', 'DarkGrey']
     labels = ['tips', 'does not tip']
     handles = []
     for m in range(len(colours)):
@@ -1317,7 +1317,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     timeseries_file_um = 'timeseries_um.nc'
     smooth = 5*months_per_year
     pi_suite = 'cs495'
-    cmap = ['Reds', 'Purples']
+    cmap = ['Reds', 'Blues']
     p0 = 0.05
     tipping_temp = -1.9
 
@@ -1421,7 +1421,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
         # Plot threshold salinity stars
         ax.plot(threshold_tip[n], tipping_temp, marker='*', markersize=15, markerfacecolor='Crimson', markeredgecolor='black')
         if threshold_recover[n] is not None:
-            ax.plot(threshold_recover[n], tipping_temp, marker='*', markersize=15, markerfacecolor='MediumPurple', markeredgecolor='black')
+            ax.plot(threshold_recover[n], tipping_temp, marker='*', markersize=15, markerfacecolor='DodgerBlue', markeredgecolor='black')
         ax.set_title(title_prefix[n]+region_names[regions[n]], fontsize=16)
         if n==0:
             ax.set_xlabel('Bottom salinity on continental shelf (psu)', fontsize=12)
@@ -1441,7 +1441,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     plt.text(0.51, 0.135, 'ramp-up + stabilise', ha='left', va='center', fontsize=10, transform=fig.transFigure)
     plt.text(0.51, 0.09, 'ramp-down', ha='left', va='center', fontsize=10, transform=fig.transFigure)
     # Manual legend
-    colours = ['Crimson', 'MediumPurple']
+    colours = ['Crimson', 'DodgerBlue']
     labels = ['mean tipping', 'mean recovery']
     handles = []
     for m in range(len(colours)):
