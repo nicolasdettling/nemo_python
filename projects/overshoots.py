@@ -62,6 +62,8 @@ suites_ramp_down_rates = {'8 Gt/y' : ['di335', 'da800', 'da697', 'da892', 'df453
 # Dictionary of which suites branch from which. None means it's a ramp-up suite (so branched from a piControl run, but we don't care about that for the purposes of integrated GW)
 suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'di335':'cy838', 'df453':'cz375', 'dc565':'cy838', 'dd210':'cz376', 'df028':'cz375', 'df025':'cy838', 'df027':'cy838', 'df021':'cz375', 'df023':'cz375', 'dh541':'cz376', 'dh859':'cz376', 'de943':'cz378', 'de962':'cz378', 'de963':'cz378'}
 
+tipping_threshold = -1.9  # If cavity mean temp is warmer than surface freezing point, it's tipped
+
 # End global vars
 
 
@@ -919,7 +921,6 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
 def find_tipped_trajectories (region, base_dir='./', bwsalt=False):
 
     pi_suite = 'cs495'
-    tipping_threshold = -1.9
     smooth = 5*months_per_year
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
@@ -1580,7 +1581,6 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
     smooth = 5*months_per_year
-    tipping_threshold = -1.9
     suite_list = suite_string.split('-')
     if region not in ['ross', 'filchner_ronne']:
         raise Exception('Invalid region '+region)
@@ -1894,7 +1894,6 @@ def animate_all (out_dir='animations/'):
 def tipping_time_histogram (base_dir='./', fig_name=None):
 
     regions = ['ross', 'filchner_ronne']
-    tipping_threshold = -1.9
     smooth = 5*months_per_year
     timeseries_file = 'timeseries.nc'
     num_bins = 10
@@ -1982,7 +1981,6 @@ def plot_FW_timeseries (base_dir='./', fig_name=None):
     units = [r'10$^6$ m$^3$/y', 'psu']
     colours = ['cyan', 'green', 'blue', 'magenta', 'red', 'DarkGrey', 'black']
     num_vars = len(var_names)
-    tipping_threshold = -1.9
     regions = ['ross', 'filchner_ronne']
     smooth_plot = 10*months_per_year
     smooth_tip = 5*months_per_year
@@ -2043,6 +2041,50 @@ def plot_FW_timeseries (base_dir='./', fig_name=None):
         ax1.axvline(tip_times[n], color='black', linestyle='dashed', linewidth=1)
         plt.text(tip_times[n], 0, region_names[regions[n]]+' tips', ha='left', va='bottom', rotation=-90)
     finished_plot(fig, fig_name=fig_name, dpi=300)
+
+
+# Plot shelf bwsalt and its time-derivative for the Ross and FRIS regions in untipped trajectories, with the given level of smoothing (in years).
+def plot_untipped_salinity (smooth=10, base_dir='./', fig_name=None):
+
+    regions = ['ross', 'filchner_ronne']
+    stype = [1, 0, -1]
+    colours = ['Crimson', 'Grey', 'DodgerBlue']
+    labels = ['ramp-up', 'stabilise', 'ramp-down']
+
+    fig = plt.figure(figsize=(8,6))
+    gs = plt.GridSpec(2,2)
+    gs.update(left=0.05, right=0.95, bottom=0.1, top=0.9)
+    for n in range(len(regions)):
+        ax_top = plt.subplot(gs[0,n])
+        ax_bottom = plt.subplot(gs[1,n])
+        # Find untipped trajectories
+        cavity_temp_all = all_timeseries_trajectories(regions[n]+'_cavity_temp', base_dir=base_dir)[0]
+        shelf_bwsalt_all = all_timeseries_trajectories(regions[n]+'_shelf_bwsalt', base_dir=base_dir)[0]
+        for cavity_temp, shelf_bwsalt in zip(cavity_temp_all, shelf_bwsalt_all):
+            if cavity_temp.max() < tipping_threshold:
+                # Does not tip - add to plot
+                # Smooth bwsalt
+                bwsalt = moving_average(shelf_bwsalt, smooth*months_per_year)
+                # Time-derivative of smoothed array; convert from days to years (30-day months in UKESM)
+                ds_dt = bwsalt.differentiate('time_centered')*360
+                # Plot different phases in different colours
+                for m in range(len(stype)):
+                    index = bwsalt.scenario_type == stype[m]
+                    ax_top.plot_date(bwsalt.time_centered.where(index), bwsalt.where(index), '-', color=colours[m], linewidth=1)
+                    ax_bottom.plot_date(ds_dt.time_centered.where(index), ds_dt.where(index), '-', color=colours[m], label=labels[m], linewidth=1)
+        ax_top.set_title('Shelf bottom salinity ('+region_names[regions[n]]+')', fontsize=14)
+        ax_bottom.set_title('Time derivative', fontsize=14)
+        if n == 0:
+            ax_top.set_ylabel('psu')
+            ax_bottom.set_ylabel('psu/y')
+        if n == 1:
+            # Legend
+            ax_bottom.legend(loc='lower center', bbox_to_anchor=(0,-0.2), ncol=3)
+    finished_plot(fig, fig_name=fig_name)
+        
+                
+
+    
         
     
     
