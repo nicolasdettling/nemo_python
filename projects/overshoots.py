@@ -2041,7 +2041,7 @@ def plot_FW_timeseries (base_dir='./', fig_name=None):
 
 
 # Plot shelf bwsalt and its time-derivative for the Ross and FRIS regions in untipped trajectories, with the given level of smoothing (in years).
-def plot_untipped_salinity (smooth=30, base_dir='./', fig_name=None):
+def plot_untipped_salinity (smooth=30, base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
     stype = [1, 0, -1]
@@ -2086,6 +2086,19 @@ def plot_untipped_salinity (smooth=30, base_dir='./', fig_name=None):
                     handles.append(Line2D([0], [0], color=colours[m], label=labels[m], linestyle='-'))
                 ax2.legend(handles=handles, loc='lower center', bbox_to_anchor=(0.5,-0.25), ncol=3)
                 finished_plot(fig)
+
+
+def stage_timescales ():
+
+    # TODO
+    # For each trajectory and region, plot 3x1 timeseries of 30-year smoothed (1) shelf_bwsalt, (2) cavity_temp, (3) massloss. Identify if tips and/or recovers, and mark years. Cut off ramp-downs that cool beyond preindustrial.
+    # Save the following timescales where relevant:
+    # 1. If tipped: Stabilisation to tipping
+    # 2. If tipped: Tipping to max ismr (initial rapid phase of tipping)
+    # 3. If untipped: Ramp-down to salinification starts (min S: option for negative years; option for "never" if within last 15? years of simulation)
+    # 4. If tipped: Ramp-down to recovery (option for "never")
+    # For each, make a 1x2 histogram showing timescales for each region, printing mean and std.
+    pass
         
                 
 
