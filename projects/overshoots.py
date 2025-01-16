@@ -3,11 +3,18 @@
 import xarray as xr
 import matplotlib.pyplot as plt
 import matplotlib.colors as cl
+import matplotlib.animation as animation
+from matplotlib.collections import LineCollection
+from matplotlib.lines import Line2D
 import os
+import subprocess
 import numpy as np
 import cf_xarray as cfxr
 import re
 import datetime
+from scipy.stats import ttest_ind, linregress
+from tqdm import tqdm
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
 from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, timeseries_plot, circumpolar_plot
@@ -645,7 +652,6 @@ def plot_bwsalt_vs_obs (suite='cy691', schmidtko_file='/gws/nopw/j04/terrafirma/
 # Time-average each stabilisation scenario (all years and all ensemble members) for the given file type (grid-T, isf-T, grid-U).
 def calc_stabilisation_means (base_dir='./', file_type='grid-T', out_dir='time_averaged/'):
 
-    from tqdm import tqdm
     scenarios = ['piControl', '1.5K', '2K', '2.5K', '3K', '4K', '5K', '6K']
     
     for scenario in scenarios:
@@ -999,8 +1005,6 @@ def find_tipped_trajectories (region, base_dir='./', bwsalt=False):
 # Analyse the cavity temperature beneath Ross and FRIS to see which scenarios tip and/or recover, under which global warming levels. Also plot this.
 def tipping_stats (base_dir='./', fig_name=None):
 
-    from matplotlib.lines import Line2D
-
     regions = ['ross', 'filchner_ronne']
     temp_correction = [1.0087846842764405, 0.8065649751736049]  # Precomputed by warming_implied_by_salinity_bias()
     bias_print_x = [4.5, 2.5]
@@ -1095,8 +1099,6 @@ def tipping_stats (base_dir='./', fig_name=None):
 
 # Plot: (1) bottom temperature on continental shelf and in cavities, and (2) ice shelf basal mass loss as a function of global warming level, for 2 different regions, showing ramp-up, stabilise, and ramp-down in different colours
 def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
-
-    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
     pi_suite = 'cs495'
     regions = ['ross', 'filchner_ronne']
@@ -1248,8 +1250,6 @@ def calc_salinity_bias (base_dir='./'):
 # Calculate the global warming implied by the salinity biases (from above), using a linear regression below 3K for Ross, 5K for FRIS.
 def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='./'):
 
-    from scipy.stats import linregress
-
     pi_suite = 'cs495'
     max_warming_regions = [2, 4.5]
     smooth = 5*months_per_year
@@ -1304,10 +1304,6 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
 
 # Plot cavity-mean temperature beneath Ross and FRIS as a function of shelf-mean bottom water salinity, in all scenarios. Colour the lines based on the global warming level relative to preindustrial, and indicate the magnitude of the salinity bias.
 def plot_ross_fris_by_bwsalt (base_dir='./'):
-
-    from matplotlib.collections import LineCollection
-    from matplotlib.lines import Line2D
-    from scipy.stats import ttest_ind
 
     regions = ['ross', 'filchner_ronne']
     title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ']
@@ -1454,9 +1450,6 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
 # Plot Amundsen Sea 500m temperature, barotropic velocity, and zero contour of barotropic streamfunction, averaged over 3 scenarios: (1) piControl, (2) 1.5K stabilisation, (3) 6K stabilisation.
 def plot_amundsen_temp_velocity (base_dir='./'):
 
-    import cf_xarray as cfxr
-    import matplotlib.colors as cl
-
     scenarios = ['piControl', '1.5K', '6K']
     num_scenarios = len(scenarios)
     title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ', r'$\bf{c}$. ']
@@ -1574,8 +1567,6 @@ def plot_amundsen_temp_velocity (base_dir='./'):
 
 # Make an animation showing all sorts of things for the given trajectory.
 def dashboard_animation (suite_string, region, base_dir='./', out_dir='animations/', only_precompute=False):
-
-    import matplotlib.animation as animation
 
     pi_suite = 'cs495'
     timeseries_file = 'timeseries.nc'
@@ -1866,8 +1857,6 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
 # Call the batch script precompute_animations.sh for every trajectory. Assumes base_dir and out_dir are default values.
 def precompute_all_animations ():
 
-    import subprocess
-
     for suite_list in all_suite_trajectories():
         suite_string = '-'.join(suite_list)
         for region in ['ross', 'filchner_ronne']:
@@ -2053,7 +2042,7 @@ def plot_untipped_salinity (smooth=10, base_dir='./', fig_name=None):
 
     fig = plt.figure(figsize=(8,6))
     gs = plt.GridSpec(2,2)
-    gs.update(left=0.05, right=0.95, bottom=0.1, top=0.9)
+    gs.update(left=0.1, right=0.95, bottom=0.15, top=0.95, hspace=0.3)
     for n in range(len(regions)):
         ax_top = plt.subplot(gs[0,n])
         ax_bottom = plt.subplot(gs[1,n])
@@ -2065,21 +2054,29 @@ def plot_untipped_salinity (smooth=10, base_dir='./', fig_name=None):
                 # Does not tip - add to plot
                 # Smooth bwsalt
                 bwsalt = moving_average(shelf_bwsalt, smooth*months_per_year)
-                # Time-derivative of smoothed array; convert from days to years (30-day months in UKESM)
-                ds_dt = bwsalt.differentiate('time_centered')*360
+                # Time-derivative of smoothed array; convert from days to centuries (30-day months in UKESM)
+                ds_dt = bwsalt.differentiate('time_centered', datetime_unit='D')*360*1e2
+                # Smooth it again
+                ds_dt = moving_average(ds_dt, smooth*months_per_year)
                 # Plot different phases in different colours
                 for m in range(len(stype)):
                     index = bwsalt.scenario_type == stype[m]
-                    ax_top.plot_date(bwsalt.time_centered.where(index), bwsalt.where(index), '-', color=colours[m], linewidth=1)
-                    ax_bottom.plot_date(ds_dt.time_centered.where(index), ds_dt.where(index), '-', color=colours[m], label=labels[m], linewidth=1)
+                    ax_top.plot_date(bwsalt.time_centered.where(bwsalt.scenario_type==stype[m], drop=True), bwsalt.where(bwsalt.scenario_type==stype[m], drop=True), '-', color=colours[m], linewidth=1)
+                    ax_bottom.plot_date(ds_dt.time_centered.where(ds_dt.scenario_type==stype[m], drop=True), ds_dt.where(ds_dt.scenario_type==stype[m], drop=True), '-', color=colours[m], linewidth=1)
         ax_top.set_title('Shelf bottom salinity ('+region_names[regions[n]]+')', fontsize=14)
+        ax_top.grid(linestyle='dotted')
         ax_bottom.set_title('Time derivative', fontsize=14)
+        ax_bottom.axhline(0, color='black', linewidth=0.5)
+        ax_bottom.grid(linestyle='dotted')
         if n == 0:
             ax_top.set_ylabel('psu')
-            ax_bottom.set_ylabel('psu/y')
+            ax_bottom.set_ylabel('psu/century')
         if n == 1:
-            # Legend
-            ax_bottom.legend(loc='lower center', bbox_to_anchor=(0,-0.2), ncol=3)
+            # Manual legend
+            handles = []
+            for m in range(len(stype)):
+                handles.append(Line2D([0], [0], color=colours[m], label=labels[m], linestyle='-'))
+            ax_bottom.legend(handles=handles, loc='lower center', bbox_to_anchor=(-0.1,-0.4), ncol=3)
     finished_plot(fig, fig_name=fig_name)
         
                 
