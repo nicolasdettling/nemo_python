@@ -2033,7 +2033,8 @@ def plot_FW_timeseries (base_dir='./', fig_name=None):
             ax = ax1
         ax.plot_date(data_plot[v].time_centered, data_plot[v], '-', color=colours[v], label=var_titles[v], linewidth=1)
     ax1.grid(linestyle='dotted')
-    ax1.set_title('Freshwater fluxes in ramp-up (anomalies from preindustrial)', fontsize=14)
+    ax.axhline(0, color='black', linewidth=1)
+    ax1.set_title('Antarctic freshwater fluxes in ramp-up (anomalies from preindustrial)', fontsize=14)
     ax1.set_ylabel(units[0], fontsize=12)
     ax2.set_ylabel(units[1], fontsize=12)
     ax1.legend(loc='lower center', bbox_to_anchor=(0.5,-0.2), ncol=3)
