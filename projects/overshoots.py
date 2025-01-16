@@ -2041,25 +2041,20 @@ def plot_FW_timeseries (base_dir='./', fig_name=None):
 
 
 # Plot shelf bwsalt and its time-derivative for the Ross and FRIS regions in untipped trajectories, with the given level of smoothing (in years).
-def plot_untipped_salinity (smooth=10, base_dir='./', fig_name=None):
+def plot_untipped_salinity (smooth=30, base_dir='./', fig_name=None):
 
     regions = ['ross', 'filchner_ronne']
     stype = [1, 0, -1]
     colours = ['Crimson', 'Grey', 'DodgerBlue']
     labels = ['ramp-up', 'stabilise', 'ramp-down']
 
-    fig = plt.figure(figsize=(8,6))
-    gs = plt.GridSpec(2,2)
-    gs.update(left=0.1, right=0.95, bottom=0.15, top=0.95, hspace=0.3)
     for n in range(len(regions)):
-        ax_top = plt.subplot(gs[0,n])
-        ax_bottom = plt.subplot(gs[1,n])
         # Find untipped trajectories
-        cavity_temp_all = all_timeseries_trajectories(regions[n]+'_cavity_temp', base_dir=base_dir)[0]
+        cavity_temp_all, suite_strings = all_timeseries_trajectories(regions[n]+'_cavity_temp', base_dir=base_dir)
         shelf_bwsalt_all = all_timeseries_trajectories(regions[n]+'_shelf_bwsalt', base_dir=base_dir)[0]
-        for cavity_temp, shelf_bwsalt in zip(cavity_temp_all, shelf_bwsalt_all):
+        for cavity_temp, shelf_bwsalt, suite_string in zip(cavity_temp_all, shelf_bwsalt_all, suite_strings):
             if cavity_temp.max() < tipping_threshold:
-                # Does not tip - add to plot
+                # Does not tip                
                 # Smooth bwsalt
                 bwsalt = moving_average(shelf_bwsalt, smooth*months_per_year)
                 # Time-derivative of smoothed array; convert from days to centuries (30-day months in UKESM)
@@ -2067,25 +2062,30 @@ def plot_untipped_salinity (smooth=10, base_dir='./', fig_name=None):
                 # Smooth it again
                 ds_dt = moving_average(ds_dt, smooth*months_per_year)
                 # Plot different phases in different colours
+                fig = plt.figure(figsize=(5,7))
+                gs = plt.GridSpec(2,1)
+                gs.update(left=0.15, right=0.95, bottom=0.1, top=0.9, hspace=0.2)
+                ax1 = plt.subplot(gs[0,0])
+                ax2 = plt.subplot(gs[1,0])
                 for m in range(len(stype)):
                     index = bwsalt.scenario_type == stype[m]
-                    ax_top.plot_date(bwsalt.time_centered.where(bwsalt.scenario_type==stype[m], drop=True), bwsalt.where(bwsalt.scenario_type==stype[m], drop=True), '-', color=colours[m], linewidth=1)
-                    ax_bottom.plot_date(ds_dt.time_centered.where(ds_dt.scenario_type==stype[m], drop=True), ds_dt.where(ds_dt.scenario_type==stype[m], drop=True), '-', color=colours[m], linewidth=1)
-        ax_top.set_title('Shelf bottom salinity ('+region_names[regions[n]]+')', fontsize=14)
-        ax_top.grid(linestyle='dotted')
-        ax_bottom.set_title('Time derivative', fontsize=14)
-        ax_bottom.axhline(0, color='black', linewidth=0.5)
-        ax_bottom.grid(linestyle='dotted')
-        if n == 0:
-            ax_top.set_ylabel('psu')
-            ax_bottom.set_ylabel('psu/century')
-        if n == 1:
-            # Manual legend
-            handles = []
-            for m in range(len(stype)):
-                handles.append(Line2D([0], [0], color=colours[m], label=labels[m], linestyle='-'))
-            ax_bottom.legend(handles=handles, loc='lower center', bbox_to_anchor=(-0.1,-0.4), ncol=3)
-    finished_plot(fig, fig_name=fig_name)
+                    ax1.plot_date(bwsalt.time_centered.where(bwsalt.scenario_type==stype[m], drop=True), bwsalt.where(bwsalt.scenario_type==stype[m], drop=True), '-', color=colours[m], linewidth=1)
+                    ax2.plot_date(ds_dt.time_centered.where(ds_dt.scenario_type==stype[m], drop=True), ds_dt.where(ds_dt.scenario_type==stype[m], drop=True), '-', color=colours[m], linewidth=1)
+                ax1.set_title('Shelf bottom salinity', fontsize=12)
+                ax1.grid(linestyle='dotted')
+                ax2.set_title('Time derivative', fontsize=12)
+                ax2.axhline(0, color='black', linewidth=0.5)
+                ax2.grid(linestyle='dotted')
+                plt.suptitle(suite_string+', '+region_names[regions[n]], fontsize=14)
+                ax1.set_ylabel('psu')
+                ax2.set_ylabel('psu/century')
+                # Manual legend
+                handles = []
+                for m in range(len(stype)):
+                    handles.append(Line2D([0], [0], color=colours[m], label=labels[m], linestyle='-'))
+                ax2.legend(handles=handles, loc='lower center', bbox_to_anchor=(0.5,-0.25), ncol=3)
+                finished_plot(fig, fig_name=fig_name)
+                break
         
                 
 
