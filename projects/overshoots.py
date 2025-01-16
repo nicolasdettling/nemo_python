@@ -14,7 +14,7 @@ from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, tim
 from ..plot_utils import truncate_colourmap
 from ..utils import moving_average, add_months, rotate_vector, polar_stereo, convert_ismr
 from ..grid import region_mask, calc_geometry
-from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year
+from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year, rho_fw, rho_ice
 from ..file_io import read_schmidtko, read_woa
 from ..interpolation import interp_latlon_cf, interp_grid
 from ..diagnostics import barotropic_streamfunction
@@ -1968,6 +1968,86 @@ def merge_sfc_files (suite='cx209', subdir='sfc'):
 def sfc_FW_timeseries (suite='cx209', base_dir='./'):
 
     update_simulation_timeseries(suite, ['all_iceberg_melt', 'all_pminuse', 'all_runoff', 'all_seaice_meltfreeze'], timeseries_file='timeseries_sfc.nc', sim_dir=base_dir+'/'+suite+'/', freq='m', halo=True, gtype='T')
+
+
+# Timeseries of various freshwater fluxes, relative to preindustrial baseline, for one ramp-up simulation.
+def plot_FW_timeseries (base_dir='./', fig_name=None):
+
+    suite = 'cx209'
+    pi_suite = 'cs495'
+    var_names = ['all_massloss', 'all_iceberg_melt', 'all_runoff', 'all_seaice_meltfreeze', 'all_pminuse', 'sum', 'all_shelf_salt']
+    var_titles = ['Ice shelves', 'Icebergs', 'Ice sheet runoff', 'Sea ice', 'P-E', 'Total', 'Salinity on shelf']
+    timeseries_files = ['timeseries.nc'] + 4*['timeseries_sfc.nc'] + ['timeseries.nc']
+    factors = [rho_fw*rho_ice*1e3] + 4*[1e6] + [1]
+    units = [r'10$^6$ m$^3$/y', 'psu']
+    colours = ['cyan', 'green', 'blue', 'magenta', 'red', 'DarkGrey', 'black']
+    num_vars = len(var_names)
+    tipping_threshold = -1.9
+    regions = ['ross', 'filchner_ronne']
+    smooth_plot = 10*months_per_year
+    smooth_tip = 5*months_per_year
+
+    # Inner function to read one timeseries variable
+    def read_var (var, file_path):
+        ds = xr.open_dataset(file_path)
+        data = ds[var]
+        ds.close()
+        return data
+    # Inner function to read the variable from the main suite and subtract the PI baseline
+    def read_var_anomaly (var, fname):
+        data = read_var(var, base_dir+'/'+suite+'/'+fname)
+        baseline = read_var(var, base_dir+'/'+pi_suite+'/'+fname).mean(dim='time_counter')
+        return data-baseline
+
+    # Loop over variables and read all the data
+    data_plot = []
+    for v in range(num_vars):
+        if var_names[v] == 'sum':
+            # Add up all the variables before this one
+            data = np.sum(data_plot)
+        else:
+            data = read_var_anomaly(var_names[v], timeseries_files[v])
+        # Convert units and smooth in time
+        data = moving_average(data, smooth_plot)*factors[v]
+        data_plot.append(data)
+
+    # Find the time of tipping for each cavity
+    tip_times = []
+    for region in regions:
+        cavity_temp = read_var(region+'_cavity_temp', base_dir+'/'+suite+'/timeseries.nc')
+        cavity_temp = moving_average(cavity_temp, smooth_tip)
+        t0 = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
+        tip_times.append(cavity_temp.coords['time_centered'][t0])
+
+    # Plot
+    fig = plt.figure(figsize=(6,6))
+    gs = plt.GridSpec(1,1)
+    gs.update(left=0.1, right=0.9, bottom=0.15, top=0.85)
+    ax1 = plt.subplot(gs[0,0])
+    for v in range(num_vars):
+        # Second y-axis for last variable
+        if v == -1:
+            ax2 = ax1.twinx()
+            ax = ax2
+        else:
+            ax = ax1
+        ax.plot_date(data_plot[v].time_centered, data_plot[v], '-', color=colours[v], label=var_titles[v], linewidth=1)
+    ax1.grid(linestyle='dotted')
+    ax1.set_title('Freshwater fluxes in ramp-up (anomalies from preindustrial)', fontsize=14)
+    ax1.set_ylabel(units[0], fontsize=12)
+    ax2.set_ylabel(units[1], fontsize=12)
+    ax1.legend(loc='lower center', bbox_to_anchor=(0.5,-0.2), ncol=3)
+    # Vertical lines to show tipping
+    for n in range(len(regions)):
+        ax1.axvline(tip_times[n], color='black', linestyle='dashed', linewidth=1)
+        plt.text(tip_times[n], 0, region_names[regions[n]]+' tips', ha='left', va='bottom', rotation=-90)
+    finished_plot(fig, fig_name=fig_name, dpi=300)
+        
+    
+    
+    
+        
+    
 
     
     
