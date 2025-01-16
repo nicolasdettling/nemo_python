@@ -2048,6 +2048,7 @@ def plot_untipped_salinity (smooth=30, base_dir='./', fig_name=None):
     colours = ['Crimson', 'Grey', 'DodgerBlue']
     labels = ['ramp-up', 'stabilise', 'ramp-down']
 
+    # Make one figure per untipped trajectory per region
     for n in range(len(regions)):
         # Find untipped trajectories
         cavity_temp_all, suite_strings = all_timeseries_trajectories(regions[n]+'_cavity_temp', base_dir=base_dir)
@@ -2084,8 +2085,7 @@ def plot_untipped_salinity (smooth=30, base_dir='./', fig_name=None):
                 for m in range(len(stype)):
                     handles.append(Line2D([0], [0], color=colours[m], label=labels[m], linestyle='-'))
                 ax2.legend(handles=handles, loc='lower center', bbox_to_anchor=(0.5,-0.25), ncol=3)
-                finished_plot(fig, fig_name=fig_name)
-                break
+                finished_plot(fig)
         
                 
 
