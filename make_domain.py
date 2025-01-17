@@ -252,8 +252,6 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
 
     ds_regional = xr.open_dataset(topo_regional)
     ds_global = xr.open_dataset(topo_global)
-    # Mask out missing regions
-    ds_regional = ds_regional.where(ds_regional['Bathymetry_isf'].notnull())
 
     if ds_regional.sizes['x'] == ds_global.sizes['x']-2:
         # The global domain has a halo, but the regional one doesn't.
@@ -304,7 +302,10 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
     # Replace the global values with regional ones in this mask
     # Bathymetry is 0 in cavities, Bathymetry_isf includes cavities, isf_draft is 0 outside cavities.
     # Loop over variables rather than doing entire dataset at once, because if so some variables like nav_lat, nav_lon get lost
+    missing = ds_regional['Bathymetry_isf'].isnull()
     for var in ds_global:
+        # Fill missing regions in the regional dataset, otherwise the mask is carried through in the next line
+        ds_regional[var] = xr.where(missing, ds_global[var], ds_regional[var])
         ds_global[var] = weights*ds_regional[var] + (1-weights)*ds_global[var]        # Take the inverse of the mask so we can put ds_global first and keep its attributes.
         #ds_global[var] = xr.where(mask==0, ds_global[var], ds_regional[var], keep_attrs=True)
     ds_global.attrs['history'] = ds_global.attrs['history'] + 'Antarctic topography updated to BedMachine3 by Kaitlin Naughten ('+str(datetime.date.today())+')'
