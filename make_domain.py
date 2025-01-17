@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import datetime
 from .constants import region_bounds, region_bathy_bounds
 from .interpolation import interp_latlon_cf_blocks
-from .utils import polar_stereo, remove_disconnected
+from .utils import polar_stereo, remove_disconnected, distance_to_bdry
 from .plots import circumpolar_plot, finished_plot
 
 # Steps to make new bathymetry on a given cut-out of a global grid (eg eORCA025):
@@ -244,7 +244,11 @@ def add_bear_ridge_bergs (lon, lat, bathy, omask):
 # halo: whether to keep the halo on the periodic boundary - only matters if it exists in the global file but not the regional file.
 # lat0: latitude bound to search for isobath (negative, degrees)
 # depth0: isobath to define Antarctica (positive, metres)
-def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/terrafirma/kaight/input_data/grids/bathy_eORCA1_noclosea_from_GEBCO2021_PlusCaspian_FillZero_S21TT_editsJuly2024.nc', out_file='bathy_meter_eORCA1_Storkey_spliceBedMachine3_nohalo.nc', halo=False, lat0=-57, depth0=2500):
+# smooth: whether to smooth over the transition
+# scale_dist: if smooth=True, distance to apply smoothing on either side of transition, in km
+def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/terrafirma/kaight/input_data/grids/bathy_eORCA1_noclosea_from_GEBCO2021_PlusCaspian_FillZero_S21TT_editsJuly2024.nc', out_file='bathy_meter_eORCA1_Storkey_spliceBedMachine3_nohalo.nc', halo=False, lat0=-57, depth0=2500, smooth=True, scale_dist=100):
+
+    xr.set_options(keep_attrs=True)
 
     ds_regional = xr.open_dataset(topo_regional)
     ds_global = xr.open_dataset(topo_global)
@@ -286,12 +290,23 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
     connected = remove_disconnected(mask, (1,1))
     mask = xr.where(connected, mask, 0)
 
+    # Calculate weights: 1 means entirely ds_regional, 0 means entirely ds_global
+    if smooth:
+        # Calculate distance to shelf edge
+        dist = distance_to_bdry(ds_global['nav_lon'], ds_global['nav_lat'], mask)
+        # Taper over scale_dist on either side using cosine function
+        taper = (dist < scale_dist)*np.cos(np.pi/2*dist/scale_dist)
+        # Want weights of 1 on shelf, 0.5 at boundary, 0 off shelf
+        weights = xr.where(mask, 1-0.5*taper, 0.5*taper)
+    else:
+        weights = xr.where(mask, 1, 0)
+
     # Replace the global values with regional ones in this mask
     # Bathymetry is 0 in cavities, Bathymetry_isf includes cavities, isf_draft is 0 outside cavities.
     # Loop over variables rather than doing entire dataset at once, because if so some variables like nav_lat, nav_lon get lost
     for var in ds_global:
-        # Take the inverse of the mask so we can put ds_global first and keep its attributes.
-        ds_global[var] = xr.where(mask==0, ds_global[var], ds_regional[var], keep_attrs=True)
+        ds_global[var] = weights*ds_regional[var] + (1-weights)*ds_global[var]        # Take the inverse of the mask so we can put ds_global first and keep its attributes.
+        #ds_global[var] = xr.where(mask==0, ds_global[var], ds_regional[var], keep_attrs=True)
     ds_global.attrs['history'] = ds_global.attrs['history'] + 'Antarctic topography updated to BedMachine3 by Kaitlin Naughten ('+str(datetime.date.today())+')'
     ds_global.to_netcdf(out_file)
 
