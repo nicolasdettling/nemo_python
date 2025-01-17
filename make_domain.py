@@ -243,7 +243,7 @@ def add_bear_ridge_bergs (lon, lat, bathy, omask):
 # halo: whether to keep the halo on the periodic boundary - only matters if it exists in the global file but not the regional file.
 # lat0: latitude bound to search for isobath (negative, degrees)
 # depth0: isobath to define Antarctica (positive, metres)
-def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/terrafirma/kaight/input_data/grids/bathy_eORCA1_noclosea_from_GEBCO2021_PlusCaspian_FillZero_S21TT_editsJuly2024.nc', out_file='bathy_meter_eORCA1_Storkey_spliceBedMachine3_withhalo.nc', halo=False, lat0=-57, depth0=2500):
+def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/terrafirma/kaight/input_data/grids/bathy_eORCA1_noclosea_from_GEBCO2021_PlusCaspian_FillZero_S21TT_editsJuly2024.nc', out_file='bathy_meter_eORCA1_Storkey_spliceBedMachine3_nohalo.nc', halo=False, lat0=-57, depth0=2500):
 
     ds_regional = xr.open_dataset(topo_regional)
     ds_global = xr.open_dataset(topo_global)
@@ -282,6 +282,7 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
         pass
     if 'isf_draft' not in ds:
         # TODO: set to all 0
+        pass
 
     # Replace the global values with regional ones in this mask
     # TODO add Bathymetry_isf, isf_draft as these don't exist in Dave's version. Also zero out Bathymetry in land mask (currently masked).
