@@ -186,13 +186,15 @@ def distance_btw_points (point0, point1):
 # Calculate the distance of every lat-lon point in the model grid to the closest point of the given mask, in km. Works best if mask is True for a small number of points (eg a grounding line or a coastline).
 def distance_to_mask (lon, lat, mask):
 
+    mask = mask==1
+    min_dist = None
     # Loop over individual points in the mask
-    for lon0, lat0 in zip(lon.where(mask, drop=True), lat.where(mask, drop=True)):
+    for lon0, lat0 in zip(lon.data[mask.data], lat.data[mask.data]):
         # Calculate distance of every other point to this point
-        dist_to_pt = distance_btw_points([lon0, lat0], [lon, lat])*1e-3
+        dist_to_pt = distance_btw_points([lon, lat], [lon0, lat0])*1e-3
         if min_dist is None:
             # Initialise array with distance to the first point
-            min_dist = dist_to_point.copy()
+            min_dist = dist_to_pt.copy()
         else:
             min_dist = np.minimum(min_dist, dist_to_pt)
     return min_dist
@@ -203,7 +205,7 @@ def distance_to_bdry (lon, lat, mask, periodic=True):
 
     # Inner function to pad the edges (flagged with NaN) with a copy of the last row
     def pad_edges (mask_new):
-        return xr.where(mask_new.isnan(), mask, mask_new)
+        return xr.where(mask_new.isnull(), mask, mask_new)
     # Find neighbours to the north, south, east, west
     mask_n = pad_edges(mask.shift(y=-1))
     mask_s = pad_edges(mask.shift(y=1))
@@ -213,8 +215,8 @@ def distance_to_bdry (lon, lat, mask, periodic=True):
     else:
         mask_e = pad_edges(mask.shift(x=-1))
         mask_w = pad_edges(mask.shift(x=1))
-    # Find points on the boundary
-    bdry = mask.where(mask_n+mask_s+mask_e+mask_w>0)
+    # Find points on the boundary: mask is True, but at least one neighbour is False
+    bdry = mask.where(mask_n*mask_s*mask_e*mask_w==0)
     # Return distance to that boundary
     return distance_to_mask(lon, lat, bdry)    
 

@@ -246,7 +246,7 @@ def add_bear_ridge_bergs (lon, lat, bathy, omask):
 # depth0: isobath to define Antarctica (positive, metres)
 # smooth: whether to smooth over the transition
 # scale_dist: if smooth=True, distance to apply smoothing on either side of transition, in km
-def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/terrafirma/kaight/input_data/grids/bathy_eORCA1_noclosea_from_GEBCO2021_PlusCaspian_FillZero_S21TT_editsJuly2024.nc', out_file='bathy_meter_eORCA1_Storkey_spliceBedMachine3_nohalo.nc', halo=False, lat0=-57, depth0=2500, smooth=True, scale_dist=100):
+def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/terrafirma/kaight/input_data/grids/bathy_eORCA1_noclosea_from_GEBCO2021_PlusCaspian_FillZero_S21TT_editsJuly2024.nc', out_file='bathy_meter_eORCA1_Storkey_spliceBedMachine3_smooth_nohalo.nc', halo=False, lat0=-57, depth0=2500, smooth=True, scale_dist=100):
 
     xr.set_options(keep_attrs=True)
 
