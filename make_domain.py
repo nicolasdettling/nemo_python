@@ -176,9 +176,10 @@ def process_topo (in_file='eORCA025_BedMachine3_IBCSO_AIS.nc', coordinates_file=
     # Don't need to mask grounded ice with zeros as NEMO will do that for us (and if coupled ice sheet is active need to know bathymetry of grounded ice)
     topo['bathy'] = -topo['bathy']
     topo['draft'] = xr.where(topo['imask']==1, -topo['draft'], 0)
-    # Turn negative values (above sea level) to 0 - they'll never be ocean cells
-    topo['bathy'] = xr.where(topo['bathy']>0, topo['bathy'], 0)
-    topo['draft'] = xr.where(topo['draft']>0, topo['draft'], 0)
+    if not will_splice:
+        # Turn negative values (above sea level) to 0 - they'll never be ocean cells
+        topo['bathy'] = xr.where(topo['bathy']>0, topo['bathy'], 0)
+        topo['draft'] = xr.where(topo['draft']>0, topo['draft'], 0)
 
     if bear_ridge:
        print('Masking grounded Bear Ridge icebergs as land')
@@ -262,6 +263,16 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
             ds_global = ds_global.isel(x=slice(1,-1))
             ds_global['x'] = ds_regional['x']
 
+    # Modify ds_global if needed
+    # Change any mask to zeros 
+    ds_global['Bathymetry'] = xr.where(ds_global['Bathymetry'].isnull(), 0, ds_global['Bathymetry'])
+    if 'Bathymetry_isf' not in ds_global:
+        # Placeholder: same as Bathymetry
+        ds_global = ds_global.assign({'Bathymetry_isf':ds_global['Bathymetry']})
+    if 'isf_draft' not in ds_global:
+        # Placeholder: all 0s
+        ds_global = ds_global.assign({'isf_draft':0*ds_global['Bathymetry']})
+
     # Make sure the regional dataset has the same coordinates and variables as the global one
     ds_regional = ds_regional.assign_coords(nav_lon=ds_regional['nav_lon'], nav_lat=ds_regional['nav_lat'])
     ds_regional = ds_regional[[var for var in ds_global]]
@@ -275,17 +286,7 @@ def splice_topo (topo_regional='bathy_meter_AIS.nc', topo_global='/gws/nopw/j04/
     connected = remove_disconnected(mask, (1,1))
     mask = xr.where(connected, mask, 0)
 
-    # Modify ds_global if needed
-    # TODO: change mask to zeros in Bathymetry
-    if 'Bathymetry_isf' not in ds:
-        # TODO: copy Bathymetry
-        pass
-    if 'isf_draft' not in ds:
-        # TODO: set to all 0
-        pass
-
     # Replace the global values with regional ones in this mask
-    # TODO add Bathymetry_isf, isf_draft as these don't exist in Dave's version. Also zero out Bathymetry in land mask (currently masked).
     # Bathymetry is 0 in cavities, Bathymetry_isf includes cavities, isf_draft is 0 outside cavities.
     # Loop over variables rather than doing entire dataset at once, because if so some variables like nav_lat, nav_lon get lost
     for var in ds_global:
