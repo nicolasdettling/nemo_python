@@ -1367,7 +1367,6 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 data_bwsalt.append(bwsalt.where(warming>0))
                 data_cavity_temp.append(cavity_temp.where(warming>0))
                 data_warming.append(warming.where(warming>0))
-                print(suite+', '+str(cavity_temp.isel(time_centered=-1).item())+', '+regions[n]+' ('+scenario+')')
         all_bwsalt.append(data_bwsalt)
         all_cavity_temp.append(data_cavity_temp)
         all_warming.append(data_warming)
