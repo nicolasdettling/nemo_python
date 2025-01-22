@@ -1354,6 +1354,9 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 ds.close()
                 warming = global_mean_sat(suite) - baseline_temp
                 # Smooth and align
+                if bwsalt.sizes['time_centered'] < smooth:
+                    # Simulation hasn't run long enough to include
+                    continue
                 bwsalt = moving_average(bwsalt, smooth)
                 cavity_temp = moving_average(cavity_temp, smooth)
                 warming = moving_average(warming, smooth)
@@ -1364,6 +1367,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 data_bwsalt.append(bwsalt.where(warming>0))
                 data_cavity_temp.append(cavity_temp.where(warming>0))
                 data_warming.append(warming.where(warming>0))
+                print(suite+', '+str(cavity_temp.isel(time_centered=-1).item())+', '+regions[n]+' ('+scenario+')')
         all_bwsalt.append(data_bwsalt)
         all_cavity_temp.append(data_cavity_temp)
         all_warming.append(data_warming)
