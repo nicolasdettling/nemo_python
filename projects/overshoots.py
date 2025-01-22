@@ -1968,7 +1968,7 @@ def plot_FW_timeseries (base_dir='./', fig_name=None):
     timeseries_files = ['timeseries.nc'] + 5*['timeseries_sfc.nc'] + ['timeseries.nc']
     factors = [rho_fw/rho_ice*1e6/sec_per_year] + 4*[1e-3/sec_per_year] + 2*[1]
     units = ['mSv', 'psu (reversed)']
-    colours = ['cyan', 'green', 'blue', 'magenta', 'red', 'DarkGrey', 'black']
+    colours = ['black', 'magenta', 'blue', 'red', 'green', 'DarkGrey', 'cyan']
     num_vars = len(var_names)
     regions = ['ross', 'filchner_ronne']
     smooth_plot = 10*months_per_year
@@ -1983,7 +1983,7 @@ def plot_FW_timeseries (base_dir='./', fig_name=None):
     # Inner function to read the variable from the main suite and subtract the PI baseline
     def read_var_anomaly (var, fname):
         data = read_var(var, base_dir+'/'+suite+'/'+fname)
-        baseline = 0 #read_var(var, base_dir+'/'+pi_suite+'/'+fname).mean(dim='time_counter')
+        baseline = data.isel(time_centered=slice(0,30*months_per_year)).mean(dim='time_centered') #read_var(var, base_dir+'/'+pi_suite+'/'+fname).mean(dim='time_centered')
         return data-baseline
 
     # Loop over variables and read all the data
@@ -2013,7 +2013,7 @@ def plot_FW_timeseries (base_dir='./', fig_name=None):
     gs = plt.GridSpec(1,1)
     gs.update(left=0.12, right=0.9, bottom=0.2, top=0.9)
     ax1 = plt.subplot(gs[0,0])
-    for v in range(num_vars):
+    for v in range(num_vars-2):
         # Second y-axis for last variable
         if v == num_vars-1:
             ax2 = ax1.twinx()
@@ -2025,18 +2025,18 @@ def plot_FW_timeseries (base_dir='./', fig_name=None):
             # Vertical lines to show tipping
             for n in range(len(regions)):
                 ax.axvline(tip_times[n].item(), color='black', linestyle='dashed', linewidth=1)
-                plt.text(tip_times[n].item(), 0, region_names[regions[n]], ha='left', va='top', rotation=-90)
+                plt.text(tip_times[n].item(), 150, region_names[regions[n]], ha='left', va='top', rotation=-90)
     ax1.grid(linestyle='dotted')
     ax1.axhline(0, color='black', linewidth=1)
-    ax1.set_title('Antarctic freshwater fluxes in ramp-up', fontsize=14) #\n(anomalies from preindustrial)', fontsize=14)
+    ax1.set_title('Antarctic freshwater fluxes in ramp-up\n(anomalies from first 30 years)', fontsize=14)
     ax1.set_ylabel(units[0])
     ax2.set_ylabel(units[1])
     ax2.set_ylim(ax2.get_ylim()[::-1])  # Reverse y-axis for salinity
     # Manual legend to get all variables
     handles = []
-    for v in range(num_vars):
+    for v in range(num_vars-2):
         handles.append(Line2D([0], [0], color=colours[v], label=var_titles[v], linestyle='-'))
-    ax1.legend(handles=handles, loc='lower center', bbox_to_anchor=(0.5,-0.25), ncol=4)
+    ax1.legend(handles=handles, loc='lower center', bbox_to_anchor=(0.5,-0.25), ncol=3)
     finished_plot(fig, fig_name=fig_name, dpi=300)
 
 
