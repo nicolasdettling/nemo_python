@@ -16,7 +16,7 @@ from scipy.stats import ttest_ind, linregress
 from tqdm import tqdm
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um
+from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um, check_nans
 from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, timeseries_plot, circumpolar_plot
 from ..plot_utils import truncate_colourmap
 from ..utils import moving_average, add_months, rotate_vector, polar_stereo, convert_ismr
@@ -2102,6 +2102,19 @@ def stage_timescales ():
     # 4. If tipped: Ramp-down to recovery (option for "never")
     # For each, make a 1x2 histogram showing timescales for each region, printing mean and std.
     pass
+
+
+def check_all_nans (base_dir='./'):
+
+    file_names = ['timeseries.nc', 'timeseries_um.nc']
+    var_lists = [['all_massloss', 'all_bwtemp'], ['global_mean_sat']]
+
+    for scenario in suites_by_scenario:
+        for suite in suites_by_scenario[scenario]:
+            print('Checking '+suite)
+            for timeseries_file, var_names in zip(file_names, var_lists):
+                check_nans(base_dir+'/'+suite+'/'+timeseries_file, var_names=var_names)
+        
         
                 
 

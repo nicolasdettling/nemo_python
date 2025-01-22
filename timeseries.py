@@ -522,6 +522,32 @@ def fix_missing_months (timeseries_file):
             # All done
             break
     overwrite_file(ds, timeseries_file)
+
+
+# Check the given timeseries for big chunks of NaNs (3 or more in a row), which could indicate a chunk of missing files on MASS. Check only the given variables (typically one per file type used to generate the timeseries, eg one from grid-T and one from isf-T).
+def check_nans (timeseries_file, var_names=['all_massloss', 'all_bwtemp']):
+
+    limit = 3
+
+    ds = xr.open_dataset(timeseries_file)
+    for var in var_names:
+        if np.count_nonzero(ds[var].isnull()):
+            # There are some NaNs; check for consecutive ones
+            count = 0
+            max_count = 0
+            for t in range(ds.sizes['time_centered']):
+                if ds[var].isel(time_centered=t).isnull():
+                    count += 1
+                    max_count = max(count, max_count)
+                else:
+                    count = 0
+            if max_count >= limit:
+                print('Problem with '+timeseries_file+': '+str(np.count_nonzero(ds[var].isnull()))+' NaNs, max block '+str(max_count))
+                break
+                    
+            
+
+    
             
         
     
