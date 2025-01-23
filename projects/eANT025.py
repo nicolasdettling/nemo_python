@@ -3,6 +3,7 @@
 import xarray as xr
 import matplotlib.pyplot as plt
 import glob
+import pandas as pd
 import numpy as np
 import cmocean
 from calendar import monthrange
@@ -313,4 +314,70 @@ def frames_Amundsen_shelf_T_slices(run_folder, region='', savefig=True, vlim=(-1
                                 figname=f'{run_folder}../animations/frames/amundsen_{region}_T_y{year}m{month:02}d{day:02}.jpg')
     
     return
+
+# Helper function to load NSIDC sea ice data into a dataset 
+def load_nsidc_sea_ice(nsidc_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/NSIDC-obs/'):
+    # load NSIDC sea ice observations: uses a 15% threshold for area
+    nsidc_files = glob.glob(f'{nsidc_folder}S_??_extent_v3.0.csv')
+    nsidc_ds    = pd.concat((pd.read_csv(f) for f in nsidc_files), ignore_index=True)
+    nsidc_ds.columns = list(map(str.lstrip, nsidc_ds)) # strip spaces from column names
+    # clean data:
+    nsidc_ds = nsidc_ds.drop(nsidc_ds[nsidc_ds.year == 1978].index) # drop years with only partial data
+    nsidc_ds = nsidc_ds.drop(nsidc_ds[nsidc_ds.year == 2024].index)
+    nsidc_ds.loc[nsidc_ds['area'] < 0, 'area'] = np.nan # mask negative areas
+
+    return nsidc_ds
+
+# Helper function to calculate simulated sea ice area for files in a particular run folder
+def simulated_sea_ice_area(run_folder):
+
+    icemod_files = glob.glob(f'{run_folder}*icemod*')
+    nemo_ds      = xr.open_mfdataset(icemod_files) 
+
+    sea_ice_area    = nemo_ds.siconc * nemo_ds.area 
+    sea_ice_area_15 = xr.where(nemo_ds.siconc >=0.15, nemo_ds.siconc * nemo_ds.area, 0)
+
+    return sea_ice_area_15
+
+# Evaluate sea ice extent monthly cycle against NSIDC estimates
+# Inputs:
+# - run_folder : string path to simulation file directory
+# - start_year, end_year : integers of range of years to plot
+# Returns: fig, ax 
+def evaluate_sea_ice_seasonal_cycle(run_folder, start_year=1979, end_year=2015, cmap=cmocean.cm.deep, savefig=None, figname=''):
+
+    # Calculate sea ice area from simulation
+    sea_ice_area_15 = simulated_sea_ice_area(run_folder)
+    SIarea_years    = sea_ice_area_15['time_counter.year']
+    # Load NSIDC sea ice observation dataset
+    nsidc_ds = load_nsidc_sea_ice()
+
+    # Take colors at regular intervals spanning the colormap.
+    colors = cmap(np.linspace(0,1,len(range(start_year, end_year+1))))
+
+    # Create figure:
+    fig, ax = plt.subplots(1,1, figsize=(10, 5))
+    ax.set_ylabel('Monthly sea ice area (millions of km2)')
+    for y, year in enumerate(range(start_year, end_year+1)):
+        SIarea_plot =  sea_ice_area_15.sum(['y','x'])[SIarea_years==year].values * 1e-12
+        if y==0:
+            labelname=['NSIDC', 'Model simulation']
+        else:
+            labelname=['_nolegend_', '_nolegend_']
+
+        ax.plot(nsidc_ds[nsidc_ds['year']==year]['mo'], nsidc_ds[nsidc_ds['year']==year]['area'], label=labelname[0], \
+                c='lightgray', linewidth=0.7, zorder=1);
+        ax.plot(np.arange(1,13,1), SIarea_plot, c=colors[y], linewidth=0.7, zorder=2, label=labelname[1]); 
+    
+    ax.set_xticks(np.arange(1,13,1), ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
+    leg = ax.legend()
+    for line in leg.get_lines():
+        line.set_linewidth(2.0)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=start_year, vmax=end_year))
+    fig.colorbar(sm, ax=ax, shrink=0.8)
+
+    if savefig:
+        finished_plot(fig, fig_name=figname)
+
+    return fig, ax
 
