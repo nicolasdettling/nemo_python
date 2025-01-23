@@ -2109,7 +2109,8 @@ def fix_all_missing_months (base_dir='./'):
     file_names = ['timeseries.nc', 'timeseries_um.nc']
     for scenario in suites_by_scenario:
         for suite in suites_by_scenario[scenario]:
-            for timeseries_file in file_names:
+            print('Checking '+suite)
+            for timeseries_file in file_names:                
                 fix_missing_months(base_dir+'/'+suite+'/'+timeseries_file)
 
 

@@ -536,6 +536,7 @@ def check_nans (timeseries_file, var_names=['all_massloss', 'all_bwtemp']):
             max_count = 0
             for t in range(ds.sizes['time_centered']):
                 if ds[var].isel(time_centered=t).isnull():
+                    print('Missing data at '+str(ds['time_centered'][t].dt.year.item())+'-'+str(ds['time_centered'][t].dt.month.item()))
                     count += 1
                     max_count = max(count, max_count)
                 else:
