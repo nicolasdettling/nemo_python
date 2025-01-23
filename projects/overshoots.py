@@ -913,93 +913,93 @@ def all_timeseries_trajectories (var_name, base_dir='./', timeseries_file='times
     return timeseries, suite_strings
 
 
-# Helper function to identify trajectories which have tipped and/or recovered, and at what GW level, for the given region.
-# Returns:
-# (1) a list of tipped trajectories (each a suite string like 'cx209-cz375')
-# (2) a list of GW levels at the tipping points
-# (3) a list of recovered trajectories
-# (4) a list of GW levels at the recovery points
-# (5) a list of peak warming in each trajectory
-# (6) a list of booleans saying whether or not each trajectory tips
-# If bwsalt, instead return:
-# (1) a list of shelf bottom salinity at the tipping points
-# (2) a list of shelf bottom salinity at the recovery points
-def find_tipped_trajectories (region, base_dir='./', bwsalt=False):
+# Helper function to check if the given suite tips.
+# Input:
+# suite: suite name or trajectory string, eg 'cx209' or 'cx209-cy838'
+# region: 'ross' or 'filchner_ronne'
+# XOR
+# cavity_temp: DataArray of temperature averaged over the cavity
+# Optional:
+# smoothed: whether cavity_temp is already smoothed
+# return_date: whether to return a cftime.datetime object showing when it tips
+# return_t: whether to return the time index (integer) showing when cavity_temp tips (only if cavity_temp is set)
+def check_tip (suite=None, region=None, cavity_temp=None, smoothed=False, return_date=False, return_t=False, base_dir='./'):
 
-    pi_suite = 'cs495'
     smooth = 5*months_per_year
-    timeseries_file = 'timeseries.nc'
-    timeseries_file_um = 'timeseries_um.nc'
 
-    if not bwsalt:
-        # Assemble all possible trajectories of global mean temperature anomalies relative to preindustrial
-        ds = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
-        baseline_temp = ds['global_mean_sat'].mean()
-        ds.close()
-        warming_ts, suite_strings = all_timeseries_trajectories('global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, static_ice=False, offset=-1*baseline_temp)
-        num_trajectories = len(warming_ts)
-        # Smooth each
-        for n in range(num_trajectories):
-            warming_ts[n] = moving_average(warming_ts[n], smooth)
+    # Error checking input
+    if suite is not None and region is None:
+        raise Exception('Must set region if suite is defined')
+    if suite is not None and cavity_temp is not None:
+        raise Exception('Cannot set both suite and cavity_temp')
+    if return_t and cavity_temp is None:
+        raise Exception('Can only set return_t if cavity_temp is set')
 
-    # Assemble all possible trajectories of cavity mean temperature
-    cavity_temp_ts = all_timeseries_trajectories(region+'_cavity_temp', base_dir=base_dir, static_ice=False)[0]
-    if bwsalt:
-        # Assemble all possible trajectories of shelf mean bottom salinity
-        shelf_bwsalt_ts = all_timeseries_trajectories(region+'_shelf_bwsalt', base_dir=base_dir, static_ice=False)[0]
-        num_trajectories = len(shelf_bwsalt_ts)
-    # Now loop over them and find the ones that have tipped and/or recovered
-    if bwsalt:
-        bwsalt_at_tip = []
-        bwsalt_at_recovery = []
+    if suite is not None:
+        # Get cavity temp array
+        cavity_temp = build_timeseries_trajectory(suite_string.split('-'), region+'_massloss', base_dir=base_dir)
+        smoothed = False
+    if not smoothed:
+        cavity_temp = moving_average(cavity_temp, smooth)
+
+    tipped = cavity_temp.max() > tipping_threshold
+    if tipped:
+        t_tip = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
+        date_tip = cavity_temp.time_centered[t_tip]
     else:
-        suites_tipped = []
-        warming_at_tip = []
-        suites_recovered = []        
-        warming_at_recovery = []
-    for n in range(num_trajectories):
-        # Smooth and trim/align with warming timeseries
-        cavity_temp = moving_average(cavity_temp_ts[n], smooth)
-        if bwsalt:
-            shelf_bwsalt = moving_average(shelf_bwsalt_ts[n], smooth)
-        else:
-            cavity_temp, warming = align_timeseries(cavity_temp, warming_ts[n])
-        if cavity_temp.max() > tipping_threshold:
-            # Find the time index of first tipping
-            tip_time = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
-            if bwsalt:
-                # Find the shelf salinity at that time index
-                bwsalt_at_tip.append(shelf_bwsalt.isel(time_centered=tip_time))
-            else:
-                # Find the global warming level at that time index
-                tip_warming = warming.isel(time_centered=tip_time)
-                if np.isnan(tip_warming):
-                    continue
-                # Save the global warming anomalies relative to tipping time
-                warming_at_tip.append(tip_warming)
-                suites_tipped.append(suite_strings[n])
-            # Now consider the time after tipping
-            cavity_temp = cavity_temp.isel(time_centered=slice(tip_time,None))
-            if bwsalt:
-                shelf_bwsalt = shelf_bwsalt.isel(time_centered=slice(tip_time,None))
-            else:
-                warming = warming.isel(time_centered=slice(tip_time,None))
-            for t in range(cavity_temp.sizes['time_centered']):
-                # If the temperature has gone back down below the threshold and stays that way for the rest of the simulation, it's recovered
-                if cavity_temp.isel(time_centered=slice(t,None)).max() < tipping_threshold:
-                    if bwsalt:
-                        bwsalt_at_recovery.append(shelf_bwsalt.isel(time_centered=t))
-                    else:
-                        warming_at_recovery.append(warming.isel(time_centered=t))
-                        suites_recovered.append(suite_strings[n])
-                    break
-    if bwsalt:
-        return bwsalt_at_tip, bwsalt_at_recovery
+        t_tip = None
+        date_tip = None
+    if return_date and return_t:
+        return tipped, date_tip, t_tip
+    elif return_date:
+        return tipped, date_tip
+    elif return_t:
+        return tipped, t_tip
     else:
-        # Find maximum warming in each trajectory, and whether or not it tips
-        max_warming = np.array([warming_ts[n].max() for n in range(num_trajectories)])
-        tips = np.array([suite_strings[n] in suites_tipped for n in range(num_trajectories)])
-        return suites_tipped, warming_at_tip, suites_recovered, warming_at_recovery, max_warming, tips
+        return tipped
+
+
+# Helper function to check if the given suite recovers.
+# Input as in tips().
+def check_recover (suite=None, region=None, cavity_temp=None, smoothed=False, return_date=False, return_t=False, base_dir='./'):
+
+    smooth = 5*months_per_year
+    
+    if suite is not None and region is None:
+        raise Exception('Must set region if suite is defined')
+    if suite is not None and cavity_temp is not None:
+        raise Exception('Cannot set both suite and cavity_temp')
+    if return_t and cavity_temp is None:
+        raise Exception('Can only set return_t if cavity_temp is set')
+
+    if suite is not None:
+        cavity_temp = build_timeseries_trajectory(suite_string.split('-'), region+'_massloss', base_dir=base_dir)
+        smoothed = False
+    if not smoothed:
+        cavity_temp = moving_average(cavity_temp, smooth)
+
+    # Check if it even tips
+    tipped, t_tip = check_tip(cavity_temp=cavity_temp, smoothed=True, return_t=True)
+    recovered = False
+    if tipped:        
+        # Check every time index after tipping
+        for t in range(t_tip, cavity_temp.sizes['time_centered']):
+            if cavity_temp.isel(time_centered=slice(t,None)).max() < tipping_threshold:
+                recovered = True
+                t_recover = t
+                date_recover = cavity_temp.time_centered[t_recover]
+                break
+    if not tipped or not recovered:
+        t_recover = None
+        date_recover = None
+    if return_date and return_t:
+        return recovered, date_recover, t_recover
+    elif return_date:
+        return recovered, date_recover
+    elif return_t:
+        return recovered, t_recover
+    else:
+        return recovered    
 
 
 # Analyse the cavity temperature beneath Ross and FRIS to see which scenarios tip and/or recover, under which global warming levels. Also plot this.
@@ -1009,6 +1009,20 @@ def tipping_stats (base_dir='./', fig_name=None):
     temp_correction = [1.0087846842764405, 0.8065649751736049]  # Precomputed by warming_implied_by_salinity_bias()
     bias_print_x = [4.5, 2.5]
     bias_print_y = 1.5
+    pi_suite = 'cs495'
+    smooth = 5*months_per_year
+    timeseries_file = 'timeseries.nc'
+    timeseries_file_um = 'timeseries_um.nc'
+
+    # Assemble all possible trajectories of global mean temperature anomalies relative to preindustrial
+    ds = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
+    baseline_temp = ds['global_mean_sat'].mean()
+    ds.close()
+    warming_ts, suite_strings = all_timeseries_trajectories('global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, static_ice=False, offset=-1*baseline_temp)
+    num_trajectories = len(warming_ts)
+    # Smooth each
+    for n in range(num_trajectories):
+        warming_ts[n] = moving_average(warming_ts[n], smooth)
 
     # Loop over regions
     all_temp_tip = []
@@ -1016,7 +1030,31 @@ def tipping_stats (base_dir='./', fig_name=None):
     all_tips = []
     threshold_bounds = []
     for r in range(len(regions)):
-        suites_tipped, warming_at_tip, suites_recovered, warming_at_recovery, max_warming, tips = find_tipped_trajectories(regions[r])
+        # Assemble all possible trajectories of cavity mean temperature
+        cavity_temp_ts = all_timeseries_trajectories(regions[r]+'_cavity_temp', base_dir=base_dir, static_ice=False)[0]
+        # Now loop over them and find the ones that have tipped and/or recovered
+        suites_tipped = []
+        warming_at_tip = []
+        suites_recovered = []        
+        warming_at_recovery = []
+        for n in range(num_trajectories):
+            # Smooth and trim/align with warming timeseries
+            cavity_temp = moving_average(cavity_temp_ts[n], smooth)
+            cavity_temp, warming = align_timeseries(cavity_temp, warming_ts[n])
+            tips, t_tip = check_tip(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)
+            if tips:
+                tip_warming = warming.isel(time_centered=t_tip)
+                if np.isnan(tip_warming):
+                    continue
+                suites_tipped.append(suite_strings[n])
+                warming_at_tipped.append(tip_warming)
+                recovers, t_recovers = check_recover(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)
+                if recovers:
+                    recover_warming = warming.isel(time_centered=t_recovers)
+                    if np.isnan(recover_warming):
+                        continue
+                    suites_recovered.append(suite_strings[n])
+                    warming_at_recovery.append(recover_warming)
         # Now throw out duplicates, eg if tipping happened before a suite branched into multiple trajectories, should only count it once for the statistics.
         # Do this by only considering unique values of warming_at_tip and warming_at_recovery.
         # This assumes it's impossible for two distinct suites to tip at exactly the same global warming level, to machine precision. I think I'm happy with this!
@@ -1339,6 +1377,8 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
         data_cavity_temp = []
         data_warming = []
         direction = []
+        bwsalt_tip = []
+        bwsalt_recover = []
         for scenario in suites_by_scenario:
             if 'piControl' in scenario or 'static_ice' in scenario:
                 continue
@@ -1367,11 +1407,16 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 data_bwsalt.append(bwsalt.where(warming>0))
                 data_cavity_temp.append(cavity_temp.where(warming>0))
                 data_warming.append(warming.where(warming>0))
+                # Save the salinity at tipping and recovery points, if relevant
+                tips, t_tip = check_tip(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)
+                if tips:
+                    bwsalt_tip.append(bwsalt.isel(time_centered=t_tip))
+                    recovers, t_recover = check_recover(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)
+                    if recovers:
+                        bwsalt_recover.append(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)                
         all_bwsalt.append(data_bwsalt)
         all_cavity_temp.append(data_cavity_temp)
         all_warming.append(data_warming)
-        # Now calculate mean salinity at tipping and recovery
-        bwsalt_tip, bwsalt_recover = find_tipped_trajectories(regions[n], bwsalt=True, base_dir=base_dir)
         bwsalt_tip = np.unique(bwsalt_tip)
         bwsalt_recover = np.unique(bwsalt_recover)
         # Print some statistics
@@ -1627,19 +1672,12 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
     massloss, warming = process_timeseries(region+'_massloss')
 
     # Identify if/when cavity tips or recovers
-    if cavity_temp.max() > tipping_threshold:
-        tip_time = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
-        tip_string = 'Tips in '+str(cavity_temp.coords['time_centered'][tip_time].dt.year.item())+' ('+str(round(warming[tip_time].item(),2))+deg_string+'C)'
-        # Now consider the time post-tipping, to see if it ever recovers (goes back down below tipping_threshold and stays that way)
-        temp_post = cavity_temp.isel(time_centered=slice(tip_time,None))
-        warming_post = warming.isel(time_centered=slice(tip_time,None))
-        recovers = temp_post.isel(time_centered=-1) < tipping_threshold
+    tips, date_tip, t_tip = check_tip(cavity_temp=cavity_temp, smoothed=True, return_date=True, return_t=True, base_dir=base_dir)
+    if tips:
+        tip_string = 'Tips in '+str(date_tip.dt.year.item())+' ('+str(round(warming[t_tip].item(),2))+deg_string+'C)'
+        recovers, date_recover, t_recover = check_recover(cavity_temp=cavity_temp, smoothed=True, return_date=True, return_t=True, base_dir=base_dir)
         if recovers:
-            for t in range(temp_post.sizes['time_centered']):
-                if temp_post.isel(time_centered=slice(t,None)).max() < tipping_threshold:
-                    recover_string = 'Recovers in '+str(temp_post.coords['time_centered'][t].dt.year.item())+' ('+str(round(warming_post[t].item(),2))+deg_string+'C)'
-                    recover_time = t
-                    break
+            recover_string = 'Recovers in '+str(date_recover.dt.year.item())+' ('+str(round(warming_post[t_recover].item(),2))+deg_string+'C)'
         else:
             recover_string = 'Does not recover'
             recover_time = None                
@@ -1903,13 +1941,11 @@ def tipping_time_histogram (base_dir='./', fig_name=None):
                 # Perpetual ramp-up; skip it
                 continue
             stab_time = np.argwhere(cavity_temp.scenario_type.data==0)[0][0]
-            if cavity_temp.max() > tipping_threshold:
-                # Find the time index of first tipping
-                tip_time = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
-                if tip_time >= stab_time:
-                    # Tips after stabilisation
-                    # Calculate years since emissions stabilised
-                    times.append((tip_time-stab_time)/months_per_year)
+            tips, tip_time = check_tip(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)
+            if tips and  tip_time >= stab_time:
+                # Tips after stabilisation
+                # Calculate years since emissions stabilised
+                times.append((tip_time-stab_time)/months_per_year)
         # Throw away duplicates
         times = np.unique(times)
         all_times.append(times)
@@ -2004,12 +2040,7 @@ def plot_FW_timeseries (base_dir='./', fig_name=None):
         data_plot.append(data)
 
     # Find the time of tipping for each cavity
-    tip_times = []
-    for region in regions:
-        cavity_temp = read_var(region+'_cavity_temp', base_dir+'/'+suite+'/timeseries.nc')
-        cavity_temp = moving_average(cavity_temp, smooth_tip)
-        t0 = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
-        tip_times.append(cavity_temp.coords['time_centered'][t0])
+    tip_times = [check_tip(suite=suite, region=region, return_date=True, base_dir=base_dir)[1] for region in regions]
 
     # Plot
     fig = plt.figure(figsize=(7,5))
@@ -2050,17 +2081,15 @@ def plot_untipped_salinity (smooth=30, base_dir='./'):
     stype = [1, 0, -1]
     colours = ['Crimson', 'Grey', 'DodgerBlue']
     labels = ['ramp-up', 'stabilise', 'ramp-down']
+    suite_sequences = all_suite_trajectories()
 
     # Make one figure per untipped trajectory per region
-    for n in range(len(regions)):
+    for region in regions:
         # Find untipped trajectories
-        cavity_temp_all, suite_strings = all_timeseries_trajectories(regions[n]+'_cavity_temp', base_dir=base_dir)
-        shelf_bwsalt_all = all_timeseries_trajectories(regions[n]+'_shelf_bwsalt', base_dir=base_dir)[0]
-        for cavity_temp, shelf_bwsalt, suite_string in zip(cavity_temp_all, shelf_bwsalt_all, suite_strings):
-            if cavity_temp.max() < tipping_threshold:
-                # Does not tip                
-                # Smooth bwsalt
-                bwsalt = moving_average(shelf_bwsalt, smooth*months_per_year)
+        for suite_list in suite_sequences:
+            suite_string = '-'.join(suite_list)
+            if not check_tip(suite=suite_string, region=region):
+                bwsalt = moving_average(build_timeseries_trajectory(suite_list, region+'_shelf_bwsalt', base_dir=base_dir), smooth*months_per_year)
                 # Time-derivative of smoothed array; convert from days to centuries (30-day months in UKESM)
                 ds_dt = bwsalt.differentiate('time_centered', datetime_unit='D')*360*1e2
                 # Smooth it again
@@ -2080,7 +2109,7 @@ def plot_untipped_salinity (smooth=30, base_dir='./'):
                 ax2.set_title('Time derivative', fontsize=12)
                 ax2.axhline(0, color='black', linewidth=0.5)
                 ax2.grid(linestyle='dotted')
-                plt.suptitle(suite_string+', '+region_names[regions[n]], fontsize=14)
+                plt.suptitle(suite_string+', '+region_names[region], fontsize=14)
                 ax1.set_ylabel('psu')
                 ax2.set_ylabel('psu/century')
                 # Manual legend
@@ -2091,19 +2120,147 @@ def plot_untipped_salinity (smooth=30, base_dir='./'):
                 finished_plot(fig)
 
 
-def stage_timescales ():
+# Calculate the timescales for different stages in the tipping process; plot 1x3 timeseries (shelf salinity, cavity temperature, mass loss) for each trajectory and region, and histograms of 4 different timescales.
+def stage_timescales (base_dir='./', fig_dir=None):
 
-    # TODO
-    # For each trajectory and region, plot 3x1 timeseries of 30-year smoothed (1) shelf_bwsalt, (2) cavity_temp, (3) massloss. Identify if tips and/or recovers, and mark years. Cut off ramp-downs that cool beyond preindustrial.
-    # Save the following timescales where relevant:
-    # 1. If tipped: Stabilisation to tipping
-    # 2. If tipped: Tipping to max ismr (initial rapid phase of tipping)
-    # 3. If untipped: Ramp-down to salinification starts (min S: option for negative years; option for "never" if within last 15? years of simulation)
-    # 4. If tipped: Ramp-down to recovery (option for "never")
-    # For each, make a 1x2 histogram showing timescales for each region, printing mean and std.
-    pass
+    regions = ['ross', 'filchner_ronne']
+    smooth = 30*months_per_year
+    titles = ['Bottom salinity on continental shelf', 'Temperature in cavity', 'Basal mass loss']
+    units = ['psu', deg_string+'C', 'Gt/y']
+    stype = [1, 0, -1]
+    colours = ['Crimson', 'Grey', 'DodgerBlue']
+    labels = ['ramp-up', 'stabilise', 'ramp-down']
+    num_bins = 10
 
+    # Inner function to calculate years between two dates; timedelta is returning negative weirdly (overflow with dates?)
+    def years_between (date1, date2):
+        years = date2.dt.year.item() - date1.dt.year.item()
+        months = date2.dt.month.item() - date1.dt.month.item()
+        return years + months/months_per_year
 
+    # Inner function to find the date at which the given scenario type starts
+    def stype_date (data, stype):
+        if np.count_nonzero(data.scenario_type==stype) == 0:
+            return None
+        return data.time_centered[np.argwhere(data.scenario_type==stype)[0][0]]
+
+    stab_to_tip_all = []
+    tip_to_melt_max_all = []
+    ramp_down_to_recovery_all = []
+    ramp_down_to_min_s_all = []
+    # Loop over regions
+    for region in regions:
+        stab_to_tip = []
+        tip_to_melt_max = []
+        ramp_down_to_recovery = []
+        ramp_down_to_min_s = []
+        all_shelf_bwsalt, suite_strings = all_timeseries_trajectories(region+'_shelf_bwsalt', base_dir=base_dir)
+        all_cavity_temp = all_timeseries_trajectories(region+'_cavity_temp', base_dir=base_dir)[0]
+        all_massloss = all_timeseries_trajectories(region+'_massloss', base_dir=base_dir)[0]
+        # Loop over trajectories
+        for suite_string, shelf_bwsalt, cavity_temp, massloss in zip(suite_strings, all_shelf_bwsalt, all_cavity_temp, all_massloss):
+            tip_time = None
+            stab_time = None
+            melt_max_time = None
+            ramp_down_time = None
+            recover_time = None
+            min_s_time = None
+            shelf_bwsalt_smooth = moving_average(shelf_bwsalt, smooth)
+            cavity_temp_smooth = moving_average(cavity_temp, smooth)
+            massloss_smooth = moving_average(massloss, smooth)
+            # Check for trajectories which tip
+            tips, tip_time = check_tip(cavity_temp=cavity_temp, smoothed=False, return_date=True, base_dir=base_dir)
+            if tips:
+                # Check for trajectories which tip after stabilisation
+                stab_time = stype_date(cavity_temp, 0)
+                if stab_time is not None and tip_time > stab_time:
+                    # Save years between stabilisation and tipping
+                    stab_to_tip.append(years_between(stab_time, tip_time))
+                # Find time of max smoothed mass loss
+                melt_max_time = massloss_smooth.time_centered[massloss_smooth.argmax()]
+                # Save years between tipping and max mass loss
+                tip_to_melt_max.append(years_between(tip_time, ismr_max_time))
+                # Check for trajectories which have a ramp-down
+                ramp_down_time = stype_date(cavity_temp, -1)
+                if ramp_down_time is not None:
+                    # Check for trajectories which recover
+                    recovers, recover_time = check_recover(cavity_temp=cavity_temp, smoothed=False, return_date=True, base_dir=base_dir)
+                    if recovers:
+                        # Save years between ramp-down and recovery
+                        ramp_down_to_recover.append(years_between(ramp_down_time, recover_time))                
+            else:
+                # Untipped
+                recovers = False
+                # Check for trajectories which have a ramp-down
+                ramp_down_time = stype_date(cavity_temp, -1)
+                if ramp_down_time is not None:
+                    # Find time of min smoothed salinity, unless it's in the last 10 years (not stabilised yet)
+                    ts = shelf_bwsalt_smooth.argmin()
+                    if ts < shelf_bwsalt_smooth.sizes['time_centered']-10*months_per_year:
+                        min_s_time = shelf_bwsalt_smooth.time_centered[ts]
+                        # Save years between ramp-down and min salinity
+                        ramp_down_to_min_s.append(years_between(ramp_down_time, min_s_time))
+            # Plot
+            fig = plt.figure(figsize=(5,8))
+            gs = plt.GridSpec(3,1)
+            gs.update(left=0.15, right=0.95, bottom=0.1, top=0.9, hspace=0.2)
+            data_plot = [shelf_bwsalt_smooth, cavity_temp_smooth, massloss_smooth]
+            for n in range(3):
+                ax = plt.subplot(gs[n,0])
+                # Plot different phases in different colours
+                for m in range(len(stype)):
+                    index = shelf_bwsalt_smooth.scenario_type == stype[m]
+                    ax.plot_date(data_plot[n].time_centered.where(index, drop=True), data_plot[n].where(index, drop=True), '-', color=colours[m], line_width=1)
+                ax.set_title(titles[n], fontsize=12)
+                ax.set_ylabel(units[n], fontsize=10)
+                ax.grid(linestyle='dotted')
+                ymax = ax.get_ylim()[-1]
+                if tips:
+                    ax.axvline(tip_time.item(), color='black', linestyle='dashed', linewidth=1)
+                    plt.text(tip_time.item(), ymax, 'tips', ha='left', va='top')
+                if recovers:
+                    ax.axvline(recover_time.item(), color='black', linestyle='dashed', linewidth=1)
+                    plt.text(recover_time.item(), ymax, 'recovers', ha='left', va='top')
+            plt.suptitle(suite_string+', '+region_names[regions], fontsize=14)
+            if fig_dir is not None:
+                fig_name = fig_dir+'/'+suite_string+'_'+region+'.png'
+            else:
+                fig_name = None
+            finished_plot(fig, fig_name=fig_name)
+        stab_to_tip_all.append(np.unique(stab_to_tip))
+        tip_to_melt_max_all.append(np.unique(tip_to_melt_max))
+        ramp_down_to_recovery_all.append(np.unique(ramp_down_to_recovery))
+        ramp_down_to_min_s_all.append(np.unique(ramp_down_to_min_s))
+
+    # Plot histograms
+    def plot_histogram (times_all, title, abbrev):
+        tmax = np.amax([np.amax(times) for times in times_all])
+        bins = np.linspace(0, tmax, num=num_bins)
+        fig = plt.figure(figsize=(5,5))
+        gs = plt.GridSpec(2,1)
+        gs.update(left=0.05, right=0.99, bottom=0.1, top=0.85, hspace=0.4)
+        for r in range(len(regions)):
+            ax = plt.subplot(gs[r,0])
+            ax.hist(all_times[r], bins=bins)
+            ax.set_title(region_names[regions[r]], fontsize=12)
+            if r==0:
+                ax.set_ylabel('# simulations', fontsize=10)
+            if r==1:
+                ax.set_xlabel('years', fontsize=10)
+            plt.text(0.02, 0.98, 'Mean '+str(np.mean(all_times[r]))+' years', ha='left', va='top', transform=ax.transAxes)
+            plt.text(0.02, 0.94, 'Range '+str(np.amin(all_times[r]))+'-'+str(np.amax(all_times[r]))+' years', ha='left', va='top', transform=ax.transAxes)
+            plt.text(0.02, 0.9, 'n='+str(np.size(all_times[r])))
+        plt.suptitle(title, fontsize=14)
+        if fig_dir is not None:
+            fig_name = fig_dir+'/histogram_'+abbrev+'.png'
+        else:
+            fig_name = None
+        finished_plot(fig, fig_name=fig_name)
+
+    for times_all, title, abbrev in zip([stab_to_tip_all, tip_to_melt_max_all, ramp_down_to_recovery_all, ramp_down_to_min_s_all], ['climate stabilisation and tipping', 'tipping and maximum basal mass loss', 'ramp-down and recovery', 'ramp-down and minimum salinity'], ['stab_to_tip', 'tip_to_melt_max', 'ramp_down_to_recovery', 'ramp_down_to_min_s']):
+        plot_histogram(times_all, 'Time between '+title, abbrev)
+
+        
 def fix_all_missing_months (base_dir='./'):
 
     file_names = ['timeseries.nc', 'timeseries_um.nc']
