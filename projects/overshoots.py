@@ -1037,17 +1037,18 @@ def tipping_stats (base_dir='./', fig_name=None):
         warming_at_tip = []
         suites_recovered = []        
         warming_at_recovery = []
+        tips = []
         for n in range(num_trajectories):
             # Smooth and trim/align with warming timeseries
             cavity_temp = moving_average(cavity_temp_ts[n], smooth)
             cavity_temp, warming = align_timeseries(cavity_temp, warming_ts[n])
-            tips, t_tip = check_tip(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)
-            if tips:
+            traj_tips, t_tip = check_tip(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)
+            if traj_tips:
                 tip_warming = warming.isel(time_centered=t_tip)
                 if np.isnan(tip_warming):
                     continue
                 suites_tipped.append(suite_strings[n])
-                warming_at_tipped.append(tip_warming)
+                warming_at_tip.append(tip_warming)
                 recovers, t_recovers = check_recover(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)
                 if recovers:
                     recover_warming = warming.isel(time_centered=t_recovers)
@@ -1055,12 +1056,15 @@ def tipping_stats (base_dir='./', fig_name=None):
                         continue
                     suites_recovered.append(suite_strings[n])
                     warming_at_recovery.append(recover_warming)
+            tips.append(traj_tips)
+        tips = np.array(tips)
         # Now throw out duplicates, eg if tipping happened before a suite branched into multiple trajectories, should only count it once for the statistics.
         # Do this by only considering unique values of warming_at_tip and warming_at_recovery.
         # This assumes it's impossible for two distinct suites to tip at exactly the same global warming level, to machine precision. I think I'm happy with this!
         warming_at_tip = np.unique(warming_at_tip)
         warming_at_recovery = np.unique(warming_at_recovery)
-                
+        # Find maximum warming in each trajectory
+        max_warming = np.array([warming_ts[n].max() for n in range(num_trajectories)])                
         # Print some statistics about which ones tipped and recovered
         print('\n'+regions[r]+':')
         print(str(len(suites_tipped))+' trajectories tip, '+str(len(warming_at_tip))+' unique')
