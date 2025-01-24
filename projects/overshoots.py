@@ -65,6 +65,10 @@ suites_by_scenario_1ens = {'ramp_up': 'cx209',  # First ensemble member for ramp
 suites_ramp_down_rates = {'8 Gt/y' : ['di335', 'da800', 'da697', 'da892', 'df453', 'dc251', 'de943', 'dg093', 'dm357'],
                           '4 Gt/y' : ['dc051', 'dc052', 'dc248', 'dc249', 'dc565', 'dd210', 'dc032', 'df028', 'dc123', 'dc130', 'de962', 'dg094', 'dm358'],
                           '2 Gt/y' : ['df025', 'df027', 'df021', 'df023', 'dh541', 'dh859', 'de963', 'dg095', 'dm359']}
+# Dictionary of overshoot lengths
+suites_overshoot_lengths = {'50 years': ['da697', 'dc052', 'di335', 'dc051', 'df025', 'df453', 'df028', 'df021', 'da892', 'dc123', 'dh541', 'dc251', 'dc130', 'de943', 'de962', 'de963'],
+                            '200 years': ['dc248', 'da800', 'dc565', 'df027', 'dc249', 'df023', 'dh859', 'dd210', 'dg093', 'dg094', 'dg095', 'dm357', 'dm358', 'dm359'],
+                            '30 years': ['dc032']}
 
 # Dictionary of which suites branch from which. None means it's a ramp-up suite (so branched from a piControl run, but we don't care about that for the purposes of integrated GW)
 suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'di335':'cy838', 'df453':'cz375', 'dc565':'cy838', 'dd210':'cz376', 'df028':'cz375', 'df025':'cy838', 'df027':'cy838', 'df021':'cz375', 'df023':'cz375', 'dh541':'cz376', 'dh859':'cz376', 'de943':'cz378', 'de962':'cz378', 'de963':'cz378', 'dg093':'cz377', 'dg094':'cz377', 'dg095':'cz377', 'dm357':'cz378', 'dm358':'cz378', 'dm359':'cz378'}
@@ -1617,6 +1621,32 @@ def plot_amundsen_temp_velocity (base_dir='./'):
     finished_plot(fig, fig_name='figures/amundsen_temp_velocity.png', dpi=300)
 
 
+# Helper function to construct a nice suite title describing the given trajectory
+def trajectory_title (suites):
+
+    if not isinstance(suites, list):
+        suites = suites.split(',')
+    title = ''
+    for suite in suites:
+        # Figure out what sort of scenario it is
+        for scenario in suites_by_scenario:
+            if suite in suites_by_scenario[scenario]:
+                if 'ramp_up' in scenario:
+                    title += 'Ramp up 8 GtC/y'
+                elif 'stabilise' in scenario:
+                    title += ', stabilise '+scenario[:scenario.index('K_')]+deg_string+'C for '
+                elif 'ramp_down' in scenario:
+                    # Figure out length of overshoot
+                    for length in suites_overshoot_lengths:
+                        if suite in suites_overshoot_lengths[length]:
+                            title += length
+                    # Figure out ramp-down rate
+                    for rate in suites_ramp_down_rates:
+                        if suite in suites_ramp_down_rates[rate]:
+                            title += ', ramp down -'+rate
+    return title
+
+
 # Make an animation showing all sorts of things for the given trajectory.
 def dashboard_animation (suite_string, region, base_dir='./', out_dir='animations/', only_precompute=False):
 
@@ -1629,29 +1659,7 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
         raise Exception('Invalid region '+region)
 
     # Assemble main title of plot, to describe the trajectory
-    sim_title = ''
-    for suite in suite_list:
-        # Figure out what type of trajectory it is
-        for scenario in suites_by_scenario:
-            if suite in suites_by_scenario[scenario]:
-                if 'ramp_up' in scenario:
-                    sim_title += 'ramp up'
-                elif 'stabilise' in scenario:
-                    if 'restabilise' in scenario:
-                        sim_title += 'restabilise '
-                    else:
-                        sim_title += 'stabilise '
-                    sim_title += scenario[:scenario.index('K_')]+deg_string+'C'
-                elif 'ramp_down' in scenario:
-                    sim_title += 'ramp down '
-                    for rate in suites_ramp_down_rates:
-                        if suite in suites_ramp_down_rates[rate]:
-                            sim_title += rate
-                else:
-                    raise Exception('Invalid scenario '+scenario)
-                sim_title += ', '                    
-    # Trim final comma
-    sim_title = sim_title[:-2]
+    sim_title = trajectory_title(suite_list)
 
     print('Reading timeseries')
     # Assemble timeseries, 5-year smoothed
@@ -2286,7 +2294,61 @@ def check_all_nans (base_dir='./'):
             print('Checking '+suite)
             for timeseries_file, var_names in zip(file_names, var_lists):
                 check_nans(base_dir+'/'+suite+'/'+timeseries_file, var_names=var_names)
+
+
+# Plot a series of maps showing snapshots of the given variable in each cavity for selected scenarios: initial state, tipping point, 100 years later, recovery point. Works for bwtemp, bwsalt, ismr. Later add icevel (BISICLES output).
+def map_snapshots (var_name='bwtemp', base_dir='./'):
+
+    regions = ['ross', 'filchner_ronne']
+    suite_strings = ['cx209-cz376-dc123', 'cx209-cz377-dc130']
+
+    # Set variable title, NEMO name, units
+    if var_name == 'bwtemp':
+        var_title = 'Bottom ocean temperature in and around ice shelf cavity'
+        units = deg_string+'C'
+        file_tail = 'grid-T.nc'
+        nemo_var = 'tob'
+    elif var_name == 'bwsalt':
+        var_title = 'Bottom ocean salinity in and around ice shelf cavity'
+        units = 'psu'
+        file_tail = 'grid-T.nc'
+        nemo_var = 'sob'
+    elif var_name == 'ismr':
+        var_title = 'Ice shelf melt rate'
+        units = 'm/y'
+        file_tail = 'isf-T.nc'
+        nemo_var = 'sowflisf'
+    elif var_name == 'icevel':
+        raise Exception('Not yet coded icevel case')
+    else:
+        raise Exception('Invalid variable '+var_name)
+
+    # Construct suite titles describing each trajectory
+    suite_titles = [trajectory_title(suites) for suites in suite_strings]
+
+    # Find initial, tipping, and recovery years and suites
+    plot_years = []
+    plot_suites = []
+    for region, suite_string in zip(regions, suite_strings):
+        years = []
+        suites = []
         
+        
+        
+    
+
+    # Read data from year 0, tipping, tipping+100, recovery; mask and annually average (careful with masks changing)
+    # Leave code stubs for icevel
+    # Find most retreated GL, trim to a few cells larger than that
+    # Find min and max in that region
+
+    # Get initial GL somehow for contour later
+    # Also contour ice shelf front
+
+    # Plot
+    
+
+    
         
                 
 
