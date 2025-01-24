@@ -1003,7 +1003,7 @@ def check_recover (suite=None, region=None, cavity_temp=None, smoothed=False, re
 
 
 # Analyse the cavity temperature beneath Ross and FRIS to see which scenarios tip and/or recover, under which global warming levels. Also plot this.
-def tipping_stats (base_dir='./', fig_name=None):
+def tipping_stats (base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
     temp_correction = [1.0087846842764405, 0.8065649751736049]  # Precomputed by warming_implied_by_salinity_bias()
@@ -1136,7 +1136,7 @@ def tipping_stats (base_dir='./', fig_name=None):
     for m in range(len(colours)):
         handles.append(Line2D([0], [0], marker='o', markersize=4, color=colours[m], label=labels[m], linestyle=''))
     plt.legend(handles=handles, loc='center left', bbox_to_anchor=(-0.35, 1.2), fontsize=9)
-    finished_plot(fig, fig_name=fig_name, dpi=300)
+    finished_plot(fig, fig_name='figures/tipping_stats.png', dpi=300)
     
 
 # Plot: (1) bottom temperature on continental shelf and in cavities, and (2) ice shelf basal mass loss as a function of global warming level, for 2 different regions, showing ramp-up, stabilise, and ramp-down in different colours
@@ -1912,6 +1912,7 @@ def precompute_all_animations ():
 
 
 # Call dashboard_animation for every precomputed file.
+# To do: only the ones which have actually changed since last time - look at timestamps on precomputed files vs MP4s?
 def animate_all (out_dir='animations/'):
 
     for f in os.listdir(out_dir+'/precomputed/'):
@@ -2002,7 +2003,7 @@ def sfc_FW_timeseries (suite='cx209', base_dir='./'):
 
 
 # Timeseries of various freshwater fluxes, relative to preindustrial baseline, for one ramp-up simulation.
-def plot_FW_timeseries (base_dir='./', fig_name=None):
+def plot_FW_timeseries (base_dir='./'):
 
     suite = 'cx209'
     pi_suite = 'cs495'
@@ -2075,7 +2076,7 @@ def plot_FW_timeseries (base_dir='./', fig_name=None):
     for v in range(num_vars-2):
         handles.append(Line2D([0], [0], color=colours[v], label=var_titles[v], linestyle='-'))
     ax1.legend(handles=handles, loc='lower center', bbox_to_anchor=(0.5,-0.25), ncol=3)
-    finished_plot(fig, fig_name=fig_name, dpi=300)
+    finished_plot(fig, fig_name='figures/FW_timeseries.png', dpi=300)
 
 
 # Plot shelf bwsalt and its time-derivative for the Ross and FRIS regions in untipped trajectories, with the given level of smoothing (in years).
