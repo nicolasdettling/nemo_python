@@ -224,8 +224,11 @@ def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year,
 
 # Generate the postprocessing file name for a CESM variable for the given experiment, year and ensemble member.
 # for example, expt = 'LE2', ensemble_member='1011.001'
+# Inputs:
+# bias_corr (optional) : boolean indicating whether you are looking for the bias corrected files
 def find_processed_cesm2_file(expt, var_name, ensemble_member, year,
-                              base_dir='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/'):
+                              base_dir='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/',
+                              bias_corr=False):
 
     import glob
     from datetime import datetime
@@ -241,10 +244,19 @@ def find_processed_cesm2_file(expt, var_name, ensemble_member, year,
         if year > 2000:
             raise Exception('Not a valid year for the specified experiment and ensemble member')
 
-    file_list  = glob.glob(f'{base_dir}{expt}/processed/CESM2-{expt}_ens{ensemble_member}_{var_name}_y*')
+    if bias_corr:
+        file_list = glob.glob(f'{base_dir}{expt}/bias-corrected/CESM2-{expt}_ens{ensemble_member}_{var_name}_bias_corr_y*')
+        file_path = f'{base_dir}{expt}/bias-corrected/CESM2-{expt}_ens{ensemble_member}_{var_name}_bias_corr_y{year}.nc'
+    else:
+        file_list = glob.glob(f'{base_dir}{expt}/processed/CESM2-{expt}_ens{ensemble_member}_{var_name}_y*')
+        file_path = f'{base_dir}{expt}/processed/CESM2-{expt}_ens{ensemble_member}_{var_name}_y{year}.nc'
+
     found_date = False
     for file in file_list:
-        file_year = datetime.strptime((file.split(f'_{var_name}_y')[1]).split('.nc')[0], '%Y').year
+        if bias_corr:
+            file_year = datetime.strptime((file.split(f'_{var_name}_bias_corr_y')[1]).split('.nc')[0], '%Y').year
+        else:
+            file_year = datetime.strptime((file.split(f'_{var_name}_y')[1]).split('.nc')[0], '%Y').year
         if (year == file_year): # found the file we're looking for
             found_date = True
             break
@@ -252,7 +264,4 @@ def find_processed_cesm2_file(expt, var_name, ensemble_member, year,
     if not found_date:
         raise Exception('File for requested year not found, double-check that it exists?')
    
-    # Return the requested file
-    file_path = f'{base_dir}{expt}/processed/CESM2-{expt}_ens{ensemble_member}_{var_name}_y{year}.nc'
-
     return file_path
