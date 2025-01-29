@@ -941,7 +941,7 @@ def check_tip (suite=None, region=None, cavity_temp=None, smoothed=False, return
 
     if suite is not None:
         # Get cavity temp array
-        cavity_temp = build_timeseries_trajectory(suite_string.split('-'), region+'_massloss', base_dir=base_dir)
+        cavity_temp = build_timeseries_trajectory(suite_string.split('-'), region+'_cavity_temp', base_dir=base_dir)
         smoothed = False
     if not smoothed:
         cavity_temp = moving_average(cavity_temp, smooth)
@@ -977,7 +977,7 @@ def check_recover (suite=None, region=None, cavity_temp=None, smoothed=False, re
         raise Exception('Can only set return_t if cavity_temp is set')
 
     if suite is not None:
-        cavity_temp = build_timeseries_trajectory(suite_string.split('-'), region+'_massloss', base_dir=base_dir)
+        cavity_temp = build_timeseries_trajectory(suite_string.split('-'), region+'_cavity_temp', base_dir=base_dir)
         smoothed = False
     if not smoothed:
         cavity_temp = moving_average(cavity_temp, smooth)
@@ -2300,24 +2300,34 @@ def check_all_nans (base_dir='./'):
 def map_snapshots (var_name='bwtemp', base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
+    subfig = [r'$\bf{a}. ', r'$\bf{b}. ']
+    num_regions = len(regions)
     suite_strings = ['cx209-cz376-dc123', 'cx209-cz377-dc130']
+    year_titles = [['Initial', 'Tipping', '100 years later', 'Recovery'] for n in range(num_regions)]
+    mask_pad = 1e3
 
     # Set variable title, NEMO name, units
     if var_name == 'bwtemp':
         var_title = 'Bottom ocean temperature in and around ice shelf cavity'
         units = deg_string+'C'
-        file_tail = 'grid-T.nc'
         nemo_var = 'tob'
+        vmin = -3
+        vmax = 5
+        ctype = 'viridis'
     elif var_name == 'bwsalt':
         var_title = 'Bottom ocean salinity in and around ice shelf cavity'
         units = 'psu'
-        file_tail = 'grid-T.nc'
         nemo_var = 'sob'
+        vmin = 34.3
+        vmax = 35
+        ctype = 'viridis'
     elif var_name == 'ismr':
         var_title = 'Ice shelf melt rate'
         units = 'm/y'
-        file_tail = 'isf-T.nc'
         nemo_var = 'sowflisf'
+        vmin = -2
+        vmax = 30
+        ctype = 'ismr'
     elif var_name == 'icevel':
         raise Exception('Not yet coded icevel case')
     else:
@@ -2326,27 +2336,146 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
     # Construct suite titles describing each trajectory
     suite_titles = [trajectory_title(suites) for suites in suite_strings]
 
-    # Find initial, tipping, and recovery years and suites
-    plot_years = []
-    plot_suites = []
-    for region, suite_string in zip(regions, suite_strings):
-        years = []
-        suites = []
-        
-        
-        
-    
+    # Inner function to figure out which suite in the trajectory the given year is, given a list of suites and corresponding starting years
+    def find_suite (year, suite_list, start_years):
+        # Loop backwards through suites
+        for suite, year0 in zip(suite_list[::-1], start_years[::-1]):
+            if year > year0:
+                return suite
+        raise Exception('Year '+str(year)+' is too early')
 
-    # Read data from year 0, tipping, tipping+100, recovery; mask and annually average (careful with masks changing)
-    # Leave code stubs for icevel
-    # Find most retreated GL, trim to a few cells larger than that
-    # Find min and max in that region
+    # Inner function to find the most retreated mask in the given direction from the list of masks, and set the plotting bound to be a bit larger than that
+    def set_bound (masks, coord, option):
+        if option == 'min':
+            bound = coord.max()
+        elif option == 'max':
+            bound = coord.min()
+        else:
+            raise Exception('Invalid option '+option)
+        for mask in masks:
+            if option == 'min':
+                bound = min(bound, coord.where(mask).min())
+            elif option == 'max':
+                bound = max(bound, coord.where(mask).max())
+        if option == 'min':
+            bound = bound - mask_pad
+        elif option == 'max':
+            bound = bound + mask_pad
+        return bound
 
-    # Get initial GL somehow for contour later
-    # Also contour ice shelf front
-
-    # Plot
-    
+    # Set up plot
+    fig = plt.figure(figsize=(8,6))
+    gs = plt.GridSpec(2,4)
+    gs.update(left=0.05, right=0.95, bottom=0.1, top=0.8, wspace=0.1, hspace=0.7)
+    # Loop over regions
+    for n in range(num_regions):
+        # Find initial, tipping, and recovery years and suites
+        tips, date_tip = check_tip(suite=suite_strings[n], region=regions[n], return_date=True, base_dir=base_dir)
+        if not tips:
+            raise Exception(suite_string+' does not tip')
+        recovers, date_recover = check_recover(suite=suite_strings[n], region=regions[n], return_date=True, base_dir=base_dir)
+        if not recovers:
+            raise Exception(suite_strings[n]+' does not recover')
+        # Find starting year of each suite in trajectory
+        start_years = []
+        suite_list = suite_strings[n].split(',')
+        for suite in suite_list:
+            file_names = []
+            for f in os.listdir(base_dir+'/'+suite):
+                if f.startswith('nemo_'+suite+'o_1m_') and f.endswith('-T.nc'):
+                    file_names.append(f)
+            file_names.sort()
+            date_code = re.findall(r'\d{4}\d{2}\d{2}', file_names[0])
+            start_years.append(int(date_code[:4]))
+        # Now locate the years and suites we want to plot
+        plot_years = [start_years[0], date_tip.dt.year, date_tip.dt.year+100, date_recover.dt.year]
+        plot_suites = [find_suite(year, suite_list, start_years) for year in years]
+        # Add the tipping and recovery years (since initial) to the titles
+        for m in [1, 3]:
+            year_titles[n][m] += ' (year '+str(plot_years[m]-plot_years[0])+')'
+        # Now read the data for the four years, annually averaging
+        data_plot = []
+        omask_plot = []
+        imask_plot = []
+        for year, suite in zip(plot_years, plot_suites):
+            if var_name == 'icevel':
+                raise Exception('Not yet coded icevel case')
+            else:
+                # Build a list of the NEMO file patterns to read for this year
+                files_to_read = []
+                for f in os.listdir(base_dir+'/'+suite):
+                    if f.startswith('nemo_'+suite+'o_1m_'+str(year)) and f.endswith('-T.nc'):
+                        date_codes = re.findall(r'\d{4}\d{2}\d{2}', f)
+                        file_pattern = base_dir+'/'+suite+'/nemo_'+suite+'o_1m_'+date_codes[0]+'-'+date_codes[1]+'*-T.nc'
+                        if file_pattern not in files_to_read:
+                            files_to_read.append(file_pattern)
+                files_to_read.sort()
+                # Check there are 12 files
+                if len(files_to_read) != months_per_year:
+                    raise Exception(str(len(files_to_read))+' files found for '+suite+', year '+str(year))
+                # Annually average, carefully with masks
+                data_accum = None
+                ocean_mask = None
+                ice_mask = None
+                for file_pattern in files_to_read:
+                    ds = xr.open_dataset(file_pattern)
+                    ds.load()
+                    ds = ds.swap_dims({'time_counter':'time_centered'}).drop_vars(['time_counter'])
+                    data_tmp = ds[nemo_var].where(ds[nemo_var]!=0)
+                    ocean_mask_tmp = region_mask(regions[n], ds)
+                    ice_mask_tmp = region_mask(regions[n], ds, option='cavity')
+                    if data_accum is None:
+                        data_accum = data_tmp
+                        ocean_mask = ocean_mask_tmp
+                        ice_mask = ice_mask_tmp
+                        if n==0:
+                            # Set up plotting coordinates
+                            x, y = polar_stereo(ds['nav_lon'], ds['nav_lat'])
+                            lon_edges = cfxr.bounds_to_vertices(ds['bounds_lon'], 'nvertex')
+                            lat_edges = cfxr.bounds_to_vertices(ds['bounds_lat'], 'nvertex')
+                            x_edges, y_edges = polar_stereo(lon_edges, lat_edges)
+                            x_bg, y_bg = np.meshgrid(np.linspace(x_edges.min(), x_edges.max()), np.linspace(y_edges.min(), y_edges.max()))
+                            mask_bg = np.ones(x_bg.shape)
+                    else:
+                        data_accum = xr.concat([data_accum, data_tmp], dim='time_centered')
+                        # Save most retreated GL
+                        ocean_mask = xr.where(ocean_mask_tmp+ocean_mask, True, False)
+                        ice_mask = xr.where(ice_mask_tmp+ice_mask, True, False)
+                    ds.close()
+                data_mean = data_accum.mean(dim='time_centered')
+                if var_name == 'ismr':
+                    data_mean = convert_ismr(data_mean)
+                data_plot.append(data_mean)
+                omask_plot.append(ocean_mask)
+                imask_plot.append(ice_mask)
+            # Set plotting bounds on x and y
+            xmin = set_bound(omask_plot, x, 'min')
+            xmax = set_bound(omask_plot, x, 'max')
+            ymin = set_bound(omask_plot, y, 'min')
+            ymax = set_bound(omask_plot, y, 'max')
+            cmap = set_colours(data_plot[0], ctype=ctype, vmin=vmin, vmax=vmax)
+            # Plot
+            for m in range(len(data_plot)):
+                ax = plt.subplot(gs[n,m])
+                # Shade land in grey
+                omask = omask_plot[m].where(omask_plot[m])
+                ax.pcolormesh(x_bg, y_bg, mask_bg, cmap=cl.ListedColormap(['DarkGrey']))
+                # Clear open ocean back to white
+                ax.pcolormesh(x_edges, y_edges, omask, cmap=cl.ListedColormap(['white']))
+                # Plot the data
+                img = ax.pcolormesh(x_edges, y_edges, data_plot[m], cmap=cmap, vmin=vmin, vmax=vmax)
+                # TODO: contour initial GL in contrasting colour
+                # TODO: contour ice front in thin black
+                ax.set_xlim([xmin, xmax])
+                ax.set_ylim([ymin, ymax])
+                ax.set_xticks([])
+                ax.set_yticks([])
+                ax.set_title(year_titles[n][m], fontsize=12)
+        plt.text(0.5, 1-0.01*n, subfig[n]+region_names[regions[n]]+' Ice Shelf', ha='center', va='top', fontsize=16, transform=fig.transFigure)
+        plt.text(0.5, 1-0.1*n, suite_titles[n], ha='center', va='top', fontsize=12, transform=fig.transFigure)
+    cax = fig.add_axes([0.3, 0.05, 0.4, 0.03])
+    plt.colorbar(img, cax=cax, orientation='horizontal', extend='both')
+    finished_plot(fig, fig_name=None) #'figures/map_snapshots_'+var_name+'.png', dpi=300)    
 
     
         
