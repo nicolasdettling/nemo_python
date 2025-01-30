@@ -2371,7 +2371,7 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
                 bound = max(bound, coord.where(mask).max())
         if option == 'min':
             bound -= max_pad
-        elif option = 'max':
+        elif option == 'max':
             bound += max_pad
         return bound
     
