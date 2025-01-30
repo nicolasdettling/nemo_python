@@ -2328,16 +2328,16 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         var_title = 'Bottom ocean salinity'
         units = 'psu'
         nemo_var = 'sob'
-        vmin = 34.3
-        vmax = 35
+        vmin = 33
+        vmax = 34.9
         ctype = 'viridis'
-        colour_GL = 'magenta'
+        colour_GL = 'white'
     elif var_name == 'ismr':
         var_title = 'Ice shelf melt rate'
         units = 'm/y'
         nemo_var = 'sowflisf'
         vmin = -2
-        vmax = 30
+        vmax = 20
         ctype = 'ismr'
         colour_GL = 'blue'
     elif var_name == 'icevel':
@@ -2370,9 +2370,9 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
             elif option == 'max':
                 bound = max(bound, coord.where(mask).max())
         if option == 'min':
-            bound -= max_pad
+            bound -= mask_pad
         elif option == 'max':
-            bound += max_pad
+            bound += mask_pad
         return bound
     
     # Loop over regions and read all the things we need
@@ -2470,9 +2470,7 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         ymin = set_bound(omask_region, y, 'min')
         ymax = set_bound(omask_region, y, 'max')
         x_bounds.append([xmin, xmax])
-        y_bounds.append([ymin, ymax])
-        if n == 0:
-            cmap = set_colours(data_region[0], ctype=ctype, vmin=vmin, vmax=vmax)[0]
+        y_bounds.append([ymin, ymax])            
         # Prepare initial GL and ice front for contouring
         omask_ini = omask_region[0].astype('float')
         imask_ini = imask_region[0].astype('float')
@@ -2488,6 +2486,7 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         print(regions[n]+' bounds from '+str(vmin_real)+' to '+str(vmax_real))
 
     # Plot
+    cmap = set_colours(data_plot[0][0], ctype=ctype, vmin=vmin, vmax=vmax)[0]
     fig = plt.figure(figsize=(7,5))
     gs = plt.GridSpec(num_regions, num_snapshots)
     gs.update(left=0.02, right=0.98, bottom=0.1, top=0.86, wspace=0.1, hspace=0.55)
@@ -2501,6 +2500,7 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
                 omask = omask_plot[n][m].where(omask_plot[n][m])
                 ax.pcolormesh(x_bg, y_bg, mask_bg, cmap=cl.ListedColormap(['DarkGrey']))
                 # Clear open ocean back to white
+                # TODO: this is only continental shelf
                 ax.pcolormesh(x_edges, y_edges, omask, cmap=cl.ListedColormap(['white']))
                 # Plot the data
                 img = ax.pcolormesh(x_edges, y_edges, data_plot[n][m], cmap=cmap, vmin=vmin, vmax=vmax)
@@ -2519,7 +2519,7 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
     cbar = plt.colorbar(img, cax=cax, orientation='horizontal', extend='both')
     cbar.ax.tick_params(labelsize=8)
     plt.text(0.49, 0.03, var_title+' ('+units+')', ha='right', va='bottom', fontsize=12, transform=fig.transFigure)
-    finished_plot(fig, fig_name=None) #'figures/map_snapshots_'+var_name+'.png', dpi=300)
+    finished_plot(fig, fig_name='figures/map_snapshots_'+var_name+'.png', dpi=300)
 
     
         
