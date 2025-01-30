@@ -1378,8 +1378,6 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     all_cavity_temp = []
     all_warming = []
     max_warming = 0
-    threshold_tip = []
-    threshold_recover = []
     for n in range(len(regions)):
         data_bwsalt = []
         data_cavity_temp = []
@@ -1415,20 +1413,30 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 data_bwsalt.append(bwsalt.where(warming>0))
                 data_cavity_temp.append(cavity_temp.where(warming>0))
                 data_warming.append(warming.where(warming>0))
-                # Save the salinity at tipping and recovery points, if relevant
-                tips, t_tip = check_tip(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)
-                if tips:
-                    bwsalt_tip.append(bwsalt.isel(time_centered=t_tip))
-                    recovers, t_recover = check_recover(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)
-                    if recovers:
-                        bwsalt_recover.append(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)                
         all_bwsalt.append(data_bwsalt)
         all_cavity_temp.append(data_cavity_temp)
         all_warming.append(data_warming)
+
+    # Now find the salinity at tipping and recovery points; for this we want trajectories, not suites. It means reading everything again unfortunately - can't find a cleaner way to do this (given some double-tipped trajectories)
+    threshold_tip = []
+    threshold_recover = []
+    suite_lists = all_suite_trajectories()
+    for region in regions:
+        bwsalt_tip = []
+        bwsalt_recover = []
+        for suite_list in suite_lists:
+            cavity_temp = moving_average(build_timeseries_trajectory(suite_list, region+'_cavity_temp', base_dir=base_dir), smooth)
+            bwsalt = moving_average(build_timeseries_trajectory(suite_list, region+'_shelf_bwsalt', base_dir=base_dir), smooth)
+            tips, t_tip = check_tip(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)
+            if tips:
+                bwsalt_tip.append(bwsalt.isel(time_centered=t_tip))
+                recovers, t_recover = check_recover(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)
+                if recovers:
+                    bwsalt_recover.append(bwsalt.isel(time_centered=t_recover))
         bwsalt_tip = np.unique(bwsalt_tip)
         bwsalt_recover = np.unique(bwsalt_recover)
         # Print some statistics
-        print(regions[n])
+        print(region)
         print('Shelf salinity at tipping has mean '+str(np.mean(bwsalt_tip))+' psu, std '+str(np.std(bwsalt_tip))+' psu')
         threshold_tip.append(np.mean(bwsalt_tip))
         if np.size(bwsalt_recover) > 0:
@@ -2192,7 +2200,7 @@ def stage_timescales (base_dir='./', fig_dir=None):
                 # Find time of max smoothed mass loss
                 melt_max_time = massloss_smooth.time_centered[massloss_smooth.argmax()]
                 # Save years between tipping and max mass loss
-                tip_to_melt_max.append(years_between(tip_time, ismr_max_time))
+                tip_to_melt_max.append(years_between(tip_time, melt_max_time))
                 # Check for trajectories which have a ramp-down
                 ramp_down_time = stype_date(cavity_temp, -1)
                 if ramp_down_time is not None:
