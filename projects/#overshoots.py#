@@ -941,7 +941,7 @@ def check_tip (suite=None, region=None, cavity_temp=None, smoothed=False, return
 
     if suite is not None:
         # Get cavity temp array
-        cavity_temp = build_timeseries_trajectory(suite_string.split('-'), region+'_cavity_temp', base_dir=base_dir)
+        cavity_temp = build_timeseries_trajectory(suite.split('-'), region+'_cavity_temp', base_dir=base_dir)
         smoothed = False
     if not smoothed:
         cavity_temp = moving_average(cavity_temp, smooth)
@@ -977,7 +977,7 @@ def check_recover (suite=None, region=None, cavity_temp=None, smoothed=False, re
         raise Exception('Can only set return_t if cavity_temp is set')
 
     if suite is not None:
-        cavity_temp = build_timeseries_trajectory(suite_string.split('-'), region+'_cavity_temp', base_dir=base_dir)
+        cavity_temp = build_timeseries_trajectory(suite.split('-'), region+'_cavity_temp', base_dir=base_dir)
         smoothed = False
     if not smoothed:
         cavity_temp = moving_average(cavity_temp, smooth)
@@ -2348,7 +2348,7 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
     def find_suite (year, suite_list, start_years):
         # Loop backwards through suites
         for suite, year0 in zip(suite_list[::-1], start_years[::-1]):
-            if year > year0:
+            if year >= year0:
                 return suite
         raise Exception('Year '+str(year)+' is too early')
 
@@ -2386,7 +2386,7 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
             raise Exception(suite_strings[n]+' does not recover')
         # Find starting year of each suite in trajectory
         start_years = []
-        suite_list = suite_strings[n].split(',')
+        suite_list = suite_strings[n].split('-')
         for suite in suite_list:
             file_names = []
             for f in os.listdir(base_dir+'/'+suite):
@@ -2394,10 +2394,10 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
                     file_names.append(f)
             file_names.sort()
             date_code = re.findall(r'\d{4}\d{2}\d{2}', file_names[0])
-            start_years.append(int(date_code[:4]))
+            start_years.append(int(date_code[0][:4]))
         # Now locate the years and suites we want to plot
-        plot_years = [start_years[0], date_tip.dt.year, date_tip.dt.year+100, date_recover.dt.year]
-        plot_suites = [find_suite(year, suite_list, start_years) for year in years]
+        plot_years = [start_years[0], date_tip.dt.year.item(), date_tip.dt.year.item()+100, date_recover.dt.year.item()]
+        plot_suites = [find_suite(year, suite_list, start_years) for year in plot_years]
         # Add the tipping and recovery years (since initial) to the titles
         for m in [1, 3]:
             year_titles[n][m] += ' (year '+str(plot_years[m]-plot_years[0])+')'
@@ -2426,12 +2426,12 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
                 ocean_mask = None
                 ice_mask = None
                 for file_pattern in files_to_read:
-                    ds = xr.open_dataset(file_pattern)
+                    ds = xr.open_mfdataset(file_pattern)
                     ds.load()
                     ds = ds.swap_dims({'time_counter':'time_centered'}).drop_vars(['time_counter'])
                     data_tmp = ds[nemo_var].where(ds[nemo_var]!=0)
-                    ocean_mask_tmp = region_mask(regions[n], ds)
-                    ice_mask_tmp = region_mask(regions[n], ds, option='cavity')
+                    ocean_mask_tmp = region_mask(regions[n], ds)[0]
+                    ice_mask_tmp = region_mask(regions[n], ds, option='cavity')[0]
                     if data_accum is None:
                         data_accum = data_tmp
                         ocean_mask = ocean_mask_tmp
