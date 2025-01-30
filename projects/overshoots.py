@@ -2308,27 +2308,30 @@ def check_all_nans (base_dir='./'):
 def map_snapshots (var_name='bwtemp', base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
-    subfig = [r'$\bf{a}. ', r'$\bf{b}. ']
+    subfig = ['a) ', 'b) ']
     num_regions = len(regions)
+    num_snapshots = 4
     suite_strings = ['cx209-cz376-dc123', 'cx209-cz377-dc130']
     year_titles = [['Initial', 'Tipping', '100 years later', 'Recovery'] for n in range(num_regions)]
-    mask_pad = 1e3
+    mask_pad = 5e4
 
     # Set variable title, NEMO name, units
     if var_name == 'bwtemp':
-        var_title = 'Bottom ocean temperature in and around ice shelf cavity'
+        var_title = 'Bottom ocean temperature'
         units = deg_string+'C'
         nemo_var = 'tob'
-        vmin = -3
-        vmax = 5
-        ctype = 'viridis'
+        vmin = -2
+        vmax = 3.5
+        ctype = 'RdBu_r'
+        colour_GL = 'yellow'
     elif var_name == 'bwsalt':
-        var_title = 'Bottom ocean salinity in and around ice shelf cavity'
+        var_title = 'Bottom ocean salinity'
         units = 'psu'
         nemo_var = 'sob'
         vmin = 34.3
         vmax = 35
         ctype = 'viridis'
+        colour_GL = 'magenta'
     elif var_name == 'ismr':
         var_title = 'Ice shelf melt rate'
         units = 'm/y'
@@ -2336,6 +2339,7 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         vmin = -2
         vmax = 30
         ctype = 'ismr'
+        colour_GL = 'blue'
     elif var_name == 'icevel':
         raise Exception('Not yet coded icevel case')
     else:
@@ -2366,16 +2370,18 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
             elif option == 'max':
                 bound = max(bound, coord.where(mask).max())
         if option == 'min':
-            bound = bound - mask_pad
-        elif option == 'max':
-            bound = bound + mask_pad
+            bound -= max_pad
+        elif option = 'max':
+            bound += max_pad
         return bound
-
-    # Set up plot
-    fig = plt.figure(figsize=(8,6))
-    gs = plt.GridSpec(2,4)
-    gs.update(left=0.05, right=0.95, bottom=0.1, top=0.8, wspace=0.1, hspace=0.7)
-    # Loop over regions
+    
+    # Loop over regions and read all the things we need
+    data_plot = []
+    omask_plot = []
+    omask_GL = []
+    imask_front = []
+    x_bounds = []
+    y_bounds = []
     for n in range(num_regions):
         # Find initial, tipping, and recovery years and suites
         tips, date_tip = check_tip(suite=suite_strings[n], region=regions[n], return_date=True, base_dir=base_dir)
@@ -2402,9 +2408,9 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         for m in [1, 3]:
             year_titles[n][m] += ' (year '+str(plot_years[m]-plot_years[0])+')'
         # Now read the data for the four years, annually averaging
-        data_plot = []
-        omask_plot = []
-        imask_plot = []
+        data_region = []
+        omask_region = []
+        imask_region = []
         for year, suite in zip(plot_years, plot_suites):
             if var_name == 'icevel':
                 raise Exception('Not yet coded icevel case')
@@ -2453,47 +2459,67 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
                 data_mean = data_accum.mean(dim='time_centered')
                 if var_name == 'ismr':
                     data_mean = convert_ismr(data_mean)
-                data_plot.append(data_mean)
-                omask_plot.append(ocean_mask)
-                imask_plot.append(ice_mask)
-            # Set plotting bounds on x and y
-            xmin = set_bound(omask_plot, x, 'min')
-            xmax = set_bound(omask_plot, x, 'max')
-            ymin = set_bound(omask_plot, y, 'min')
-            ymax = set_bound(omask_plot, y, 'max')
-            cmap = set_colours(data_plot[0], ctype=ctype, vmin=vmin, vmax=vmax)
-            # Prepare initial GL and ice front for contouring
-            omask_ini = omask_plot[0].astype('float')
-            imask_ini = imask_plot[0].astype('float')
-            mask_sum = omask_ini + imask_ini  # 0 in grounded ice, 1 in open ocean, 2 in cavity
-            # Mask open ocean for GL
-            omask_GL = omask_ini.where(mask_sum!=1)
-            # Mask grounded ice for ice front
-            imask_front = imask_ini.where(mask_sum!=0)
-            # Plot
-            for m in range(len(data_plot)):
-                ax = plt.subplot(gs[n,m])
+                data_region.append(data_mean)
+                omask_region.append(ocean_mask)
+                imask_region.append(ice_mask)
+        data_plot.append(data_region)
+        omask_plot.append(omask_region)
+        # Set plotting bounds on x (based on cavity) and y (based on cavity and shelf)
+        xmin = set_bound(imask_region, x, 'min')
+        xmax = set_bound(imask_region, x, 'max')
+        ymin = set_bound(omask_region, y, 'min')
+        ymax = set_bound(omask_region, y, 'max')
+        x_bounds.append([xmin, xmax])
+        y_bounds.append([ymin, ymax])
+        if n == 0:
+            cmap = set_colours(data_region[0], ctype=ctype, vmin=vmin, vmax=vmax)[0]
+        # Prepare initial GL and ice front for contouring
+        omask_ini = omask_region[0].astype('float')
+        imask_ini = imask_region[0].astype('float')
+        mask_sum = omask_ini + imask_ini  # 0 in grounded ice, 1 in open ocean, 2 in cavity
+        # Mask open ocean for GL
+        omask_GL.append(omask_ini.where(mask_sum!=1))
+        # Mask grounded ice for ice front
+        imask_front.append(imask_ini.where(mask_sum!=0))
+        # Print actual min and max in this region to help choosing manual bounds
+        plot_region = (x>=xmin)*(x<=xmax)*(y>=ymin)*(y<=ymax)
+        vmin_real = np.amin([data.where(plot_region).min() for data in data_region])
+        vmax_real = np.amax([data.where(plot_region).max() for data in data_region])
+        print(regions[n]+' bounds from '+str(vmin_real)+' to '+str(vmax_real))
+
+    # Plot
+    fig = plt.figure(figsize=(7,5))
+    gs = plt.GridSpec(num_regions, num_snapshots)
+    gs.update(left=0.02, right=0.98, bottom=0.1, top=0.86, wspace=0.1, hspace=0.55)
+    for n in range(num_regions):
+        for m in range(num_snapshots):
+            ax = plt.subplot(gs[n,m])
+            if var_name == 'icevel':
+                raise Exception('Not yet coded icevel case')
+            else:            
                 # Shade land in grey
-                omask = omask_plot[m].where(omask_plot[m])
+                omask = omask_plot[n][m].where(omask_plot[n][m])
                 ax.pcolormesh(x_bg, y_bg, mask_bg, cmap=cl.ListedColormap(['DarkGrey']))
                 # Clear open ocean back to white
                 ax.pcolormesh(x_edges, y_edges, omask, cmap=cl.ListedColormap(['white']))
                 # Plot the data
-                img = ax.pcolormesh(x_edges, y_edges, data_plot[m], cmap=cmap, vmin=vmin, vmax=vmax)
-                # Contour initial GL in red
-                ax.contour(x, y, omask_GL, levels=[0.5], colors=('red'))
+                img = ax.pcolormesh(x_edges, y_edges, data_plot[n][m], cmap=cmap, vmin=vmin, vmax=vmax)
+                # Contour initial GL in given colour
+                ax.contour(x, y, omask_GL[n], levels=[0.5], colors=(colour_GL), linewidths=0.5)
                 # Contour ice front in black
-                ax.contour(x, y, imask_front, levels=[0.5], colors=('black'))
-                ax.set_xlim([xmin, xmax])
-                ax.set_ylim([ymin, ymax])
+                ax.contour(x, y, imask_front[n], levels=[0.5], colors=('black'), linewidths=0.5)
+                ax.set_xlim(x_bounds[n])
+                ax.set_ylim(y_bounds[n])
                 ax.set_xticks([])
                 ax.set_yticks([])
                 ax.set_title(year_titles[n][m], fontsize=12)
-        plt.text(0.5, 1-0.01*n, subfig[n]+region_names[regions[n]]+' Ice Shelf', ha='center', va='top', fontsize=16, transform=fig.transFigure)
-        plt.text(0.5, 1-0.1*n, suite_titles[n], ha='center', va='top', fontsize=12, transform=fig.transFigure)
-    cax = fig.add_axes([0.3, 0.05, 0.4, 0.03])
-    plt.colorbar(img, cax=cax, orientation='horizontal', extend='both')
-    finished_plot(fig, fig_name=None) #'figures/map_snapshots_'+var_name+'.png', dpi=300)    
+        plt.text(0.5, 0.99-0.46*n, subfig[n]+region_names[regions[n]]+' Ice Shelf', ha='center', va='top', fontsize=14, transform=fig.transFigure)
+        plt.text(0.5, 0.95-0.46*n, suite_titles[n], ha='center', va='top', fontsize=10, transform=fig.transFigure)
+    cax = fig.add_axes([0.51, 0.05, 0.4, 0.02])
+    cbar = plt.colorbar(img, cax=cax, orientation='horizontal', extend='both')
+    cbar.ax.tick_params(labelsize=8)
+    plt.text(0.49, 0.03, var_title+' ('+units+')', ha='right', va='bottom', fontsize=12, transform=fig.transFigure)
+    finished_plot(fig, fig_name=None) #'figures/map_snapshots_'+var_name+'.png', dpi=300)
 
     
         
