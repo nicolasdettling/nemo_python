@@ -1697,7 +1697,7 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
         tip_string = 'Tips in '+str(date_tip.dt.year.item())+' ('+str(round(warming[t_tip].item(),2))+deg_string+'C)'
         recovers, date_recover, t_recover = check_recover(cavity_temp=cavity_temp, smoothed=True, return_date=True, return_t=True, base_dir=base_dir)
         if recovers:
-            recover_string = 'Recovers in '+str(date_recover.dt.year.item())+' ('+str(round(warming_post[t_recover].item(),2))+deg_string+'C)'
+            recover_string = 'Recovers in '+str(date_recover.dt.year.item())+' ('+str(round(warming[t_recover].item(),2))+deg_string+'C)'
         else:
             recover_string = 'Does not recover'
             recover_time = None                
