@@ -2140,15 +2140,14 @@ def plot_untipped_salinity (smooth=30, base_dir='./'):
                 ax2.legend(handles=handles, loc='lower center', bbox_to_anchor=(0.5,-0.25), ncol=3)
                 finished_plot(fig)
 
-
-# Calculate the timescales for different stages in the tipping process; plot 1x3 timeseries (shelf salinity, cavity temperature, mass loss) for each trajectory and region, and histograms of 4 different timescales.
-def stage_timescales (base_dir='./', fig_dir=None):
+# Calculate the timescales for different stages in the tipping process; plot 1x3 timeseries (shelf salinity, cavity temperature, mass loss) for each trajectory and region (optional), and histograms of 4 different timescales.
+def stage_timescales (base_dir='./', fig_dir=None, plot_traj=False):
 
     regions = ['ross', 'filchner_ronne']
-    smooth = 30*months_per_year
+    smooth = 10*months_per_year
     titles = ['Bottom salinity on continental shelf', 'Temperature in cavity', 'Basal mass loss']
     units = ['psu', deg_string+'C', 'Gt/y']
-    stype = [1, 0, -1]
+    stypes = [1, 0, -1]
     colours = ['Crimson', 'Grey', 'DodgerBlue']
     labels = ['ramp-up', 'stabilise', 'ramp-down']
     num_bins = 10
@@ -2160,10 +2159,17 @@ def stage_timescales (base_dir='./', fig_dir=None):
         return years + months/months_per_year
 
     # Inner function to find the date at which the given scenario type starts
-    def stype_date (data, stype):
-        if np.count_nonzero(data.scenario_type==stype) == 0:
-            return None
-        return data.time_centered[np.argwhere(data.scenario_type==stype)[0][0]]
+    def stype_date (data, stype, return_index=False):
+        if np.count_nonzero(data.scenario_type==stype)==0:
+            t0 = None
+            date = None
+        else:
+            t0 = np.argwhere(data.scenario_type.data==stype)[0][0]
+            date = data.time_centered[t0]
+        if return_index:
+            return date, t0
+        else:
+            return date
 
     stab_to_tip_all = []
     tip_to_melt_max_all = []
@@ -2171,15 +2177,16 @@ def stage_timescales (base_dir='./', fig_dir=None):
     ramp_down_to_min_s_all = []
     # Loop over regions
     for region in regions:
+        all_shelf_bwsalt, suite_strings = all_timeseries_trajectories(region+'_shelf_bwsalt', base_dir=base_dir)
+        all_cavity_temp = all_timeseries_trajectories(region+'_cavity_temp', base_dir=base_dir)[0]
+        all_massloss = all_timeseries_trajectories(region+'_massloss', base_dir=base_dir)[0]
         stab_to_tip = []
         tip_to_melt_max = []
         ramp_down_to_recovery = []
         ramp_down_to_min_s = []
-        all_shelf_bwsalt, suite_strings = all_timeseries_trajectories(region+'_shelf_bwsalt', base_dir=base_dir)
-        all_cavity_temp = all_timeseries_trajectories(region+'_cavity_temp', base_dir=base_dir)[0]
-        all_massloss = all_timeseries_trajectories(region+'_massloss', base_dir=base_dir)[0]
         # Loop over trajectories
         for suite_string, shelf_bwsalt, cavity_temp, massloss in zip(suite_strings, all_shelf_bwsalt, all_cavity_temp, all_massloss):
+            print(suite_string+', '+region)
             tip_time = None
             stab_time = None
             melt_max_time = None
@@ -2201,65 +2208,72 @@ def stage_timescales (base_dir='./', fig_dir=None):
                 melt_max_time = massloss_smooth.time_centered[massloss_smooth.argmax()]
                 # Save years between tipping and max mass loss
                 tip_to_melt_max.append(years_between(tip_time, melt_max_time))
+                # Check for trajectories which recover
+                recovers, recover_time = check_recover(cavity_temp=cavity_temp, smoothed=False, return_date=True, base_dir=base_dir)
                 # Check for trajectories which have a ramp-down
                 ramp_down_time = stype_date(cavity_temp, -1)
-                if ramp_down_time is not None:
-                    # Check for trajectories which recover
-                    recovers, recover_time = check_recover(cavity_temp=cavity_temp, smoothed=False, return_date=True, base_dir=base_dir)
-                    if recovers:
-                        # Save years between ramp-down and recovery
-                        ramp_down_to_recover.append(years_between(ramp_down_time, recover_time))                
+                if ramp_down_time is not None and recovers:
+                    # Save years between ramp-down and recovery
+                    ramp_down_to_recovery.append(years_between(ramp_down_time, recover_time))                
             else:
                 # Untipped
                 recovers = False
                 # Check for trajectories which have a ramp-down
-                ramp_down_time = stype_date(cavity_temp, -1)
+                ramp_down_time, t0 = stype_date(cavity_temp, -1, return_index=True)
                 if ramp_down_time is not None:
-                    # Find time of min smoothed salinity, unless it's in the last 10 years (not stabilised yet)
-                    ts = shelf_bwsalt_smooth.argmin()
+                    # Find time of min smoothed salinity after ramp down starts, unless it's in the last 10 years (not stabilised yet)
+                    ts = shelf_bwsalt_smooth.isel(time_centered=slice(t0,None)).argmin() + t0
                     if ts < shelf_bwsalt_smooth.sizes['time_centered']-10*months_per_year:
                         min_s_time = shelf_bwsalt_smooth.time_centered[ts]
                         # Save years between ramp-down and min salinity
                         ramp_down_to_min_s.append(years_between(ramp_down_time, min_s_time))
-            # Plot
-            fig = plt.figure(figsize=(5,8))
-            gs = plt.GridSpec(3,1)
-            gs.update(left=0.15, right=0.95, bottom=0.1, top=0.9, hspace=0.2)
-            data_plot = [shelf_bwsalt_smooth, cavity_temp_smooth, massloss_smooth]
-            for n in range(3):
-                ax = plt.subplot(gs[n,0])
-                # Plot different phases in different colours
-                for m in range(len(stype)):
-                    index = shelf_bwsalt_smooth.scenario_type == stype[m]
-                    ax.plot_date(data_plot[n].time_centered.where(index, drop=True), data_plot[n].where(index, drop=True), '-', color=colours[m], line_width=1)
-                ax.set_title(titles[n], fontsize=12)
-                ax.set_ylabel(units[n], fontsize=10)
-                ax.grid(linestyle='dotted')
-                ymax = ax.get_ylim()[-1]
-                if tips:
-                    ax.axvline(tip_time.item(), color='black', linestyle='dashed', linewidth=1)
-                    plt.text(tip_time.item(), ymax, 'tips', ha='left', va='top')
-                if recovers:
-                    ax.axvline(recover_time.item(), color='black', linestyle='dashed', linewidth=1)
-                    plt.text(recover_time.item(), ymax, 'recovers', ha='left', va='top')
-            plt.suptitle(suite_string+', '+region_names[regions], fontsize=14)
-            if fig_dir is not None:
-                fig_name = fig_dir+'/'+suite_string+'_'+region+'.png'
-            else:
-                fig_name = None
-            finished_plot(fig, fig_name=fig_name)
+            if plot_traj:
+                # Plot
+                fig = plt.figure(figsize=(5,8))
+                gs = plt.GridSpec(3,1)
+                gs.update(left=0.15, right=0.95, bottom=0.05, top=0.92, hspace=0.3)
+                data_plot = [shelf_bwsalt_smooth, cavity_temp_smooth, massloss_smooth]
+                time = data_plot[0].time_centered
+                for n in range(3):
+                    ax = plt.subplot(gs[n,0])
+                    # Plot different phases in different colours
+                    for m in range(len(stypes)):
+                        index = shelf_bwsalt_smooth.scenario_type == stypes[m]
+                        ax.plot_date(time.where(index, drop=True), data_plot[n].where(index, drop=True), '-', color=colours[m], linewidth=1)
+                    ax.set_title(titles[n], fontsize=12)
+                    ax.set_ylabel(units[n], fontsize=10)
+                    ax.grid(linestyle='dotted')
+                    ax.set_xlim([time[0], time[-1]])
+                    ymax = ax.get_ylim()[-1]
+                    if tips:
+                        ax.axvline(tip_time.item(), color='black', linestyle='dashed', linewidth=1)
+                        if n==0:
+                            plt.text(tip_time.item(), ymax, ' tips', ha='left', va='top')
+                    if recovers:
+                        ax.axvline(recover_time.item(), color='black', linestyle='dashed', linewidth=1)
+                        if n==0:
+                            plt.text(recover_time.item(), ymax, ' recovers', ha='left', va='top')
+                plt.suptitle(suite_string+', '+region_names[region], fontsize=14)
+                if fig_dir is not None:
+                    fig_name = fig_dir+'/'+suite_string+'_'+region+'.png'
+                else:
+                    fig_name = None
+                finished_plot(fig, fig_name=fig_name)
         stab_to_tip_all.append(np.unique(stab_to_tip))
         tip_to_melt_max_all.append(np.unique(tip_to_melt_max))
         ramp_down_to_recovery_all.append(np.unique(ramp_down_to_recovery))
         ramp_down_to_min_s_all.append(np.unique(ramp_down_to_min_s))
 
     # Plot histograms
-    def plot_histogram (times_all, title, abbrev):
-        tmax = np.amax([np.amax(times) for times in times_all])
+    def plot_histogram (all_times, title, abbrev):
+        tmax = 0
+        for times in all_times:
+            if len(times) > 0:
+                tmax = max(tmax, np.amax(times))
         bins = np.linspace(0, tmax, num=num_bins)
         fig = plt.figure(figsize=(5,5))
         gs = plt.GridSpec(2,1)
-        gs.update(left=0.05, right=0.99, bottom=0.1, top=0.85, hspace=0.4)
+        gs.update(left=0.1, right=0.99, bottom=0.1, top=0.85, hspace=0.4)
         for r in range(len(regions)):
             ax = plt.subplot(gs[r,0])
             ax.hist(all_times[r], bins=bins)
@@ -2268,9 +2282,10 @@ def stage_timescales (base_dir='./', fig_dir=None):
                 ax.set_ylabel('# simulations', fontsize=10)
             if r==1:
                 ax.set_xlabel('years', fontsize=10)
-            plt.text(0.02, 0.98, 'Mean '+str(np.mean(all_times[r]))+' years', ha='left', va='top', transform=ax.transAxes)
-            plt.text(0.02, 0.94, 'Range '+str(np.amin(all_times[r]))+'-'+str(np.amax(all_times[r]))+' years', ha='left', va='top', transform=ax.transAxes)
-            plt.text(0.02, 0.9, 'n='+str(np.size(all_times[r])))
+            if len(all_times[r]) > 0:
+                plt.text(0.02, 0.98, 'Mean '+str(int(np.round(np.mean(all_times[r]))))+' years', ha='left', va='top', transform=ax.transAxes)
+                plt.text(0.02, 0.88, 'Range '+str(int(round(np.amin(all_times[r]))))+'-'+str(int(round(np.amax(all_times[r]))))+' years', ha='left', va='top', transform=ax.transAxes)
+                plt.text(0.02, 0.78, 'n='+str(np.size(all_times[r])), ha='left', va='top', transform=ax.transAxes)
         plt.suptitle(title, fontsize=14)
         if fig_dir is not None:
             fig_name = fig_dir+'/histogram_'+abbrev+'.png'
@@ -2278,8 +2293,8 @@ def stage_timescales (base_dir='./', fig_dir=None):
             fig_name = None
         finished_plot(fig, fig_name=fig_name)
 
-    for times_all, title, abbrev in zip([stab_to_tip_all, tip_to_melt_max_all, ramp_down_to_recovery_all, ramp_down_to_min_s_all], ['climate stabilisation and tipping', 'tipping and maximum basal mass loss', 'ramp-down and recovery', 'ramp-down and minimum salinity'], ['stab_to_tip', 'tip_to_melt_max', 'ramp_down_to_recovery', 'ramp_down_to_min_s']):
-        plot_histogram(times_all, 'Time between '+title, abbrev)
+    for all_times, title, abbrev in zip([stab_to_tip_all, tip_to_melt_max_all, ramp_down_to_recovery_all, ramp_down_to_min_s_all], ['climate stabilisation and tipping', 'tipping and maximum basal mass loss', 'ramp-down and recovery', 'ramp-down and minimum salinity'], ['stab_to_tip', 'tip_to_melt_max', 'ramp_down_to_recovery', 'ramp_down_to_min_s']):
+        plot_histogram(all_times, 'Time between '+title, abbrev)
 
         
 def fix_all_missing_months (base_dir='./'):
