@@ -2022,13 +2022,14 @@ def sfc_FW_timeseries (suite='cx209', base_dir='./'):
 def plot_FW_timeseries (base_dir='./'):
 
     suite = 'cx209'
-    pi_suite = 'cs495'
-    var_names = ['all_massloss', 'all_iceberg_melt', 'all_runoff', 'all_seaice_meltfreeze', 'all_pminuse', 'sum', 'all_shelf_salt']
-    var_titles = ['Ice shelves', 'Icebergs', 'Ice sheet runoff', 'Sea ice', 'P-E', 'Total', 'Salinity on shelf']
-    timeseries_files = ['timeseries.nc'] + 5*['timeseries_sfc.nc'] + ['timeseries.nc']
-    factors = [rho_fw/rho_ice*1e6/sec_per_year] + 4*[1e-3/sec_per_year] + 2*[1]
-    units = ['mSv', 'psu (reversed)']
-    colours = ['black', 'magenta', 'blue', 'red', 'green', 'DarkGrey', 'cyan']
+    pi_suite = 'cs568'  # Want evolving ice PI control so the ice mass is partitioned the same way into calving, basal melting, runoff.
+    pi_years = 50
+    var_names = ['all_massloss', 'all_iceberg_melt', 'all_runoff', 'all_seaice_meltfreeze', 'all_pminuse']
+    var_titles = ['Ice shelves', 'Icebergs', 'Ice sheet runoff', 'Sea ice', 'P-E']
+    timeseries_files = ['timeseries.nc'] + 4*['timeseries_sfc.nc']
+    factors = [rho_fw/rho_ice*1e6/sec_per_year] + 4*[1e-3/sec_per_year]
+    units = 'mSv'
+    colours = ['black', 'magenta', 'blue', 'red', 'green']
     num_vars = len(var_names)
     regions = ['ross', 'filchner_ronne']
     smooth_plot = 10*months_per_year
@@ -2043,7 +2044,7 @@ def plot_FW_timeseries (base_dir='./'):
     # Inner function to read the variable from the main suite and subtract the PI baseline
     def read_var_anomaly (var, fname):
         data = read_var(var, base_dir+'/'+suite+'/'+fname)
-        baseline = data.isel(time_centered=slice(0,30*months_per_year)).mean(dim='time_centered') #read_var(var, base_dir+'/'+pi_suite+'/'+fname).mean(dim='time_centered')
+        baseline = read_var(var, base_dir+'/'+pi_suite+'/'+fname).isel(time_centered=slice(0,pi_years*months_per_year).mean(dim='time_centered')
         return data-baseline
 
     # Loop over variables and read all the data
@@ -2067,31 +2068,23 @@ def plot_FW_timeseries (base_dir='./'):
     fig = plt.figure(figsize=(7,5))
     gs = plt.GridSpec(1,1)
     gs.update(left=0.12, right=0.9, bottom=0.2, top=0.9)
-    ax1 = plt.subplot(gs[0,0])
-    for v in range(num_vars-2):
-        # Second y-axis for last variable
-        if v == num_vars-1:
-            ax2 = ax1.twinx()
-            ax = ax2
-        else:
-            ax = ax1
+    ax = plt.subplot(gs[0,0])
+    for v in range(num_vars):
         ax.plot_date(data_plot[v].time_centered, data_plot[v], '-', color=colours[v], label=var_titles[v], linewidth=1)
         if v == 0:
             # Vertical lines to show tipping
             for n in range(len(regions)):
                 ax.axvline(tip_times[n].item(), color='black', linestyle='dashed', linewidth=1)
                 plt.text(tip_times[n].item(), 150, region_names[regions[n]], ha='left', va='top', rotation=-90)
-    ax1.grid(linestyle='dotted')
-    ax1.axhline(0, color='black', linewidth=1)
-    ax1.set_title('Antarctic freshwater fluxes in ramp-up\n(anomalies from first 30 years)', fontsize=14)
-    ax1.set_ylabel(units[0])
-    ax2.set_ylabel(units[1])
-    ax2.set_ylim(ax2.get_ylim()[::-1])  # Reverse y-axis for salinity
+    ax.grid(linestyle='dotted')
+    ax.axhline(0, color='black', linewidth=1)
+    ax.set_title('Antarctic freshwater fluxes in ramp-up\n(anomalies from preindustrial)', fontsize=14)
+    ax.set_ylabel(units)
     # Manual legend to get all variables
     handles = []
     for v in range(num_vars-2):
         handles.append(Line2D([0], [0], color=colours[v], label=var_titles[v], linestyle='-'))
-    ax1.legend(handles=handles, loc='lower center', bbox_to_anchor=(0.5,-0.25), ncol=3)
+    ax.legend(handles=handles, loc='lower center', bbox_to_anchor=(0.5,-0.25), ncol=3)
     finished_plot(fig, fig_name='figures/FW_timeseries.png', dpi=300)
 
 
