@@ -2044,7 +2044,7 @@ def plot_FW_timeseries (base_dir='./'):
     # Inner function to read the variable from the main suite and subtract the PI baseline
     def read_var_anomaly (var, fname):
         data = read_var(var, base_dir+'/'+suite+'/'+fname)
-        baseline = read_var(var, base_dir+'/'+pi_suite+'/'+fname).isel(time_centered=slice(0,pi_years*months_per_year).mean(dim='time_centered')
+        baseline = read_var(var, base_dir+'/'+pi_suite+'/'+fname).isel(time_centered=slice(0,pi_years*months_per_year)).mean(dim='time_centered')
         return data-baseline
 
     # Loop over variables and read all the data
