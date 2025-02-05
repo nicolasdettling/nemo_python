@@ -29,8 +29,8 @@ rad2deg = 1./deg2rad
 rEarth = 6.371e6
 # Rotation rate of Earth
 omegaEarth = 7.2921e-5 #rad/s
-# Conversion from ice VAF change to global mean sea level contribution (m^-2) following Goelzer 2020 
-vaf_to_gmslr = -910./1028./3.625e14
+# Conversion from ice VAF change to global mean sea level contribution (m^-2)
+vaf_to_gmslr = -0.918e-12/361.8
 # Degrees formatted nicely in a string
 deg_string = r'$^{\circ}$'
 # 10^-3 formatted nicely in a string (for absolute salinity)

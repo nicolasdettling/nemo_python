@@ -2543,65 +2543,83 @@ def plot_SLR_timeseries (base_dir='./'):
     labels = ['untipped', 'tipped', 'recovered', 'control']
 
     # Inner function to add the given DataArray to the axes with the given colour
-    def add_line (years, data, ax0, colour):
-        ax0.plot(years, data, '-', color=colour, linewidth=1)
+    def add_line (data, ax0, colour, year0):
+        ax0.plot(data.coords['time']-year0, data, '-', color=colour, linewidth=0.8)
 
     # Set up plot
-    fig = plt.figure(figsize=(7,4))
-    gs = plt.GridSpec(1, num_regions)
-    gs.update(left=0.05, right=0.95, bottom=0.1, top=0.85, hspace=0.2)
+    fig = plt.figure(figsize=(4.5,6))
+    gs = plt.GridSpec(num_regions, 1)
+    gs.update(left=0.13, right=0.87, bottom=0.2, top=0.9, hspace=0.3)
     for n in range(num_regions):
-        ax = plt.subplot(gs[0,n])
+        ax = plt.subplot(gs[n,0])
         # Get baseline initial VAF from first member ramp-up (should be consistent between members as evolving ice has just been switched on)
         ds = xr.open_dataset(vaf_dir+'/'+file_head+baseline_suite+file_tail)
-        baseline = ds[regions[n]+'_vaf'].isel(time=0)
+        vaf0 = ds[regions[n]+'_vaf'].isel(time=0)
         year0 = ds['time'].isel(time=0)
         ds.close()
-        # Loop over all files in the directory
-        for f in os.listdir(vaf_dir):
-            if f.startswith(file_head) and f.endswith(file_tail):
-                # Extract suite ID
-                suite = f[len(file_head):-1*len(file_tail)]
+        num_tip = 0
+        num_recover = 0
+        # Loop over scenarios and check if file exists
+        for scenario in suites_by_scenario:
+            if scenario in ['piControl', 'ramp_up_static_ice']:
+                continue
+            for suite in suites_by_scenario[scenario]:
+                file_path = vaf_dir + '/' + file_head + suite + file_tail
+                if not os.path.isfile(file_path):
+                    print('Warning: '+suite+' missing')
+                    continue
                 # Read data
-                ds = xr.open_dataset(vaf_dir+'/'+f)
+                ds = xr.open_dataset(file_path)
                 # Offset of 1 year as per Tom's email (BISICLES output is snapshot at beginning of next year)
                 time = ds['time'] - 1
                 vaf = ds[regions[n]+'_vaf']
                 # Convert from VAF to sea level rise in cm
-                slr = (vaf-baseline)*vaf_to_gmslr*1e-2
                 if suite == pi_suite:
-                    add_line(time-year0, slr, ax, colours[labels.index('control')])
+                    # Different initial state to the rest
+                    baseline = vaf.isel(time=0)
                 else:
-                    tips, date_tip = check_tip(suite=suite, return_date=True)
+                    baseline = vaf0
+                slr = (vaf-baseline)*vaf_to_gmslr*1e2
+                if suite == pi_suite:
+                    add_line(slr, ax, colours[labels.index('control')], year0)
+                else:
+                    tips, date_tip = check_tip(suite=suite, region=regions[n], return_date=True, base_dir=base_dir)
                     if tips:
+                        if date_tip.dt.year <= time[-1]:
+                            num_tip += 1
+                        else:
+                            print('Warning: '+suite+' does not extend to tipping date')
                         # Select untipped section
                         untipped = slr.where(time < date_tip.dt.year, drop=True)  # 1-year offset as before
-                        recovers, date_recover = check_recover(suite=suite, return_date=True)
+                        recovers, date_recover = check_recover(suite=suite, region=regions[n], return_date=True, base_dir=base_dir)
                         if recovers:
+                            if date_recover.dt.year <= time[-1]:
+                                num_recover += 1
+                            else:
+                                print('Warning: '+suite+' does not extend to recovery date')
                             tipped = slr.where((time >= date_tip.dt.year)*(time < date_recover.dt.year), drop=True)
                             recovered = slr.where(time >= date_recover.dt.year, drop=True)
-                            add_line(time-year0, recovered, ax, colours[labels.index('recovered')])
+                            add_line(recovered, ax, colours[labels.index('recovered')], year0)
                         else:
                             tipped = slr.where(time >= date_tip.dt.year, drop=True)
-                        add_line(time-year0, tipped, ax, colours[labels.index('tipped')])
+                        add_line(tipped, ax, colours[labels.index('tipped')], year0)
                     else:
                         untipped = slr
-                    add_line(time-year0, untipped, ax, colours[labels.index('untipped')])
+                    add_line(untipped, ax, colours[labels.index('untipped')], year0)
+        print(regions[n]+': '+str(num_tip)+' tipped, '+str(num_recover)+' recovered')
         ax.grid(linestyle='dashed')
-        ax.axhline(0, color='black')
-        if n == 0:
-            plt.text(700, 1, 'Sea level rise', ha='left', va='bottom')
-            plt.text(700, -1, 'Sea level fall', ha='left', va='top')
+        ax.set_ylabel('cm')
+        if n == 1:
             ax.set_xlabel('Years')
-            ax.set_ylabel('cm')
-        ax.set_title(region_names[region]+' catchment', fontsize=12)
+        ax.set_xlim([0, None])
+        ax.set_title(region_names[regions[n]]+' catchment', fontsize=12)
     plt.suptitle('Sea level contribution', fontsize=14)
     # Manual legend
     handles = []
     for m in range(len(colours)):
         handles.append(Line2D([0], [0], color=colours[m], label=labels[m], linestyle='-'))
-    ax.legend(handles=handles, loc='lower center', bbox_to_anchor=(-0.5, -0.25), ncol=4)
-    finished_plot(fig) #, fig_name='figures/SLR_timeseries.png', dpi=300)
+    ax.legend(handles=handles, loc='lower center', bbox_to_anchor=(0.5, -0.6), ncol=2)
+    finished_plot(fig, fig_name='figures/SLR_timeseries.png', dpi=300)
         
                 
 
