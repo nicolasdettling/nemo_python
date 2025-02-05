@@ -22,7 +22,6 @@ vap_pres_c1 = 611.21; vap_pres_c3 = 17.502; vap_pres_c4=32.19;
 Rdry = 287.0597
 # Gas constant for water vapor
 Rvap = 461.5250
-
 # Degrees to radians conversion factor
 deg2rad = np.pi/180.0
 rad2deg = 1./deg2rad
@@ -30,6 +29,8 @@ rad2deg = 1./deg2rad
 rEarth = 6.371e6
 # Rotation rate of Earth
 omegaEarth = 7.2921e-5 #rad/s
+# Conversion from ice VAF change to global mean sea level contribution (m^-2) following Goelzer 2020 
+vaf_to_gmslr = -910./1028./3.625e14
 # Degrees formatted nicely in a string
 deg_string = r'$^{\circ}$'
 # 10^-3 formatted nicely in a string (for absolute salinity)

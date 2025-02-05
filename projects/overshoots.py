@@ -21,7 +21,7 @@ from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, tim
 from ..plot_utils import truncate_colourmap
 from ..utils import moving_average, add_months, rotate_vector, polar_stereo, convert_ismr
 from ..grid import region_mask, calc_geometry
-from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year, rho_fw, rho_ice, sec_per_year
+from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year, rho_fw, rho_ice, sec_per_year, vaf_to_gmslr
 from ..file_io import read_schmidtko, read_woa
 from ..interpolation import interp_latlon_cf, interp_grid
 from ..diagnostics import barotropic_streamfunction
@@ -2529,7 +2529,79 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
     plt.text(0.49, 0.03, var_title+' ('+units+')', ha='right', va='bottom', fontsize=12, transform=fig.transFigure)
     finished_plot(fig, fig_name='figures/map_snapshots_'+var_name+'.png', dpi=300)
 
-    
+
+def plot_SLR_timeseries (base_dir='./'):
+
+    vaf_dir = '/gws/nopw/j04/terrafirma/tm17544/TerraFIRMA_overshoots/processed_data/netcdf_files/'
+    file_head = 'vaf_'
+    file_tail = '_timeseries.nc'
+    pi_suite = 'cs568'  # Evolving ice
+    baseline_suite = 'cx209'  # First member ramp-up
+    regions = ['ross', 'filchner_ronne']
+    num_regions = len(regions)
+    colours = ['DarkGrey', 'Crimson', 'DodgerBlue', 'black']
+    labels = ['untipped', 'tipped', 'recovered', 'control']
+
+    # Inner function to add the given DataArray to the axes with the given colour
+    def add_line (years, data, ax0, colour):
+        ax0.plot(years, data, '-', color=colour, linewidth=1)
+
+    # Set up plot
+    fig = plt.figure(figsize=(7,4))
+    gs = plt.GridSpec(1, num_regions)
+    gs.update(left=0.05, right=0.95, bottom=0.1, top=0.85, hspace=0.2)
+    for n in range(num_regions):
+        ax = plt.subplot(gs[0,n])
+        # Get baseline initial VAF from first member ramp-up (should be consistent between members as evolving ice has just been switched on)
+        ds = xr.open_dataset(vaf_dir+'/'+file_head+baseline_suite+file_tail)
+        baseline = ds[regions[n]+'_vaf'].isel(time=0)
+        year0 = ds['time'].isel(time=0)
+        ds.close()
+        # Loop over all files in the directory
+        for f in os.listdir(vaf_dir):
+            if f.startswith(file_head) and f.endswith(file_tail):
+                # Extract suite ID
+                suite = f[len(file_head):-1*len(file_tail)]
+                # Read data
+                ds = xr.open_dataset(vaf_dir+'/'+f)
+                # Offset of 1 year as per Tom's email (BISICLES output is snapshot at beginning of next year)
+                time = ds['time'] - 1
+                vaf = ds[regions[n]+'_vaf']
+                # Convert from VAF to sea level rise in cm
+                slr = (vaf-baseline)*vaf_to_gmslr*1e-2
+                if suite == pi_suite:
+                    add_line(time-year0, slr, ax, colours[labels.index('control')])
+                else:
+                    tips, date_tip = check_tip(suite=suite, return_date=True)
+                    if tips:
+                        # Select untipped section
+                        untipped = slr.where(time < date_tip.dt.year, drop=True)  # 1-year offset as before
+                        recovers, date_recover = check_recover(suite=suite, return_date=True)
+                        if recovers:
+                            tipped = slr.where((time >= date_tip.dt.year)*(time < date_recover.dt.year), drop=True)
+                            recovered = slr.where(time >= date_recover.dt.year, drop=True)
+                            add_line(time-year0, recovered, ax, colours[labels.index('recovered')])
+                        else:
+                            tipped = slr.where(time >= date_tip.dt.year, drop=True)
+                        add_line(time-year0, tipped, ax, colours[labels.index('tipped')])
+                    else:
+                        untipped = slr
+                    add_line(time-year0, untipped, ax, colours[labels.index('untipped')])
+        ax.grid(linestyle='dashed')
+        ax.axhline(0, color='black')
+        if n == 0:
+            plt.text(700, 1, 'Sea level rise', ha='left', va='bottom')
+            plt.text(700, -1, 'Sea level fall', ha='left', va='top')
+            ax.set_xlabel('Years')
+            ax.set_ylabel('cm')
+        ax.set_title(region_names[region]+' catchment', fontsize=12)
+    plt.suptitle('Sea level contribution', fontsize=14)
+    # Manual legend
+    handles = []
+    for m in range(len(colours)):
+        handles.append(Line2D([0], [0], color=colours[m], label=labels[m], linestyle='-'))
+    ax.legend(handles=handles, loc='lower center', bbox_to_anchor=(-0.5, -0.25), ncol=4)
+    finished_plot(fig) #, fig_name='figures/SLR_timeseries.png', dpi=300)
         
                 
 
