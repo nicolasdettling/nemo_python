@@ -349,17 +349,17 @@ def plot_integrated_gw (base_dir='./', timeseries_file_um='timeseries_um.nc', pi
     timeseries_plot(datas, labels=labels_plot, colours=colours_plot, title='Integrated global warming relative to preindustrial', units='Kelvin-years', linewidth=1, fig_name=fig_name)
 
 
-# Given two timeseries, trim them to line up along the time_centered axis and be the same length.
-def align_timeseries (data1, data2):
+# Given two timeseries, trim them to line up along the time axis and be the same length.
+def align_timeseries (data1, data2, time_coord='time_centered'):
 
     # Find most restrictive endpoints
-    date_start = max(data1.time_centered[0], data2.time_centered[0])
-    date_end = min(data1.time_centered[-1], data2.time_centered[-1])
+    date_start = max(data1[time_coord][0], data2[time_coord][0])
+    date_end = min(data1[time_coord][-1], data2[time_coord][-1])
     # Inner function to trim
     def trim_timeseries (A):
-        t_start = np.argwhere(A.time_centered.data == date_start.data)[0][0]
-        t_end = np.argwhere(A.time_centered.data == date_end.data)[0][0]
-        return A.isel(time_centered=slice(t_start, t_end+1))
+        t_start = np.argwhere(A[time_coord].data == date_start.data)[0][0]
+        t_end = np.argwhere(A[time_coord].data == date_end.data)[0][0]
+        return A.isel({time_coord:slice(t_start, t_end+1)})
     data1 = trim_timeseries(data1)
     data2 = trim_timeseries(data2)
     return data1, data2
@@ -2543,15 +2543,16 @@ def plot_SLR_timeseries (base_dir='./'):
     labels = ['untipped', 'tipped', 'recovered', 'control']
 
     # Inner function to add the given DataArray to the axes with the given colour
-    def add_line (data, ax0, colour, year0):
-        ax0.plot(data.coords['time']-year0, data, '-', color=colour, linewidth=0.8)
+    def add_line (data, ax, colour, year0):
+        ax.plot(data.coords['time']-year0, data, '-', color=colour, linewidth=0.8)
 
     # Set up plot
-    fig = plt.figure(figsize=(4.5,6))
-    gs = plt.GridSpec(num_regions, 1)
-    gs.update(left=0.13, right=0.87, bottom=0.2, top=0.9, hspace=0.3)
+    fig = plt.figure(figsize=(8,6))
+    gs = plt.GridSpec(2, num_regions)
+    gs.update(left=0.08, right=0.92, bottom=0.15, top=0.9, hspace=0.3, wspace=0.2)
     for n in range(num_regions):
-        ax = plt.subplot(gs[n,0])
+        ax1 = plt.subplot(gs[0,n])
+        ax2 = plt.subplot(gs[1,n])
         # Get baseline initial VAF from first member ramp-up (should be consistent between members as evolving ice has just been switched on)
         ds = xr.open_dataset(vaf_dir+'/'+file_head+baseline_suite+file_tail)
         vaf0 = ds[regions[n]+'_vaf'].isel(time=0)
@@ -2581,7 +2582,7 @@ def plot_SLR_timeseries (base_dir='./'):
                     baseline = vaf0
                 slr = (vaf-baseline)*vaf_to_gmslr*1e2
                 if suite == pi_suite:
-                    add_line(slr, ax, colours[labels.index('control')], year0)
+                    add_line(slr, ax1, colours[labels.index('control')], year0)
                 else:
                     tips, date_tip = check_tip(suite=suite, region=regions[n], return_date=True, base_dir=base_dir)
                     if tips:
@@ -2599,26 +2600,50 @@ def plot_SLR_timeseries (base_dir='./'):
                                 print('Warning: '+suite+' does not extend to recovery date')
                             tipped = slr.where((time >= date_tip.dt.year)*(time < date_recover.dt.year), drop=True)
                             recovered = slr.where(time >= date_recover.dt.year, drop=True)
-                            add_line(recovered, ax, colours[labels.index('recovered')], year0)
+                            add_line(recovered, ax1, colours[labels.index('recovered')], year0)
                         else:
                             tipped = slr.where(time >= date_tip.dt.year, drop=True)
-                        add_line(tipped, ax, colours[labels.index('tipped')], year0)
+                        add_line(tipped, ax1, colours[labels.index('tipped')], year0)
                     else:
                         untipped = slr
-                    add_line(untipped, ax, colours[labels.index('untipped')], year0)
+                    add_line(untipped, ax1, colours[labels.index('untipped')], year0)
+                if 'ramp_down' in scenario and tips:
+                    # Add to second plot: differences from parent stabilisation suite
+                    # Find year ramp-down starts
+                    year_rd = ds['time'].isel(time=0)
+                    # Find parent stabilisation suite
+                    parent_suite = suites_branched[suite]
+                    # Read data and convert to SLR as before
+                    ds2 = xr.open_dataset(vaf_dir+'/'+file_head+parent_suite+file_tail)
+                    parent_slr = (ds2[regions[n]+'_vaf']-baseline)*vaf_to_gmslr*1e2
+                    # Trim to same years
+                    slr, parent_slr = align_timeseries(slr, parent_slr, time_coord='time')
+                    # Get difference: sea level rise avoided due to ramp-down
+                    slr_diff = parent_slr - slr
+                    # Colour-code based on tipping status as before
+                    if recovers:
+                        time_trim = slr_diff.coords['time']-1
+                        slr_diff_recovered = slr_diff.where(time_trim >= date_recover.dt.year, drop=True)
+                        add_line(slr_diff_recovered, ax2, colours[labels.index('recovered')], year_rd)
+                        slr_diff_tipped = slr_diff.where((time_trim >= date_tip.dt.year)*(time_trim < date_recover.dt.year), drop=True)
+                    else:
+                        slr_diff_tipped = slr_diff.where(time_trim >= date_tip.dt.year, drop=True)
+                    add_line(slr_diff_tipped, ax2, colours[labels.index('tipped')], year_rd)
         print(regions[n]+': '+str(num_tip)+' tipped, '+str(num_recover)+' recovered')
-        ax.grid(linestyle='dashed')
-        ax.set_ylabel('cm')
-        if n == 1:
-            ax.set_xlabel('Years')
-        ax.set_xlim([0, None])
-        ax.set_title(region_names[regions[n]]+' catchment', fontsize=12)
-    plt.suptitle('Sea level contribution', fontsize=14)
+        for ax in [ax1, ax2]:
+            ax.grid(linestyle='dashed')
+            ax.set_ylabel('cm')
+            ax.set_xlim([0, None])
+            ax.set_title(region_names[regions[n]]+' catchment', fontsize=12)
+        ax1.set_xlabel('Years')
+        ax2.set_xlabel('Years since beginning of ramp-down')
+        plt.text(0.5, 0.99, 'a) Sea level contribution', fontsize=14, ha='center', va='top', transform=fig.transFigure)
+        plt.text(0.5, 0.5, 'b) Sea level rise avoided due to ramp-down', fontsize=14, ha='center', va='top', transform=fig.transFigure)
     # Manual legend
     handles = []
     for m in range(len(colours)):
         handles.append(Line2D([0], [0], color=colours[m], label=labels[m], linestyle='-'))
-    ax.legend(handles=handles, loc='lower center', bbox_to_anchor=(0.5, -0.6), ncol=2)
+    ax2.legend(handles=handles, loc='lower center', bbox_to_anchor=(0.5, -0.6), ncol=2)
     finished_plot(fig, fig_name='figures/SLR_timeseries.png', dpi=300)
         
                 
