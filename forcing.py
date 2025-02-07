@@ -398,14 +398,14 @@ def era5_time_mean_forcing(variable, year_start=1979, year_end=2015, out_file=No
                            land_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/ERA5-forcing/daily/files/land_sea_mask.nc'):
 
     ERA5_ds   = xr.open_mfdataset(f'{era5_folder}{variable}_*.nc')
-    ERA5_ds   = ERA5_ds.isel(valid_time=((ERA5_ds.time.dt.year <= year_end)*(ERA5_ds.time.dt.year >= year_start)))
+    ERA5_ds   = ERA5_ds.isel(time=((ERA5_ds.time.dt.year <= year_end)*(ERA5_ds.time.dt.year >= year_start)))
     time_mean = ERA5_ds.mean(dim='time')
 
     # mask areas that are land:
-    era5_mask = xr.open_dataset(land_mask).lsm.isel(valid_time=0)
-    era5_mask['longitude'] = fix_lon_range(era5_mask['longitude'])
+    #era5_mask = xr.open_dataset(land_mask).lsm.isel(valid_time=0)
+    #era5_mask['longitude'] = fix_lon_range(era5_mask['longitude'])
     time_mean['longitude'] = fix_lon_range(time_mean['longitude'])
-    time_mean = xr.where(era5_mask != 0, np.nan, time_mean)
+    #time_mean = xr.where(era5_mask != 0, np.nan, time_mean)
 
     if out_file:
         time_mean.to_netcdf(out_file)
@@ -444,9 +444,9 @@ def cesm2_ensemble_time_mean_forcing(expt, variable, year_start=1979, year_end=2
     time_mean = year_mean.copy().mean(dim='year')
 
     # mask areas that are land:
-    cesm2_mask = xr.open_dataset(land_mask).LANDFRAC
-    cesm2_mask['lon'] = fix_lon_range(cesm2_mask['lon'])  
-    time_mean  = xr.where(cesm2_mask.isel(time=0) != 0, np.nan, time_mean)
+    #cesm2_mask = xr.open_dataset(land_mask).LANDFRAC
+    #cesm2_mask['lon'] = fix_lon_range(cesm2_mask['lon'])  
+    #time_mean  = xr.where(cesm2_mask.isel(time=0) != 0, np.nan, time_mean)
 
     if out_file:
         time_mean.to_netcdf(out_file)
@@ -545,17 +545,26 @@ def process_era5_forcing(variable, year_start=1979, year_end=2023, era5_folder='
         # convert time dimension to unlimited so that NEMO reads in the calendar correctly
         for filename in glob.glob(f'{era5_folder}{variable}*y{year}.nc'):
             with xr.open_dataset(filename, mode='a') as data:
-                data = data.rename({'valid_time':'time'})
+                print(filename)
+                try:
+                    data = data.rename({'valid_time':'time'})
+                except:
+                    continue
                 variable = filename.split('files/')[1].split('_')[0]
 
-                print(f'Filling land for variable {variable} year {year}')
-                src_to_fill = xr.where(landmask!=0, -9999, data[variable]) # which cells need to be filled
-                var_filled_array = np.empty(src_to_fill.shape)
-                for tind, t in enumerate(src_to_fill.time):
-                    var_filled_array[:,:,tind] = extend_into_mask(src_to_fill.isel(time=tind).values, missing_val=-9999, fill_val=np.nan, 
-                                                                  use_2d=True, use_3d=False, num_iters=200)
+                if variable in ['msdwlwrf','msdwswrf','t2m','sph2m','d2m','msl']: 
+                    print(f'Filling land for variable {variable} year {year}')
+                    if variable=='sph2m':
+                        varname='specific_humidity'
+                    else:
+                        varname=variable
+                    src_to_fill = xr.where(landmask!=0, -9999, data[varname]) # which cells need to be filled
+                    var_filled_array = np.empty(src_to_fill.shape)
+                    for tind, t in enumerate(src_to_fill.time):
+                        var_filled_array[:,:,tind] = extend_into_mask(src_to_fill.isel(time=tind).values, missing_val=-9999, fill_val=np.nan, 
+                                                                     use_2d=True, use_3d=False, num_iters=200)
                     
-                data[variable] = (('latitude','longitude','time'), var_filled_array)
+                    data[varname] = (('latitude','longitude','time'), var_filled_array)
 
                 data.to_netcdf(f'{era5_folder}processed/{variable}_time_y{year}.nc', unlimited_dims={'time':True})
 
