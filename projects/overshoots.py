@@ -2539,20 +2539,21 @@ def plot_SLR_timeseries (base_dir='./'):
     baseline_suite = 'cx209'  # First member ramp-up
     regions = ['ross', 'filchner_ronne']
     num_regions = len(regions)
-    colours = ['DarkGrey', 'Crimson', 'DodgerBlue', 'black']
-    labels = ['untipped', 'tipped', 'recovered', 'control']
+    colours = ['DarkGrey', 'Crimson', 'DodgerBlue']
+    labels = ['untipped', 'tipped', 'recovered']
+    trend_years = 200  # Calculate drift in control over the last 200 years
+    total_years = 1000  # Extend control to be 1000 years long (just needs to be longer than any other trajectory)
 
     # Inner function to add the given DataArray to the axes with the given colour
     def add_line (data, ax, colour, year0):
         ax.plot(data.coords['time']-year0, data, '-', color=colour, linewidth=0.8)
 
     # Set up plot
-    fig = plt.figure(figsize=(7.5,6))
-    gs = plt.GridSpec(2, num_regions)
-    gs.update(left=0.08, right=0.98, bottom=0.15, top=0.9, hspace=0.6, wspace=0.15)
+    fig = plt.figure(figsize=(4.5,6))
+    gs = plt.GridSpec(num_regions, 1)
+    gs.update(left=0.13, right=0.87, bottom=0.15, top=0.9, hspace=0.3)
     for n in range(num_regions):
-        ax1 = plt.subplot(gs[0,n])
-        ax2 = plt.subplot(gs[1,n])
+        ax = plt.subplot(gs[n,0])
         # Get baseline initial VAF from first member ramp-up (should be consistent between members as evolving ice has just been switched on)
         ds = xr.open_dataset(vaf_dir+'/'+file_head+baseline_suite+file_tail)
         vaf0 = ds[regions[n]+'_vaf'].isel(time=0)
@@ -2560,9 +2561,9 @@ def plot_SLR_timeseries (base_dir='./'):
         ds.close()
         num_tip = 0
         num_recover = 0
+        pi_slr = None
         # Loop over scenarios and check if file exists
         for scenario in suites_by_scenario:
-            pi_slr = None
             if scenario in ['piControl', 'ramp_up_static_ice']:
                 continue
             for suite in suites_by_scenario[scenario]:
@@ -2583,10 +2584,21 @@ def plot_SLR_timeseries (base_dir='./'):
                     baseline = vaf0
                 slr = (vaf-baseline)*vaf_to_gmslr*1e2
                 if suite == pi_suite:
-                    pi_slr = slr
-                if suite == pi_suite:
-                    add_line(slr, ax1, colours[labels.index('control')], year0)
+                    # Calculate linear trend over last 200 years of control
+                    pi_trend = linregress(time.data[-trend_years:], slr.data[-trend_years:])[0]
+                    print(regions[n]+' drift at end of control simulation is '+str(pi_trend)+' cm/y')
+                    # Extend the control suite with this linear trend                    
+                    time_extend = np.arange(time[-1]+1, time[0]+total_years)
+                    slr_extend = slr.data[-1] + pi_trend*(time_extend - time[-1].data)
+                    slr_extend = xr.DataArray(data=slr_extend, dims=['time'], coords=dict(time=time_extend+1))
+                    pi_slr = xr.concat([slr, slr_extend], dim='time')
                 else:
+                    # Subtract drift
+                    slr_trim, pi_slr_trim = align_timeseries(slr, pi_slr, time_coord='time')
+                    if not (slr_trim==slr).all():
+                        # Shouldn't have needed to trim the base timeseries
+                        raise Exception('Problem with aligning timeseries')
+                    slr = slr_trim - pi_slr_trim
                     tips, date_tip = check_tip(suite=suite, region=regions[n], return_date=True, base_dir=base_dir)
                     if tips:
                         year_tip = date_tip.dt.year
@@ -2605,42 +2617,28 @@ def plot_SLR_timeseries (base_dir='./'):
                                 print('Warning: '+suite+' does not extend to recovery date')
                             tipped = slr.where((time >= year_tip)*(time < year_recover), drop=True)
                             recovered = slr.where(time >= year_recover, drop=True)
-                            add_line(recovered, ax1, colours[labels.index('recovered')], year0)
+                            add_line(recovered, ax, colours[labels.index('recovered')], year0)
                         else:
                             tipped = slr.where(time >= year_tip, drop=True)
-                        add_line(tipped, ax1, colours[labels.index('tipped')], year0)
+                        add_line(tipped, ax, colours[labels.index('tipped')], year0)
                     else:
                         untipped = slr
                         recovers = False
-                    add_line(untipped, ax1, colours[labels.index('untipped')], year0)
-                if 'ramp_down' in scenario and recovers:
-                    # Add to second plot: differences from piControl
-                    # Trim to same years
-                    slr_trim, pi_slr_trim = align_timeseries(slr, pi_slr, time_coord='time')
-                    # Get difference: sea level rise avoided due to ramp-down
-                    slr_diff = pi_slr_trim - slr_trim
-                    # Start plotting on recovery date
-                    time_trim = slr_diff.coords['time']-1
-                    slr_diff = slr_diff.where(time_trim >= year_recover, drop=True)
-                    add_line(slr_diff, ax2, colours[labels.index('recovered')], year_recover+1)
+                    add_line(untipped, ax, colours[labels.index('untipped')], year0)
         print(regions[n]+': '+str(num_tip)+' tipped, '+str(num_recover)+' recovered')
-        for ax in [ax1, ax2]:
-            ax.grid(linestyle='dotted')
-            ax.axhline(0, color='black', linewidth=0.5)
-            if n==0:
-                ax.set_ylabel('cm')
-            ax.set_xlim([0, None])
-            ax.set_title(region_names[regions[n]]+' catchment', fontsize=12)
-        if n==0:
-            ax1.set_xlabel('Years')
-            ax2.set_xlabel('Years since recovery')
-        plt.text(0.53, 0.99, 'a) Sea level contribution', fontsize=14, ha='center', va='top', transform=fig.transFigure)
-        plt.text(0.53, 0.52, 'b) Sea level anomaly after recovery', fontsize=14, ha='center', va='top', transform=fig.transFigure)
+        ax.grid(linestyle='dotted')
+        ax.axhline(0, color='black', linewidth=0.5)
+        if n == 1:
+            ax.set_xlabel('Years')
+        ax.set_ylabel('cm')
+        ax.set_xlim([0, None])
+        ax.set_title(region_names[regions[n]]+' catchment', fontsize=12)
+        plt.suptitle('Sea level contribution', fontsize=14)
     # Manual legend
     handles = []
     for m in range(len(colours)):
         handles.append(Line2D([0], [0], color=colours[m], label=labels[m], linestyle='-'))
-    ax2.legend(handles=handles, loc='lower center', bbox_to_anchor=(-0.1, -0.5), ncol=4)
+    ax.legend(handles=handles, loc='lower center', bbox_to_anchor=(0.5, -0.45), ncol=3)
     finished_plot(fig, fig_name='figures/SLR_timeseries.png', dpi=300)
         
                 
