@@ -287,9 +287,9 @@ def convert_precip(file_precip='era5_tp_1979_daily_averages.nc', variable='tp',
 # variable_slp: string name of the sea level pressure variable within the file specified by file_slp
 # dataset: string specifying type of atmospheric forcing dataset (ERA5, JRA etc.)
 # folder: string of location that contains the atmospheric forcing files
-def dewpoint_to_specific_humidity(file_dew='era5_d2m_1979_daily_averages.nc', variable_dew='d2m',
-                                  file_slp='era5_msl_1979_daily_averages.nc', variable_slp='msl',
-                                  dataset='ERA5', folder='/gws/nopw/j04/terrafirma/birgal/NEMO_AIS/ERA5-forcing/'):
+def dewpoint_to_specific_humidity(file_dew='d2m_y1979.nc', variable_dew='d2m',
+                                  file_slp='msl_y1979.nc', variable_slp='msl',
+                                  dataset='ERA5', folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/ERA5-forcing/daily/files/'):
     if dataset=='ERA5':
         # ERA5 does not provide specific humidity, but gives the 2 m dewpoint temperature in K
         # Conversion assumes temperature is in K and pressure in Pa.
