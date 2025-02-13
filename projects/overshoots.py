@@ -2681,6 +2681,26 @@ def plot_SLR_timeseries (base_dir='./'):
         handles.append(Line2D([0], [0], color=colours[m], label=labels[m], linestyle='-'))
     ax.legend(handles=handles, loc='lower center', bbox_to_anchor=(0.5, -0.45), ncol=3)
     finished_plot(fig, fig_name='figures/SLR_timeseries.png', dpi=300)
+
+
+# Count the total number of years in all overshoot simulations (excluding piControl and static ice).
+def count_simulation_years (base_dir='./'):
+
+    timeseries_file = 'timeseries.nc'
+
+    years = 0
+    for scenario in suites_by_scenario:
+        if 'piControl' in scenario or 'static_ice' in scenario:
+            continue
+        for suite in suites_by_scenario[scenario]:
+            file_path = base_dir+'/'+suite+'/'+timeseries_file
+            ds = xr.open_dataset(file_path)
+            num_months = ds.sizes['time_counter']
+            ds.close()
+            years += num_months/months_per_year
+    print('Total '+str(years)+' years')
+
+    
         
                 
 
