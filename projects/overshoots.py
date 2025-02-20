@@ -2571,11 +2571,12 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
     finished_plot(fig, fig_name='figures/map_snapshots_'+var_name+'.png', dpi=300)
 
 
-def plot_SLR_timeseries (base_dir='./'):
+def plot_SLR_timeseries (base_dir='./', draft=False):
 
     vaf_dir = '/gws/nopw/j04/terrafirma/tm17544/TerraFIRMA_overshoots/processed_data/netcdf_files/'
     file_head = 'vaf_'
     file_tail = '_timeseries.nc'
+    timeseries_file = 'timeseries.nc'
     pi_suite = 'cs568'  # Evolving ice
     baseline_suite = 'cx209'  # First member ramp-up
     regions = ['ross', 'filchner_ronne']
@@ -2587,7 +2588,11 @@ def plot_SLR_timeseries (base_dir='./'):
 
     # Inner function to add the given DataArray to the axes with the given colour
     def add_line (data, ax, colour, year0):
-        ax.plot(data.coords['time']-year0, data, '-', color=colour, linewidth=0.8)
+        if draft:
+            time_coord = 'time_centered'
+        else:
+            time_coord = 'time'
+        ax.plot(data.coords[time_coord]-year0, data, '-', color=colour, linewidth=0.8)
 
     # Set up plot
     fig = plt.figure(figsize=(4.5,6))
@@ -2595,11 +2600,12 @@ def plot_SLR_timeseries (base_dir='./'):
     gs.update(left=0.13, right=0.87, bottom=0.15, top=0.9, hspace=0.3)
     for n in range(num_regions):
         ax = plt.subplot(gs[n,0])
-        # Get baseline initial VAF from first member ramp-up (should be consistent between members as evolving ice has just been switched on)
-        ds = xr.open_dataset(vaf_dir+'/'+file_head+baseline_suite+file_tail)
-        vaf0 = ds[regions[n]+'_vaf'].isel(time=0)
-        year0 = ds['time'].isel(time=0)
-        ds.close()
+        if not draft:
+            # Get baseline initial VAF from first member ramp-up (should be consistent between members as evolving ice has just been switched on)
+            ds = xr.open_dataset(vaf_dir+'/'+file_head+baseline_suite+file_tail)
+            vaf0 = ds[regions[n]+'_vaf'].isel(time=0)
+            year0 = ds['time'].isel(time=0)
+            ds.close()
         num_tip = 0
         num_recover = 0
         pi_slr = None
@@ -2608,73 +2614,90 @@ def plot_SLR_timeseries (base_dir='./'):
             if scenario in ['piControl', 'ramp_up_static_ice']:
                 continue
             for suite in suites_by_scenario[scenario]:
-                file_path = vaf_dir + '/' + file_head + suite + file_tail
-                if not os.path.isfile(file_path):
-                    print('Warning: '+suite+' missing')
-                    continue
-                # Read data
-                ds = xr.open_dataset(file_path)
-                # Offset of 1 year as per Tom's email (BISICLES output is snapshot at beginning of next year)
-                time = ds['time'] - 1
-                vaf = ds[regions[n]+'_vaf']
-                # Convert from VAF to sea level rise in cm
-                if suite == pi_suite:
-                    # Different initial state to the rest
-                    baseline = vaf.isel(time=0)
+                if draft:
+                    if suite == pi_suite:
+                        continue
+                    file_path = base_dir + '/' + suite + '/' + timeseries_file
+                    ds = xr.open_dataset(file_path)
+                    # Get annual values for year and draft
+                    time = [t.dt.year for t in ds['time_centered'][::12]]
+                    if suite == baseline_suite:
+                        year0 = time[0]
+                    data = ds[regions[n]+'_draft'][::12]
+                    ds.close()
                 else:
-                    baseline = vaf0
-                slr = (vaf-baseline)*vaf_to_gmslr*1e2
-                if suite == pi_suite:
-                    # Calculate linear trend over last 200 years of control
-                    pi_trend = linregress(time.data[-trend_years:], slr.data[-trend_years:])[0]
-                    print(regions[n]+' drift at end of control simulation is '+str(pi_trend)+' cm/y')
-                    # Extend the control suite with this linear trend                    
-                    time_extend = np.arange(time[-1]+1, time[0]+total_years)
-                    slr_extend = slr.data[-1] + pi_trend*(time_extend - time[-1].data)
-                    slr_extend = xr.DataArray(data=slr_extend, dims=['time'], coords=dict(time=time_extend+1))
-                    pi_slr = xr.concat([slr, slr_extend], dim='time')
-                else:
+                    file_path = vaf_dir + '/' + file_head + suite + file_tail
+                    if not os.path.isfile(file_path):
+                        print('Warning: '+suite+' missing')
+                        continue
+                    # Read data
+                    ds = xr.open_dataset(file_path)
+                    # Offset of 1 year as per Tom's email (BISICLES output is snapshot at beginning of next year)
+                    time = ds['time'] - 1
+                    vaf = ds[regions[n]+'_vaf']
+                    # Convert from VAF to sea level rise in cm
+                    if suite == pi_suite:
+                        # Different initial state to the rest
+                        baseline = vaf.isel(time=0)
+                    else:
+                        baseline = vaf0
+                    slr = (vaf-baseline)*vaf_to_gmslr*1e2
+                    if suite == pi_suite:
+                        # Calculate linear trend over last 200 years of control
+                        pi_trend = linregress(time.data[-trend_years:], slr.data[-trend_years:])[0]
+                        print(regions[n]+' drift at end of control simulation is '+str(pi_trend)+' cm/y')
+                        # Extend the control suite with this linear trend                    
+                        time_extend = np.arange(time[-1]+1, time[0]+total_years)
+                        slr_extend = slr.data[-1] + pi_trend*(time_extend - time[-1].data)
+                        slr_extend = xr.DataArray(data=slr_extend, dims=['time'], coords=dict(time=time_extend+1))
+                        pi_slr = xr.concat([slr, slr_extend], dim='time')
+                        continue
                     # Subtract drift
                     slr_trim, pi_slr_trim = align_timeseries(slr, pi_slr, time_coord='time')
                     if not (slr_trim==slr).all():
                         # Shouldn't have needed to trim the base timeseries
                         raise Exception('Problem with aligning timeseries')
-                    slr = slr_trim - pi_slr_trim
-                    tips, date_tip = check_tip(suite=suite, region=regions[n], return_date=True, base_dir=base_dir)
-                    if tips:
-                        year_tip = date_tip.dt.year
-                        if year_tip <= time[-1]:
-                            num_tip += 1
-                        else:
-                            print('Warning: '+suite+' does not extend to tipping date')
-                        # Select untipped section
-                        untipped = slr.where(time < year_tip, drop=True)  # 1-year offset as before
-                        recovers, date_recover = check_recover(suite=suite, region=regions[n], return_date=True, base_dir=base_dir)
-                        if recovers:
-                            year_recover = date_recover.dt.year
-                            if year_recover <= time[-1]:
-                                num_recover += 1
-                            else:
-                                print('Warning: '+suite+' does not extend to recovery date')
-                            tipped = slr.where((time >= year_tip)*(time < year_recover), drop=True)
-                            recovered = slr.where(time >= year_recover, drop=True)
-                            add_line(recovered, ax, colours[labels.index('recovered')], year0)
-                        else:
-                            tipped = slr.where(time >= year_tip, drop=True)
-                        add_line(tipped, ax, colours[labels.index('tipped')], year0)
+                    data = slr_trim - pi_slr_trim
+                tips, date_tip = check_tip(suite=suite, region=regions[n], return_date=True, base_dir=base_dir)
+                if tips:
+                    year_tip = date_tip.dt.year
+                    if year_tip <= time[-1]:
+                        num_tip += 1
                     else:
-                        untipped = slr
-                        recovers = False
-                    add_line(untipped, ax, colours[labels.index('untipped')], year0)
+                        print('Warning: '+suite+' does not extend to tipping date')
+                    # Select untipped section
+                    untipped = slr.where(time < year_tip, drop=True)  # 1-year offset as before
+                    recovers, date_recover = check_recover(suite=suite, region=regions[n], return_date=True, base_dir=base_dir)
+                    if recovers:
+                        year_recover = date_recover.dt.year
+                        if year_recover <= time[-1]:
+                            num_recover += 1
+                        else:
+                            print('Warning: '+suite+' does not extend to recovery date')
+                        tipped = slr.where((time >= year_tip)*(time < year_recover), drop=True)
+                        recovered = slr.where(time >= year_recover, drop=True)
+                        add_line(recovered, ax, colours[labels.index('recovered')], year0)
+                    else:
+                        tipped = slr.where(time >= year_tip, drop=True)
+                    add_line(tipped, ax, colours[labels.index('tipped')], year0)
+                else:
+                    untipped = slr
+                    recovers = False
+                add_line(untipped, ax, colours[labels.index('untipped')], year0)
         print(regions[n]+': '+str(num_tip)+' tipped, '+str(num_recover)+' recovered')
         ax.grid(linestyle='dotted')
         ax.axhline(0, color='black', linewidth=0.5)
         if n == 1:
             ax.set_xlabel('Years')
-        ax.set_ylabel('cm')
         ax.set_xlim([0, None])
-        ax.set_title(region_names[regions[n]]+' catchment', fontsize=12)
-        plt.suptitle('Sea level contribution', fontsize=14)
+        if draft:
+            ax.set_title(region_names[regions[n]], fontsize=12)
+            plt.suptitle('Ice shelf draft', fontsize=14)
+            ax.set_ylabel('m')
+        else:
+            ax.set_title(region_names[regions[n]]+' catchment', fontsize=12)
+            plt.suptitle('Sea level contribution', fontsize=14)
+            ax.set_ylabel('cm')
     # Manual legend
     handles = []
     for m in range(len(colours)):
@@ -2695,11 +2718,10 @@ def count_simulation_years (base_dir='./'):
         for suite in suites_by_scenario[scenario]:
             file_path = base_dir+'/'+suite+'/'+timeseries_file
             ds = xr.open_dataset(file_path)
-            num_months = ds.sizes['time_counter']
+            num_months = ds.sizes['time_centered']
             ds.close()
             years += num_months/months_per_year
     print('Total '+str(years)+' years')
-
     
         
                 
