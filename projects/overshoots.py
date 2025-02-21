@@ -2728,26 +2728,37 @@ def count_simulation_years (base_dir='./'):
 def find_corrupted_files (base_dir='./'):
 
     # Logfile to save a list of all the affected files
-    out_file = base_dir+'/corrupted_files'
+    log_file = base_dir+'/corrupted_files'
+    # MASS command file
+    mass_file = base_dir+'/moo_replace_corrupted.sh'
     timeseries_file = 'timeseries.nc'
-    threshold_ini = 50  # Allow larger jump in first coupling timestep of piControl simulation
+    threshold_ini = 50  # Allow larger jump when ice sheets are first switched on
     threshold_big = 10
     threshold_small = 1e-3  # approx. machine precision
     coupling_month = 1
+    file_types = ['grid', 'isf']
     file_tails = ['grid-T.nc', 'isf-T.nc']
 
-    # Open file
-    f = open(out_file, 'w')
+    # Open files
+    f_log = open(logfile, 'w')
+    f_mass = open(mass_file, 'w')
+    num_months = 0
+    num_problems = 0
 
     # Construct the filenames corresponding to the given suite and date, and add them to the logfile.
     def add_files (suite, date):
+        num_problems += 1
         year0 = date.dt.year.item()
         month0 = date.dt.month.item()
         year1, month1 = add_months(year0, month0, 1)
-        for file_tail in file_tails:
-            file_path = suite+'/nemo_'+suite+'o_1m_'+str(year0)+str(month0).zfill(2)+'01-'+str(year1)+str(month1).zfill(2)+'01_'+file_tail
+        for file_type in file_types:
+            file_path = 'nemo_'+suite+'o_1m_'+str(year0)+str(month0).zfill(2)+'01-'+str(year1)+str(month1).zfill(2)+'01_'+file_type+'-T.nc'
+            if not os.path.isfile(suite+'/'+file_path):
+                raise Exception('Missing file '+file_path)
             print('Problem with '+file_path)
-            f.write(file_path+'\n')          
+            f_log.write(file_path+'\n')
+            f_mass.write('rm '+suite+'/'+file_path+'\n')
+            f_mass.write('moo filter '+file_type+'.moo_ncks_opts :crum/u-'+suite+'/onm.nc.file/'+file_path+' '+suite+'/')
 
     # Loop over all suites
     for scenario in suites_by_scenario:
@@ -2760,11 +2771,7 @@ def find_corrupted_files (base_dir='./'):
             draft = ds['all_draft']
             time = ds['time_centered']
             ds.close()
-            # Quick plot
-            fig, ax = plt.subplots()
-            ax.plot_date(time, draft, '-')
-            ax.set_title(suite)
-            fig.show()
+            num_months += np.size(time)
             problem = False
             last_good = draft[0]
             # Loop over time
@@ -2799,7 +2806,9 @@ def find_corrupted_files (base_dir='./'):
                         # Out of the problem block
                         problem = False
                         last_good = draft[t]
-    f.close()
+    f_log.close()
+    f_mass.close()
+    print(str(num_problems)+' of '+str(num_months)+' affected ('+str(num_problems/num_months*100)+'%')
     
     
 
