@@ -16,7 +16,7 @@ from scipy.stats import ttest_ind, linregress
 from tqdm import tqdm
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um, check_nans, fix_missing_months
+from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um, check_nans, fix_missing_months, calc_timeseries, overwrite_file
 from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, timeseries_plot, circumpolar_plot
 from ..plot_utils import truncate_colourmap
 from ..utils import moving_average, add_months, rotate_vector, polar_stereo, convert_ismr
@@ -2810,6 +2810,61 @@ def find_corrupted_files (base_dir='./'):
     f_log.close()
     f_mass.close()
     print(str(num_problems)+' of '+str(num_months)+' months affected ('+str(num_problems/num_months*100)+'%)')
+
+
+# For each corrupted file name listed in the given file (created above), re-calculate that time index of data for the given timeseries file.
+def overwrite_corrupted_timeseries (in_file='corrupted_files', timeseries_file='timeseries.nc', base_dir='./'):
+
+    # Read file into list
+    f = open(in_file, 'r')
+    file_paths = f.read().splitlines()
+    f.close()
+    
+    # Build list of affected suites
+    suites = []
+    for fname in file_paths:
+        i0 = fname.index('_')+1
+        i1 = fname.index('o_1m_')
+        suite = fname[i0:i1]
+        if suite not in suites:
+            suites.append(suite)
+
+    # Loop over suites
+    for suite in suites:
+        # Build list of affected file patterns
+        file_patterns = []
+        for fname in file_paths:
+            if suite not in fname:
+                continue
+            file_head = fname[:fname.rfind('_')]
+            file_pattern = file_head + '*.nc'
+            if file_pattern not in file_patterns:
+                file_patterns.append(file_pattern)
+        # Read timeseries file and get list of variables to precompute
+        file_path_ts = base_dir+'/'+suite+'/'+timeseries_file
+        ds_ts = xr.open_dataset(file_path_ts)
+        var_names = [var for var in ds_ts]
+        for file_pattern in file_patterns:
+            print('Processing '+file_pattern)
+            ds_nemo = xr.open_mfdataset(suite+'/'+file_pattern)
+            ds_nemo.load()
+            # Remove halo
+            ds_nemo = ds_nemo.isel(x=slice(1,-1))
+            # Find the matching time index in the timeseries file
+            t0 = np.argwhere(ds_ts['time_centered'].data==ds_nemo['time_centered'][0].data)[0][0]
+            for var in var_names:
+                # Recalculate variable
+                try:
+                    data, ds_nemo = calc_timeseries(var, ds_nemo)
+                except(KeyError):
+                    print('Warning: missing data')
+                    # Flag with NaN
+                    data = ds_nemo['time_counter'].where(False)
+                data = data.swap_dims({'time_counter':'time_centered'})
+                # Overwrite in timeseries dataset
+                ds_ts[var][t0] = data.squeeze()
+        # Overwrite timeseries file
+        overwrite_file(ds_ts, file_path_ts)
     
     
 
