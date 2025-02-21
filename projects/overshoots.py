@@ -1361,7 +1361,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     timeseries_file_um = 'timeseries_um.nc'
     smooth = 5*months_per_year
     pi_suite = 'cs495'
-    cmap = ['Reds', 'Blues']
+    cmap = ['YlOrRd', 'YlGnBu'] #['Reds', 'Blues']
     p0 = 0.05
     tipping_temp = -1.9
 
@@ -1470,7 +1470,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
             # Plot each line with colour varying by global warming level
             points = np.array([all_bwsalt[n][m].data, all_cavity_temp[n][m].data]).T.reshape(-1,1,2)
             segments = np.concatenate([points[:-1], points[1:]], axis=1)
-            lc = LineCollection(segments, cmap=truncate_colourmap(cmap[direction[m]], minval=0.3), norm=norm)
+            lc = LineCollection(segments, cmap=truncate_colourmap(cmap[direction[m]], minval=0.1), norm=norm) #.3), norm=norm)
             lc.set_array(all_warming[n][m].data)
             lc.set_linewidth(1)
             img = ax.add_collection(lc)
@@ -1488,14 +1488,14 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
         if n==0:
             ax.set_xlabel('Bottom salinity on continental shelf (psu)', fontsize=12)
             ax.set_ylabel('Temperature in ice shelf cavity ('+deg_string+'C)', fontsize=12)
-        # Indicate salinity bias
+        '''# Indicate salinity bias
         x_start = bias_print_x[n]
         x_end = bias_print_x[n] + np.abs(bwsalt_bias[n])
         ax.plot([x_start, x_end], [bias_print_y]*2, color='black')
         ax.plot([x_start]*2, [bias_print_y-0.05, bias_print_y+0.05], color='black')
         ax.plot([x_end]*2, [bias_print_y-0.05, bias_print_y+0.05], color='black')
-        plt.text(0.5*(x_start+x_end), bias_print_y+0.3, 'Salinity bias of\n'+str(np.round(bwsalt_bias[n],3))+' psu', fontsize=10, color='black', ha='center', va='center')
-    # Two colour bars: red on the way up, purple on the way down
+        plt.text(0.5*(x_start+x_end), bias_print_y+0.3, 'Salinity bias of\n'+str(np.round(bwsalt_bias[n],3))+' psu', fontsize=10, color='black', ha='center', va='center')'''
+    # Two colour bars: yellow/orange/red on the way up, yellow/green/blue on the way down
     cbar = plt.colorbar(img_up, cax=cax1, orientation='horizontal')
     cbar.set_ticklabels([])
     plt.colorbar(img_down, cax=cax2, orientation='horizontal')
