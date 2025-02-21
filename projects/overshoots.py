@@ -2865,6 +2865,59 @@ def overwrite_corrupted_timeseries (in_file='corrupted_files', timeseries_file='
                 ds_ts[var][t0] = data.squeeze()
         # Overwrite timeseries file
         overwrite_file(ds_ts, file_path_ts)
+
+
+# Check the NetCDF global attribute timeStamp for every NEMO file in every suite, compared to the nearly-empty header files pulled more recently from MASS (only containing time variable). Make a list of the ones where the header timeStamp is newer: these have been overwritten on MASS and should be re-pulled again. Also write a moose command script as in find_corrupted_files.
+def find_updated_files (base_dir='./'):
+
+    header_dir = base_dir+'/headers/'
+    log_file = base_dir+'/updated_files'
+    mass_file = base_dir+'/moo_replace_updated.sh'
+
+    f_log = open(log_file, 'w')
+    f_mass = open(mass_file, 'w')
+    num_files = 0
+    num_updated = 0
+
+    # Inner function to open the given NetCDF file and return the timeStamp attribute as a datetime object
+    def parse_timestamp (file_path):
+        ds = xr.open_dataset(file_path)
+        date = datetime.datetime.strptime(ds.attrs['timeStamp'], "%Y-%b-%d %H:%M:%S UTC")
+        ds.close()
+        return date
+
+    # Add the given filename to the logfile and MASS file
+    def add_files (suite, fname):
+        print('Problem with '+fname)
+        file_type = fname[fname.rfind('_')+1:fname.index('-T.nc')]
+        f_log.write(fname+'\n')
+        f_mass.write('rm '+suite+'/'+fname+'\n')
+        f_mass.write('moo filter '+file_type+'T.moo_ncks_opts :crum/u-'+suite+'/onm.nc.file/'+fname+' '+suite+'/\n')
+    
+    for scenario in suites_by_scenario:
+        for suite in suites_by_scenario[scenario]:
+            print('Processing '+suite)
+            for f in os.listdir(base_dir+'/'+suite):
+                num_files += 1
+                if not f.startswith('nemo_'+suite):
+                    continue
+                if not os.path.isfile(header_dir+'/'+suite+'/'+f):
+                    print('Warning: missing header for '+f)
+                date_orig = parse_timestamp(base_dir+'/'+suite+'/'+f)
+                date_header = parse_timestamp(header_dir+'/'+suite+'/'+f)
+                if date_header < date_orig:
+                    print('Warning: MASS timestamp is older than local timestamp for '+f)
+                elif date_header > date_orig:
+                    # MASS timestamp is newer - will have to re-pull this one
+                    add_files(suite, f)
+                    num_updated += 1
+    f_log.close()
+    f_mass.close()
+    print(str(num_updated)+' of '+str(num_files)+' files affected ('+str(num_updated/num_files*100)+'%)')
+                
+                    
+                
+            
     
     
 
