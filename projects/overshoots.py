@@ -1176,7 +1176,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
                 ax.set_xlabel('Global warming ('+deg_string+'C), corrected', fontsize=12)
             else:
                 ax.set_xlabel('')
-            ax.set_xlim([0,8])
+            ax.set_xlim([temp_correction[n],temp_correction[n]+8])
             if v==0:
                 # Inset panel in top left showing region
                 mask = region_mask(regions[n], ds, option='all')[0]
@@ -1399,7 +1399,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 bwsalt = ds[regions[n]+'_shelf_bwsalt']
                 cavity_temp = ds[regions[n]+'_cavity_temp']
                 ds.close()
-                warming = global_mean_sat(suite) - baseline_temp + temp_correction[n]
+                warming = global_mean_sat(suite) - baseline_temp
                 # Smooth and align
                 if bwsalt.sizes['time_centered'] < smooth:
                     # Simulation hasn't run long enough to include
@@ -1410,10 +1410,10 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 bwsalt = align_timeseries(bwsalt, warming)[0]
                 cavity_temp, warming = align_timeseries(cavity_temp, warming)
                 max_warming = max(max_warming, warming.max())
-                # Throw away any ramp-down data where global temp has overshot preindustrial and gone into negative
+                # Throw away any ramp-down data where global temp has overshot preindustrial and gone into negative, and apply correction after that
                 data_bwsalt.append(bwsalt.where(warming>0))
                 data_cavity_temp.append(cavity_temp.where(warming>0))
-                data_warming.append(warming.where(warming>0))
+                data_warming.append(warming.where(warming>0) + temp_correction[n])
         all_bwsalt.append(data_bwsalt)
         all_cavity_temp.append(data_cavity_temp)
         all_warming.append(data_warming)
