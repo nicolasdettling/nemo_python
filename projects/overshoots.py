@@ -2740,14 +2740,13 @@ def find_corrupted_files (base_dir='./'):
     file_tails = ['grid-T.nc', 'isf-T.nc']
 
     # Open files
-    f_log = open(logfile, 'w')
+    f_log = open(log_file, 'w')
     f_mass = open(mass_file, 'w')
     num_months = 0
     num_problems = 0
 
     # Construct the filenames corresponding to the given suite and date, and add them to the logfile.
     def add_files (suite, date):
-        num_problems += 1
         year0 = date.dt.year.item()
         month0 = date.dt.month.item()
         year1, month1 = add_months(year0, month0, 1)
@@ -2758,7 +2757,7 @@ def find_corrupted_files (base_dir='./'):
             print('Problem with '+file_path)
             f_log.write(file_path+'\n')
             f_mass.write('rm '+suite+'/'+file_path+'\n')
-            f_mass.write('moo filter '+file_type+'.moo_ncks_opts :crum/u-'+suite+'/onm.nc.file/'+file_path+' '+suite+'/')
+            f_mass.write('moo filter '+file_type+'T.moo_ncks_opts :crum/u-'+suite+'/onm.nc.file/'+file_path+' '+suite+'/\n')
 
     # Loop over all suites
     for scenario in suites_by_scenario:
@@ -2791,6 +2790,7 @@ def find_corrupted_files (base_dir='./'):
                     # Compare to previous month
                     if np.abs(draft[t]-draft[t-1]) > threshold:
                         problem = True
+                        num_problems += 1
                         # Add to log file
                         add_files(suite, time[t])
                     else:
@@ -2800,6 +2800,7 @@ def find_corrupted_files (base_dir='./'):
                     # In a block of problem files
                     # Compare to last good ice draft
                     if np.abs(draft[t]-last_good) > threshold:
+                        num_problems += 1
                         # Add to log file
                         add_files(suite, time[t])
                     else:
@@ -2808,7 +2809,7 @@ def find_corrupted_files (base_dir='./'):
                         last_good = draft[t]
     f_log.close()
     f_mass.close()
-    print(str(num_problems)+' of '+str(num_months)+' affected ('+str(num_problems/num_months*100)+'%')
+    print(str(num_problems)+' of '+str(num_months)+' months affected ('+str(num_problems/num_months*100)+'%)')
     
     
 
