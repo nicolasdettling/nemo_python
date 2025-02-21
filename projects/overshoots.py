@@ -74,6 +74,7 @@ suites_overshoot_lengths = {'50 years': ['da697', 'dc052', 'di335', 'dc051', 'df
 suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'di335':'cy838', 'df453':'cz375', 'dc565':'cy838', 'dd210':'cz376', 'df028':'cz375', 'df025':'cy838', 'df027':'cy838', 'df021':'cz375', 'df023':'cz375', 'dh541':'cz376', 'dh859':'cz376', 'de943':'cz378', 'de962':'cz378', 'de963':'cz378', 'dg093':'cz377', 'dg094':'cz377', 'dg095':'cz377', 'dm357':'cz378', 'dm358':'cz378', 'dm359':'cz378'}
 
 tipping_threshold = -1.9  # If cavity mean temp is warmer than surface freezing point, it's tipped
+temp_correction = [1.0087846842764405, 0.8065649751736049]  # Precomputed by warming_implied_by_salinity_bias(). Ross, then FRIS.
 
 # End global vars
 
@@ -368,7 +369,7 @@ def align_timeseries (data1, data2, time_coord='time_centered'):
 # Plot the timeseries of one or more experiments/ensembles (expts can be a string, a list of strings, or a list of lists of string) and one variable against global warming level (relative to preindustrial mean in the given PI suite, unless offsets is not None).
 # Can also use an ocean variable to plot against instead of GW level (eg cavity temperature) with alternate_var='something' (assumed to be within timeseries_file).
 # Can also set offsets as a list of the same shape as expts, with different global warming baselines for each - this is still on top of PI mean, so eg pass 3 for 3K above PI.
-def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None, offsets=None, alternate_var=None):
+def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None, offsets=None, alternate_var=None, temp_correct=0):
 
     new_ax = ax is None
 
@@ -452,7 +453,7 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
             figsize = (8,5)
         fig, ax = plt.subplots(figsize=figsize)
     for gw_level, data, colour, label in zip(gw_levels, datas, colours_plot, labels_plot):
-        ax.plot(gw_level, data, '-', color=colour, label=label, linewidth=linewidth)
+        ax.plot(gw_level+temp_correct, data, '-', color=colour, label=label, linewidth=linewidth)
     ax.grid(linestyle='dotted')
     if title is None:
         title = datas[0].long_name
@@ -1011,7 +1012,6 @@ def check_recover (suite=None, region=None, cavity_temp=None, smoothed=False, re
 def tipping_stats (base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
-    temp_correction = [1.0087846842764405, 0.8065649751736049]  # Precomputed by warming_implied_by_salinity_bias()
     bias_print_x = [4.5, 2.5]
     bias_print_y = 1.5
     pi_suite = 'cs495'
@@ -1133,7 +1133,7 @@ def tipping_stats (base_dir='./'):
         ax.set_yticks(np.arange(1,4))
         ax.set_yticklabels(['peak warming', 'at time of recovery', 'at time of tipping'])
         ax.grid(linestyle='dotted')       
-    ax.set_xlabel('global warming level ('+deg_string+'C), corrected', fontsize=10)
+    ax.set_xlabel('Global warming ('+deg_string+'C), corrected', fontsize=10)
     # Manual legend
     colours = ['Crimson', 'DarkGrey']
     labels = ['tips', 'does not tip']
@@ -1166,14 +1166,14 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     for v in range(num_var):
         for n in range(len(regions)):
             ax = plt.subplot(gs[v,n])
-            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth[v], labels=sim_names, colours=colours, linewidth=1, ax=ax)
+            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth[v], labels=sim_names, colours=colours, linewidth=1, ax=ax, temp_correct=temp_corrections[n])
             ax.set_title(title_prefix[v*2+n]+region_names[regions[n]], fontsize=14)
             if n == 0:
                 ax.set_ylabel(var_units[v], fontsize=12)
             else:
                 ax.set_ylabel('')
             if n==0 and v==0:
-                ax.set_xlabel('Global warming relative to preindustrial ('+deg_string+'C)', fontsize=12)
+                ax.set_xlabel('Global warming ('+deg_string+'C), corrected', fontsize=12)
             else:
                 ax.set_xlabel('')
             ax.set_xlim([0,8])
@@ -1399,7 +1399,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 bwsalt = ds[regions[n]+'_shelf_bwsalt']
                 cavity_temp = ds[regions[n]+'_cavity_temp']
                 ds.close()
-                warming = global_mean_sat(suite) - baseline_temp
+                warming = global_mean_sat(suite) - baseline_temp + temp_correction[n]
                 # Smooth and align
                 if bwsalt.sizes['time_centered'] < smooth:
                     # Simulation hasn't run long enough to include
@@ -1499,7 +1499,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     cbar = plt.colorbar(img_up, cax=cax1, orientation='horizontal')
     cbar.set_ticklabels([])
     plt.colorbar(img_down, cax=cax2, orientation='horizontal')
-    plt.text(0.3, 0.02, 'Global warming relative to preindustrial ('+deg_string+'C)', ha='center', va='center', fontsize=12, transform=fig.transFigure)
+    plt.text(0.3, 0.02, 'Global warming ('+deg_string+'C), corrected', ha='center', va='center', fontsize=12, transform=fig.transFigure)
     plt.text(0.51, 0.135, 'ramp-up + stabilise', ha='left', va='center', fontsize=10, transform=fig.transFigure)
     plt.text(0.51, 0.09, 'ramp-down', ha='left', va='center', fontsize=10, transform=fig.transFigure)
     # Manual legend
