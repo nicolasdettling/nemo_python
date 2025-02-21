@@ -1470,7 +1470,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
             # Plot each line with colour varying by global warming level
             points = np.array([all_bwsalt[n][m].data, all_cavity_temp[n][m].data]).T.reshape(-1,1,2)
             segments = np.concatenate([points[:-1], points[1:]], axis=1)
-            lc = LineCollection(segments, cmap=truncate_colourmap(cmap[direction[m]], minval=0.1), norm=norm) #.3), norm=norm)
+            lc = LineCollection(segments, cmap=truncate_colourmap(cmap[direction[m]], minval=0), norm=norm) #.3), norm=norm)
             lc.set_array(all_warming[n][m].data)
             lc.set_linewidth(1)
             img = ax.add_collection(lc)
