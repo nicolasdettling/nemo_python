@@ -2588,11 +2588,7 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
 
     # Inner function to add the given DataArray to the axes with the given colour
     def add_line (data, ax, colour, year0):
-        if draft:
-            time_coord = 'time_centered'
-        else:
-            time_coord = 'time'
-        ax.plot(data.coords[time_coord]-year0, data, '-', color=colour, linewidth=0.8)
+        ax.plot(data.coords['time']-year0, data, '-', color=colour, linewidth=0.8)
 
     # Set up plot
     fig = plt.figure(figsize=(4.5,6))
@@ -2620,10 +2616,11 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
                     file_path = base_dir + '/' + suite + '/' + timeseries_file
                     ds = xr.open_dataset(file_path)
                     # Get annual values for year and draft
-                    time = [t.dt.year for t in ds['time_centered'][::12]]
+                    time_data = [t.dt.year.item() for t in ds['time_centered'][::12]]
+                    time = xr.DataArray(time_data, coords={'time':time_data})
                     if suite == baseline_suite:
                         year0 = time[0]
-                    data = ds[regions[n]+'_draft'][::12]
+                    data = xr.DataArray(ds[regions[n]+'_draft'][::12].data, coords={'time':time_data})
                     ds.close()
                 else:
                     file_path = vaf_dir + '/' + file_head + suite + file_tail
@@ -2666,7 +2663,7 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
                     else:
                         print('Warning: '+suite+' does not extend to tipping date')
                     # Select untipped section
-                    untipped = slr.where(time < year_tip, drop=True)  # 1-year offset as before
+                    untipped = data.where(time < year_tip, drop=True)  # 1-year offset as before
                     recovers, date_recover = check_recover(suite=suite, region=regions[n], return_date=True, base_dir=base_dir)
                     if recovers:
                         year_recover = date_recover.dt.year
@@ -2674,14 +2671,14 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
                             num_recover += 1
                         else:
                             print('Warning: '+suite+' does not extend to recovery date')
-                        tipped = slr.where((time >= year_tip)*(time < year_recover), drop=True)
-                        recovered = slr.where(time >= year_recover, drop=True)
+                        tipped = data.where((time >= year_tip)*(time < year_recover), drop=True)
+                        recovered = data.where(time >= year_recover, drop=True)
                         add_line(recovered, ax, colours[labels.index('recovered')], year0)
                     else:
-                        tipped = slr.where(time >= year_tip, drop=True)
+                        tipped = data.where(time >= year_tip, drop=True)
                     add_line(tipped, ax, colours[labels.index('tipped')], year0)
                 else:
-                    untipped = slr
+                    untipped = data
                     recovers = False
                 add_line(untipped, ax, colours[labels.index('untipped')], year0)
         print(regions[n]+': '+str(num_tip)+' tipped, '+str(num_recover)+' recovered')
@@ -2694,16 +2691,18 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
             ax.set_title(region_names[regions[n]], fontsize=12)
             plt.suptitle('Ice shelf draft', fontsize=14)
             ax.set_ylabel('m')
+            fig_name = 'figures/draft_timeseries.png'
         else:
             ax.set_title(region_names[regions[n]]+' catchment', fontsize=12)
             plt.suptitle('Sea level contribution', fontsize=14)
             ax.set_ylabel('cm')
+            fig_name = 'figures/SLR_timeseries.png'
     # Manual legend
     handles = []
     for m in range(len(colours)):
         handles.append(Line2D([0], [0], color=colours[m], label=labels[m], linestyle='-'))
     ax.legend(handles=handles, loc='lower center', bbox_to_anchor=(0.5, -0.45), ncol=3)
-    finished_plot(fig, fig_name='figures/SLR_timeseries.png', dpi=300)
+    finished_plot(fig, fig_name=fig_name, dpi=300)
 
 
 # Count the total number of years in all overshoot simulations (excluding piControl and static ice).
@@ -2722,6 +2721,78 @@ def count_simulation_years (base_dir='./'):
             ds.close()
             years += num_months/months_per_year
     print('Total '+str(years)+' years')
+
+
+# Identify NEMO files where the precomputed timeseries of ice draft jumps by an unreasonable amount. The pull from MASS did something weird and the output is sprinkled with weird files (maybe linked to the wrong suite?), most easily identifiable by huge changes in the ice draft which then change right back.
+# At the same time I'm comparing the timeStamp global attribute, but this requires a slow pull of all the file headers from MASS. I'll make sure all the files identified here are in that list too.
+def find_corrupted_files (base_dir='./'):
+
+    # Logfile to save a list of all the affected files
+    out_file = base_dir+'/corrupted_files'
+    timeseries_file = 'timeseries.nc'
+    threshold_big = 10
+    threshold_small = 1e-3  # approx. machine precision
+    coupling_month = 1
+    file_tails = ['grid-T.nc', 'isf-T.nc']
+
+    # Open file
+    f = open(out_file, 'w')
+
+    # Construct the filenames corresponding to the given suite and date, and add them to the logfile.
+    def add_files (suite, date):
+        year0 = date.dt.year.item()
+        month0 = date.dt.month.item()
+        year1, month1 = add_months(year0, month0, 1)
+        for file_tail in file_tails:
+            file_path = suite+'/nemo_'+suite+'o_1m_'+str(year0)+str(month0).zfill(2)+'01-'+str(year1)+str(month1).zfill(2)+'01_'+file_tail
+            print('Problem with '+file_path)
+            f.write(file_path+'\n')          
+
+    # Loop over all suites
+    for scenario in suites_by_scenario:
+        for suite in suites_by_scenario[suite]:
+            print('Processing '+suite)
+            # Read precomputed timeseries of mean ice draft
+            ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+            draft = ds['all_draft']
+            time = ds['time_centered']
+            ds.close()
+            problem = False
+            last_good = draft[0]
+            # Loop over time
+            for t in range(1, np.size(time)):
+                # Choose threshold to use
+                if time[t].dt.month == coupling_month or problem:
+                    # Ice draft could have changed a small amount from annual coupling
+                    threshold = threshold_big
+                else:
+                    # Ice draft should not have changed beyond machine precision
+                    threshold = threshold_small
+                if not problem:
+                    # Not currently in a block of problem files
+                    # Compare to previous month
+                    if np.abs(draft[t]-draft[t-1]) > threshold:
+                        problem = True
+                        # Add to log file
+                        add_files(suite, time[t])
+                    else:
+                        # Update the last good ice draft
+                        last_good = draft[t]
+                else:
+                    # In a block of problem files
+                    # Compare to last good ice draft
+                    if np.abs(draft[t]-last_good) > threshold:
+                        # Add to log file
+                        add_files(suite, time[t])
+                    else:
+                        # Out of the problem block
+                        problem = False
+                        last_good = draft[t]
+    f.close()
+    
+    
+
+    
     
         
                 
