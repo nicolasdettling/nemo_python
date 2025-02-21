@@ -30,8 +30,8 @@ from ..plot_utils import set_colours, latlon_axes
 # Global dictionaries of suites - update these as more suites become available!
 
 # Dictionary of which suites correspond to which scenario
-suites_by_scenario = {'piControl' : ['cs495'],
-                      'piControl_static_ice' : ['cs568'],
+suites_by_scenario = {'piControl_static_ice' : ['cs495'],
+                      'piControl' : ['cs568'],
                       'ramp_up' : ['cx209', 'cw988', 'cw989', 'cw990'],
                       'ramp_up_static_ice': ['cz826'],
                       '1.5K_stabilise': ['cy837','cz834','da087'],
@@ -2730,6 +2730,7 @@ def find_corrupted_files (base_dir='./'):
     # Logfile to save a list of all the affected files
     out_file = base_dir+'/corrupted_files'
     timeseries_file = 'timeseries.nc'
+    threshold_ini = 50  # Allow larger jump in first coupling timestep of piControl simulation
     threshold_big = 10
     threshold_small = 1e-3  # approx. machine precision
     coupling_month = 1
@@ -2750,19 +2751,29 @@ def find_corrupted_files (base_dir='./'):
 
     # Loop over all suites
     for scenario in suites_by_scenario:
-        for suite in suites_by_scenario[suite]:
+        if 'static_ice' in scenario:
+            continue
+        for suite in suites_by_scenario[scenario]:
             print('Processing '+suite)
             # Read precomputed timeseries of mean ice draft
             ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
             draft = ds['all_draft']
             time = ds['time_centered']
             ds.close()
+            # Quick plot
+            fig, ax = plt.subplots()
+            ax.plot_date(time, draft, '-')
+            ax.set_title(suite)
+            fig.show()
             problem = False
             last_good = draft[0]
             # Loop over time
             for t in range(1, np.size(time)):
                 # Choose threshold to use
-                if time[t].dt.month == coupling_month or problem:
+                if ('piControl' in scenario or 'ramp_up' in scenario) and time[t].dt.year == time[0].dt.year+1 and time[t].dt.month == coupling_month:
+                    # Ice draft could have a moderate jump in first coupling timestep after
+                    threshold = threshold_ini
+                elif time[t].dt.month == coupling_month or problem:
                     # Ice draft could have changed a small amount from annual coupling
                     threshold = threshold_big
                 else:
