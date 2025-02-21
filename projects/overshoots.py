@@ -1413,7 +1413,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 # Throw away any ramp-down data where global temp has overshot preindustrial and gone into negative, and apply correction after that
                 data_bwsalt.append(bwsalt.where(warming>0))
                 data_cavity_temp.append(cavity_temp.where(warming>0))
-                data_warming.append(warming.where(warming>+temp_correction[n])
+                data_warming.append(warming.where(warming>+temp_correction[n]))
         all_bwsalt.append(data_bwsalt)
         all_cavity_temp.append(data_cavity_temp)
         all_warming.append(data_warming)
