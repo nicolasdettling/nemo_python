@@ -1409,7 +1409,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 warming = moving_average(warming, smooth)
                 bwsalt = align_timeseries(bwsalt, warming)[0]
                 cavity_temp, warming = align_timeseries(cavity_temp, warming)
-                max_warming = max(max_warming, warming.max())
+                max_warming = max(max_warming, warming.max()+temp_correction[n])
                 # Throw away any ramp-down data where global temp has overshot preindustrial and gone into negative, and apply correction after that
                 data_bwsalt.append(bwsalt.where(warming>0))
                 data_cavity_temp.append(cavity_temp.where(warming>0))
