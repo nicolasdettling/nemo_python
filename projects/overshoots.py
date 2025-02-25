@@ -2723,9 +2723,9 @@ def count_simulation_years (base_dir='./'):
     print('Total '+str(years)+' years')
 
 
-# Identify NEMO files where the precomputed timeseries of ice draft jumps by an unreasonable amount. The pull from MASS did something weird and the output is sprinkled with weird files (maybe linked to the wrong suite?), most easily identifiable by huge changes in the ice draft which then change right back.
+# Identify NEMO files where the precomputed timeseries of ice draft jumps by an unreasonable amount. The pull from MASS did something weird and the output is sprinkled with weird files, most easily identifiable by huge changes in the ice draft which then change right back.
 # At the same time I'm comparing the timeStamp global attribute, but this requires a slow pull of all the file headers from MASS. I'll make sure all the files identified here are in that list too.
-def find_corrupted_files (base_dir='./'):
+def find_corrupted_files (base_dir='./', log=False):
 
     # Logfile to save a list of all the affected files
     log_file = base_dir+'/corrupted_files'
@@ -2738,38 +2738,54 @@ def find_corrupted_files (base_dir='./'):
     coupling_month = 1
     file_types = ['grid', 'isf']
     file_tails = ['grid-T.nc', 'isf-T.nc']
+    ref_file = '/gws/nopw/j04/terrafirma/kaight/overshoots/cw988/nemo_cw988o_1m_21491201-21500101_grid-T.nc'  # compare draft to file that is definitely an example of the problem
 
-    # Open files
-    f_log = open(log_file, 'w')
-    f_mass = open(mass_file, 'w')
+    ds_ref = xr.open_dataset(ref_file)
+    draft_ref = calc_geometry(ds_ref)[1]
+    ds_ref.close()
+
+    if log:
+        # Open files
+        f_log = open(log_file, 'w')
+        f_mass = open(mass_file, 'w')
     num_months = 0
     num_problems = 0
+    num_blocks_ref = 0
+    num_blocks_other = 0
 
     # Construct the filenames corresponding to the given suite and date, and add them to the logfile.
-    def add_files (suite, date):
+    def add_files (suite, date, add=False):
         year0 = date.dt.year.item()
         month0 = date.dt.month.item()
         year1, month1 = add_months(year0, month0, 1)
         for file_type in file_types:
             file_path = 'nemo_'+suite+'o_1m_'+str(year0)+str(month0).zfill(2)+'01-'+str(year1)+str(month1).zfill(2)+'01_'+file_type+'-T.nc'
+            if file_type == 'grid':
+                file_path0 = file_path
             if not os.path.isfile(suite+'/'+file_path):
                 raise Exception('Missing file '+file_path)
-            print('Problem with '+file_path)
-            f_log.write(file_path+'\n')
-            f_mass.write('rm '+suite+'/'+file_path+'\n')
-            f_mass.write('moo filter '+file_type+'T.moo_ncks_opts :crum/u-'+suite+'/onm.nc.file/'+file_path+' '+suite+'/\n')
+            if log and add:
+                print('Problem with '+file_path)
+                f_log.write(file_path+'\n')
+                f_mass.write('rm '+suite+'/'+file_path+'\n')
+                f_mass.write('moo filter '+file_type+'T.moo_ncks_opts :crum/u-'+suite+'/onm.nc.file/'+file_path+' '+suite+'/\n')
+        return file_path0
 
     # Loop over all suites
     for scenario in suites_by_scenario:
         if 'static_ice' in scenario:
             continue
         for suite in suites_by_scenario[scenario]:
+            num_blocks = 0
             print('Processing '+suite)
             # Read precomputed timeseries of mean ice draft
             ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
             draft = ds['all_draft']
             time = ds['time_centered']
             ds.close()
+            # Check tipping and recovery in this suite
+            tips, date_tip = check_tip(suite=suite, return_date=True)
+            recovers, date_recover = check_recover(suite_suite, return_date=True)
             num_months += np.size(time)
             problem = False
             last_good = draft[0]
@@ -2791,8 +2807,47 @@ def find_corrupted_files (base_dir='./'):
                     if np.abs(draft[t]-draft[t-1]) > threshold:
                         problem = True
                         num_problems += 1
+                        num_blocks += 1
                         # Add to log file
-                        add_files(suite, time[t])
+                        nemo_file = add_files(suite, time[t])
+                        print('Block starts on month '+str(time[t].dt.month))
+                        # Check if draft matches the reference file
+                        ds = xr.open_dataset(nemo_file)
+                        draft = check_geometry(ds)[1]
+                        if (draft==draft_ref).all():
+                            print('Draft matches reference geometry')
+                            num_blocks_ref += 1
+                        else:
+                            print('Draft is something different')
+                            num_blocks_other +=1
+                        # Check timestamp
+                        date = datetime.datetime.strptime(ds.attrs['timeStamp'], "%Y-%b-%d %H:%M:%S UTC")
+                        ds.close()
+                        # Now check timestamp in file before
+                        last_file = add_files(suite, time[t-1], add=False)
+                        ds_before = xr.open_dataset(last_file)
+                        date_before = datetime.datetime.strptime(ds_before.attrs['timeStamp'], "%Y-%b-%d %H:%M:%S UTC")
+                        ds_before.close()
+                        delta = date - date_before
+                        print('Timestamp jump of '+str(delta.hours)+' hours ('+str(delta.days)+' days)')
+                        # Check date relative to tipping
+                        if tips:
+                            if time[t] < date_tip:
+                                delta_tip = date_tip - time[t]
+                                print('Block happens '+str(delta.years)+' years before tipping')
+                            else:
+                                delta_tip = time[t] - date_tip
+                                if recovers:
+                                    if time[t] < date_recover:
+                                        delta_recover = date_recover - time[t]
+                                        print('Block happens '+str(delta_tip.years)+' years after tipping, '+str(delta_recover.years)+' years before recovery')
+                                    else:
+                                        delta_recover = time[t] - date_recover
+                                        print('Block happens '+str(delta_recover.years)+' years after recovery')
+                                else:
+                                    print('Block happens '+str(delta_tip.years)+' years after tipping (does not recover)')
+                        else:
+                            print('Suite does not tip')                                
                     else:
                         # Update the last good ice draft
                         last_good = draft[t]
@@ -2802,13 +2857,17 @@ def find_corrupted_files (base_dir='./'):
                     if np.abs(draft[t]-last_good) > threshold:
                         num_problems += 1
                         # Add to log file
-                        add_files(suite, time[t])
+                        nemo_file = add_files(suite, time[t])
                     else:
                         # Out of the problem block
                         problem = False
                         last_good = draft[t]
-    f_log.close()
-    f_mass.close()
+                        print('Block ends on month '+str(time[t].dt.month))
+            if num_blocks > 0:
+                print(str(num_blocks)+' blocks in '+suite)
+    if log:
+        f_log.close()
+        f_mass.close()
     print(str(num_problems)+' of '+str(num_months)+' months affected ('+str(num_problems/num_months*100)+'%)')
 
 
