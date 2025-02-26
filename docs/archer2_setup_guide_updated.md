@@ -2,7 +2,7 @@
 
 This guide explains how to install and run the circum-Antarctic NEMO configuration eANT025.L121 on ARCHER2. It assumes you already have access to the machine.
 
-Many thanks to Christoph Kittel and Pierre Mathiot who have done all the hard work setting up this configuration, and to Chris Bull for his helpful guides to running WED025 on ARCHER2 (currently offline).
+This is based on K. Naughten's archer2 setup guide with updates to run the configuration set up by B. Rogalla.
 
 # Installing NEMO and other bits
 
@@ -24,9 +24,11 @@ Now, download the code from the repository:
     git clone https://forge.nemo-ocean.eu/nemo/nemo.git
     cd nemo
 
-Now freeze the code at the 4.2 branch:
+Now freeze the code at the 4.2.2 branch:
 
-    git switch --detach 4.2.0
+    git switch --detach 4.2.2
+
+(The original configuration by Christoph Kittel and Pierre Mathiot used nemo 4.2.0 but the updated configuration relies on a sea ice bug fix introduced in version 4.2.2)
 
 Copy the Gnu architecture file which was built by the team at NOC (there is also a Cray version but I've had issues with it before):
 
@@ -51,8 +53,22 @@ If you want to change the number of cores you can use this tool to regenerate mo
 
 For some of Kaitlin's scripts you will need a python package which is not installed on ARCHER2. Follow the instructions [here](https://docs.archer2.ac.uk/user-guide/python/) to set up a new virtual environment named pyenv, to be stored in $WORK/pyenv. Activate this environment and use pip to install the package f90nml (all explained in the link).
 
-You will need to set up globus-url-copy to transfer data between ARCHER2 and JASMIN, following [these instructions](https://help.jasmin.ac.uk/article/4997-transfers-from-archer2) ("1st choice method"). Make sure you save the credentials file directly within $WORK. Some of Kaitlin's scripts assume your username is the same on ARCHER2 and JASMIN; ask her for help if this is not the case, or just have a go (search for "whoami").
+You will need to set up globus to transfer data between ARCHER2 and JASMIN, following [these instructions](https://help.jasmin.ac.uk/article/4997-transfers-from-archer2) ("1st choice method"). Remember to set the environment variables for the archer2 and JASMIN collections and potentially save them to your bashrc file. Most likely, these are:
 
+    export a2c=3e90d018-0d05-461a-bbaf-aab605283d21
+    export jdc=a2f53b7f-1b4e-4dce-9b7c-349ae760fee0  
+
+You can check whether globus is set up by listing the collections and transferring example data:
+
+    globus ls $a2c
+    globus ls $jdc
+    globus transfer $a2c:pathtofile $jdc:pathtofile
+
+Once a globus transfer is submitted, a task_id will be printed. This id can be used to monitor or cancel the transfer:
+
+    globus task show task_id
+    globus task cancel task_id
+    
 Finally, ARCHER2 has a quirk where it expects booleans, and only booleans, to have trailing commas in the namelists. To fix all the preinstalled namelists (in case you want to run any test configurations later), create edit_nmls and reverse_edit_nmls files following [these instructions](https://forge.ipsl.jussieu.fr/nemo/ticket/2653), and chmod +x them.    
 
 # Adding the new configuration
