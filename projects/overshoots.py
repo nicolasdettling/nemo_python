@@ -2876,7 +2876,17 @@ def find_corrupted_files (base_dir='./', log=False):
         f_log.close()
         f_mass.close()
     print(str(num_problems)+' of '+str(num_months)+' months affected ('+str(num_problems/num_months*100)+'%)')
-    print(str(num_blocks_ref)+' blocks of reference geometry ,'+str(num_blocks_other)+' blocks of other geometry')
+    print(str(num_blocks_ref)+' blocks of reference geometry, '+str(num_blocks_other)+' blocks of other geometry')
+
+    # Plot distribution of timestamps
+    fig, ax = plt.subplots(figsize=(8,3))
+    for ts in timestamps:
+        ax.plot_date(ts, np.random.rand(), '*')
+    ax.set_yticks([])
+    ax.set_title('Problems in real time')
+    ax.grid(linestyle='dotted')
+    plt.tight_layout()
+    fig.savefig('figures/problem_timestamps.png')
 
 
 # For each corrupted file name listed in the given file (created above), re-calculate that time index of data for the given timeseries file.
