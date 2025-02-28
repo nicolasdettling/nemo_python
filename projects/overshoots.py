@@ -2729,8 +2729,9 @@ def find_corrupted_files (base_dir='./', log=False):
 
     # Logfile to save a list of all the affected files
     log_file = base_dir+'/corrupted_files'
+    log_file2 = base_dir+'/problem_events'
     # MASS command file
-    mass_file = base_dir+'/moo_replace_corrupted.sh'
+    #mass_file = base_dir+'/moo_replace_corrupted.sh'
     timeseries_file = 'timeseries.nc'
     threshold_ini = 50  # Allow larger jump when ice sheets are first switched on
     threshold_big = 10
@@ -2747,7 +2748,8 @@ def find_corrupted_files (base_dir='./', log=False):
     if log:
         # Open files
         f_log = open(log_file, 'w')
-        f_mass = open(mass_file, 'w')
+        f_log2 = open(log_file2, 'w')
+        #f_mass = open(mass_file, 'w')
     num_months = 0
     num_problems = 0
     num_blocks_ref = 0
@@ -2769,8 +2771,8 @@ def find_corrupted_files (base_dir='./', log=False):
             if log and add:
                 print('Problem with '+file_path)
                 f_log.write(file_path+'\n')
-                f_mass.write('rm '+suite+'/'+file_path+'\n')
-                f_mass.write('moo filter '+file_type+'T.moo_ncks_opts :crum/u-'+suite+'/onm.nc.file/'+file_path+' '+suite+'/\n')
+                #f_mass.write('rm '+suite+'/'+file_path+'\n')
+                #f_mass.write('moo filter '+file_type+'T.moo_ncks_opts :crum/u-'+suite+'/onm.nc.file/'+file_path+' '+suite+'/\n')
         return file_path0
 
     timestamps = []
@@ -2819,6 +2821,7 @@ def find_corrupted_files (base_dir='./', log=False):
                             if is_ref:
                                 print('Draft matches reference geometry')
                                 num_blocks_ref += 1
+                                f_log2.write(nemo_file+'\n')
                             else:
                                 print('Draft is something different')
                                 num_blocks_other +=1
@@ -2874,7 +2877,8 @@ def find_corrupted_files (base_dir='./', log=False):
                 print('\n'+str(num_blocks)+' blocks in '+suite+'\n')
     if log:
         f_log.close()
-        f_mass.close()
+        f_log2.close()
+        #f_mass.close()
     print(str(num_problems)+' of '+str(num_months)+' months affected ('+str(num_problems/num_months*100)+'%)')
     print(str(num_blocks_ref)+' blocks of reference geometry, '+str(num_blocks_other)+' blocks of other geometry')
 
@@ -2907,7 +2911,7 @@ def overwrite_corrupted_timeseries (in_file='corrupted_files', timeseries_file='
             suites.append(suite)
 
     # Loop over suites
-    for suite in suites:
+    for suite in suites2:
         # Build list of affected file patterns
         file_patterns = []
         for fname in file_paths:
@@ -2991,6 +2995,21 @@ def find_updated_files (base_dir='./'):
     f_log.close()
     f_mass.close()
     print(str(num_updated)+' of '+str(num_files)+' files affected ('+str(num_updated/num_files*100)+'%)')
+
+
+def plot_problem_trajectories (base_dir='./', in_file='corrupted_files_ref_geom'):
+
+    # Read corrupted file list (reference geometry only), make dictionary of suites and dates when each block begins
+    
+    # Assemble all trajectory strings
+    # Loop through them
+    # Check if any suites are affected
+    # If so, get start and end dates of each suite (as in FW flux plot)
+    # Check if problems are included in trajectory
+    # If so, check Ross and FRIS tipping/recovery dates
+    # Plot a long skinny date plot with (1) colours and labels showing each suite, (2) stars showing each problem, (3) dashed lines showing Ross and FRIS tipping/recovery (red then blue, dark then light?)
+
+    pass
                 
                     
                 
