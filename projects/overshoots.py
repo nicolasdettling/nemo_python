@@ -2756,7 +2756,7 @@ def find_corrupted_files (base_dir='./', log=False):
     num_blocks_other = 0
 
     # Construct the filenames corresponding to the given suite and date, and add them to the logfile.
-    def add_files (suite, date, add=False):
+    def add_files (suite, date, add=True):
         year0 = date.dt.year.item()
         month0 = date.dt.month.item()
         year1, month1 = add_months(year0, month0, 1)
@@ -2997,19 +2997,38 @@ def find_updated_files (base_dir='./'):
     print(str(num_updated)+' of '+str(num_files)+' files affected ('+str(num_updated/num_files*100)+'%)')
 
 
-def plot_problem_trajectories (base_dir='./', in_file='corrupted_files_ref_geom'):
+def plot_problem_trajectories (base_dir='./', in_file='problem_events'):
 
-    # Read corrupted file list (reference geometry only), make dictionary of suites and dates when each block begins
-    
-    # Assemble all trajectory strings
-    # Loop through them
-    # Check if any suites are affected
+    # Read list of files where each problem events start
+    f = open(in_file, 'r')
+    file_paths = f.read().splitlines()
+    f.close()   
+    # Make dictionary of suites and dates for corresponding problems
+    problems_by_suite = {}
+    for file_path in file_paths:
+        # Extract suite name
+        suite = file_path[len('nemo_'):file_path.index('o_1m_')]
+        # Get date object from relevant file
+        ds = xr.open_dataset(suite+'/'+file_path)
+        date = ds['time_centered'].squeeze().item()
+        ds.close()
+        if suite in problems_by_suite:
+            problems_by_suite[suite] = problems_by_suite[suite] + [date]
+        else:
+            problems_by_suite[suite] = [date]
+
+    # Loop through all trajectories
+    all_traj = all_suite_trajectories()
+    for traj in all_traj:
+        # Check if any suites are affected
+        if any([suite in problems_by_suite for suite in traj]):
+            # Check if any problems happen during the trajectory (instead of, eg, in a perpetual ramp-up after the stabilisation here has already branched off)
+
+            
     # If so, get start and end dates of each suite (as in FW flux plot)
     # Check if problems are included in trajectory
     # If so, check Ross and FRIS tipping/recovery dates
     # Plot a long skinny date plot with (1) colours and labels showing each suite, (2) stars showing each problem, (3) dashed lines showing Ross and FRIS tipping/recovery (red then blue, dark then light?)
-
-    pass
                 
                     
                 
