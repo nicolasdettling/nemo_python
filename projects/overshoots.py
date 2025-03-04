@@ -2991,7 +2991,7 @@ def find_updated_files (suite, base_dir='./'):
             print('Warning: MASS timestamp is older than local timestamp for '+f)
         elif date_header > date_orig:
             # MASS timestamp is newer - will have to re-pull this one
-            add_files(suite, f)
+            add_files(f)
             num_updated += 1
     f_log.close()
     f_mass.close()
