@@ -1,6 +1,7 @@
 # Analysing TerraFIRMA overshoot simulations with UKESM1.1-ice (NEMO 3.6)
 
 import xarray as xr
+import netCDF4 as nc
 import matplotlib.pyplot as plt
 import matplotlib.colors as cl
 import matplotlib.animation as animation
@@ -2962,9 +2963,9 @@ def find_updated_files (base_dir='./'):
 
     # Inner function to open the given NetCDF file and return the timeStamp attribute as a datetime object
     def parse_timestamp (file_path):
-        ds = xr.open_dataset(file_path)
-        date = datetime.datetime.strptime(ds.attrs['timeStamp'], "%Y-%b-%d %H:%M:%S UTC")
-        ds.close()
+        id = nc.Dataset(file_path, 'r')
+        date = datetime.datetime.strptime(id.timeStamp, "%Y-%b-%d %H:%M:%S UTC")
+        id.close()
         return date
 
     # Add the given filename to the logfile and MASS file
@@ -2979,9 +2980,11 @@ def find_updated_files (base_dir='./'):
         for suite in suites_by_scenario[scenario]:
             print('Processing '+suite)
             for f in os.listdir(base_dir+'/'+suite):
-                num_files += 1
                 if not f.startswith('nemo_'+suite):
                     continue
+                num_files += 1
+                if num_files % 100 == 0:
+                    print('...done '+str(num_files)+' files')
                 if not os.path.isfile(header_dir+'/'+suite+'/'+f):
                     print('Warning: missing header for '+f)
                 date_orig = parse_timestamp(base_dir+'/'+suite+'/'+f)
