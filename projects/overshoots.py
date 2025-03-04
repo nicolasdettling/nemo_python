@@ -3022,6 +3022,7 @@ def plot_problem_trajectories (base_dir='./', in_file='problem_events'):
     for traj in all_traj:
         # Check if any suites are affected
         if any([suite in problems_by_suite for suite in traj]):
+            pass
             # Check if any problems happen during the trajectory (instead of, eg, in a perpetual ramp-up after the stabilisation here has already branched off)
 
             
