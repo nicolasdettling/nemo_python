@@ -2998,7 +2998,12 @@ def find_updated_files (suite, base_dir='./'):
     print(str(num_updated)+' of '+str(num_files)+' files affected ('+str(num_updated/num_files*100)+'%)')
 
 
+# Find all the trajectories affected by the geometry bug, and plot the affected ones showing the dates of each problem relative to tipping/recovery and suite transitions.
 def plot_problem_trajectories (base_dir='./', in_file='problem_events'):
+
+    regions = ['ross', 'filchner_ronne']
+    colours = ['DarkRed', 'DarkSlateBlue', 'Crimson', 'DodgerBlue']  # Ross tips, Ross recovers, FRIS tips, FRIS recovers
+    stage_colours = ['Crimson', 'white', 'DodgerBlue']
 
     # Read list of files where each problem events start
     f = open(in_file, 'r')
@@ -3021,16 +3026,48 @@ def plot_problem_trajectories (base_dir='./', in_file='problem_events'):
     # Loop through all trajectories
     all_traj = all_suite_trajectories()
     for traj in all_traj:
+        suite_string = '-'.join(traj)
         # Check if any suites are affected
         if any([suite in problems_by_suite for suite in traj]):
-            pass
-            # Check if any problems happen during the trajectory (instead of, eg, in a perpetual ramp-up after the stabilisation here has already branched off)
-
-            
-    # If so, get start and end dates of each suite (as in FW flux plot)
-    # Check if problems are included in trajectory
-    # If so, check Ross and FRIS tipping/recovery dates
-    # Plot a long skinny date plot with (1) colours and labels showing each suite, (2) stars showing each problem, (3) dashed lines showing Ross and FRIS tipping/recovery (red then blue, dark then light?)
+            # Check if any problems actually happen during the trajectory (instead of, eg, in a perpetual ramp-up after the stabilisation here has already branched off)
+            # Find start and end date of each suite segment in trajectory
+            start_dates = []
+            end_dates = []
+            for suite in traj:
+                file_path = base_dir+'/'+suite+'/timeseries.nc'
+                ds = xr.open_dataset(file_path)
+                start_dates.append(ds['time_centered'][0].item())
+                end_dates.append(ds['time_centered'][-1].item())
+                ds.close()
+            # Deal with overlaps
+            end_dates[:-1] = start_dates[1:]
+            problems_in_traj = []
+            for suite, suite_start, suite_end in zip(traj, start_dates, end_dates):
+                if suite in problems_by_suite:
+                    for date in problems_by_suite[suite]:
+                        if date >= suite_start and date <= suite_end:
+                            problems_in_traj.append(date)
+            if len(problems_in_traj) > 0:
+                print(suite_string+' affected')
+                # Check Ross and FRIS tipping/recovery dates
+                plot_dates = []
+                for region in regions:
+                    plot_dates.append(check_tip(suite=suite_string, region=region, return_date=True)[1])
+                    plot_dates.append(check_recover(suite=suite_string, region=region, return_date=True)[1])
+                # Plot
+                fig, ax = plt.subplots(figsize=(8,2))
+                # Star for each problem
+                for date in problems_in_traj:
+                    ax.plot_date(date, 1, '*', color='black')
+                # Dashed lines for tipping and recovery
+                for date, colour in zip(plot_dates, colours):
+                    if date is not None:
+                        ax.axvline(date, color=colour, linestyle='dashed')
+                # Shade colours and labels for each suite
+                for t in range(len(start_dates)):
+                    ax.axvspan(start_dates[t], end_dates[t], alpha=0.1, color=stage_colours[t])
+                    plt.text(start_dates[t], 2, traj[t], ha='left', va='top')
+                fig.show()
                 
                     
                 
