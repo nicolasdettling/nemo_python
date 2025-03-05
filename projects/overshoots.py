@@ -2021,6 +2021,21 @@ def sfc_FW_timeseries (suite='cx209', base_dir='./'):
     update_simulation_timeseries(suite, ['all_iceberg_melt', 'all_pminuse', 'all_runoff', 'all_seaice_meltfreeze'], timeseries_file='timeseries_sfc.nc', sim_dir=base_dir+'/'+suite+'/', freq='m', halo=True, gtype='T')
 
 
+# Helper function to get the start and end dates of each suite-segment in a trajectory
+def find_stages_start_end (suite_list, base_dir='./', timeseries_file='timeseries.nc'):
+    stage_start = []
+    stage_end = []
+    for suite in suite_list:
+        file_path = base_dir+'/'+suite+'/'+timeseries_files[0]
+        ds = xr.open_dataset(file_path)
+        stage_start.append(ds.time_centered[0].dt.year.item()-year0)
+        stage_end.append(ds.time_centered[-1].dt.year.item()-year0)
+        ds.close()
+    # Now deal with overlaps
+    stage_end[:-1] = stage_start[1:]
+    return stage_start, stage_end
+
+
 # Timeseries of various freshwater fluxes, relative to preindustrial baseline, for one trajectory.
 def plot_FW_timeseries (base_dir='./'):
 
@@ -2072,16 +2087,7 @@ def plot_FW_timeseries (base_dir='./'):
     #    ismr_plot.append(data)
 
     # Find the first and last year of each stage in the simulation
-    stage_start = []
-    stage_end = []
-    for suite in suite_list:
-        file_path = base_dir+'/'+suite+'/'+timeseries_files[0]
-        ds = xr.open_dataset(file_path)
-        stage_start.append(ds.time_centered[0].dt.year.item()-year0)
-        stage_end.append(ds.time_centered[-1].dt.year.item()-year0)
-        ds.close()
-    # Now deal with overlaps
-    stage_end[:-1] = stage_start[1:]
+    stage_start, stage_end = find_stages_start_end(suite_list, base_dir=base_dir, timeseries_file=timeseries_files[0])
 
     # Find the time of tipping and recovery for each cavity
     tip_times = [check_tip(suite=suite_string, region=region, return_date=True, base_dir=base_dir)[1] for region in tip_regions]
@@ -3030,16 +3036,7 @@ def find_problem_trajectories (base_dir='./', in_file='problem_events'):
         if any([suite in problems_by_suite for suite in traj]):
             # Check if any problems actually happen during the trajectory (instead of, eg, in a perpetual ramp-up after the stabilisation here has already branched off)
             # Find start and end date of each suite segment in trajectory
-            start_dates = []
-            end_dates = []
-            for suite in traj:
-                file_path = base_dir+'/'+suite+'/timeseries.nc'
-                ds = xr.open_dataset(file_path)
-                start_dates.append(ds['time_centered'][0].item())
-                end_dates.append(ds['time_centered'][-1].item())
-                ds.close()
-            # Deal with overlaps
-            end_dates[:-1] = start_dates[1:]
+            start_dates, end_dates = find_stages_start_end(traj, base_dir=base_dir)
             problems_in_traj = []
             for suite, suite_start, suite_end in zip(traj, start_dates, end_dates):
                 if suite in problems_by_suite:
@@ -3067,10 +3064,11 @@ def plot_problem_trajectories (base_dir='./', in_file='problem_events'):
         for region in regions:
             plot_dates.append(check_tip(suite=suite_string, region=region, return_date=True)[1])
             plot_dates.append(check_recover(suite=suite_string, region=region, return_date=True)[1])
+        start_dates, end_dates = find_stages_start_end(suite_string.split('-'), base_dir=base_dir)
         # Plot
         fig, ax = plt.subplots(figsize=(8,2))
         # Star for each problem
-        for date in problems_in_traj:
+        for date in problems_by_traj[suite_string]:
             ax.plot_date(date, 1, '*', color='black')
         # Dashed lines for tipping and recovery
         for date, colour in zip(plot_dates, colours):
