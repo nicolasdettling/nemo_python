@@ -2026,7 +2026,7 @@ def find_stages_start_end (suite_list, base_dir='./', timeseries_file='timeserie
     stage_start = []
     stage_end = []
     for suite in suite_list:
-        file_path = base_dir+'/'+suite+'/'+timeseries_files[0]
+        file_path = base_dir+'/'+suite+'/'+timeseries_file
         ds = xr.open_dataset(file_path)
         stage_start.append(ds.time_centered[0].dt.year.item()-year0)
         stage_end.append(ds.time_centered[-1].dt.year.item()-year0)
