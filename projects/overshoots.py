@@ -298,6 +298,21 @@ def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 
         timeseries_by_expt(var, sim_dirs, sim_names=sim_names, colours=colours, timeseries_file=fname, smooth=smooth, linewidth=1, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_master.png'))
 
 
+# Helper function to read global mean SAT
+def global_temp (suite, base_dir='./', timeseries_file_um='timeseries_um.nc'):
+    ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
+    sat = ds['global_mean_sat']
+    ds.close()
+    return sat
+# Helper function to get baseline PI global temp
+def pi_baseline_temp (pi_suite='cs495', base_dir='./'):
+    return global_temp(pi_suite, base_dir=base_dir).mean()
+# Helper function to get global warming relative to preindustrial
+def global_warming (suite, pi_suite='cs495', base_dir='./'):
+    baseline = pi_baseline_temp(pi_suite=pi_suite, base_dir=base_dir)
+    return global_temp(suite, base_dir=base_dir) - baseline    
+
+
 # Calculate the integrated global warming relative to preindustrial mean, in Kelvin-years, for the given suite (starting from the beginning of the relevant ramp-up simulation). Returns a timeseries over the given experiment, with the first value being the sum of all branched-from experiments before then.
 def integrated_gw (suite, pi_suite='cs495', timeseries_file_um='timeseries_um.nc', base_dir='./'):
 
@@ -308,10 +323,8 @@ def integrated_gw (suite, pi_suite='cs495', timeseries_file_um='timeseries_um.nc
         ds.close()
         return sat
 
-    # Get baseline global mean SAT
-    baseline_temp = global_mean_sat(pi_suite).mean()
     # Get timeseries of global warming relative to preindustrial, in this suite
-    gw_level = global_mean_sat(suite) - baseline_temp
+    gw_level = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
     # Indefinite integral over time
     integrated_gw = (gw_level/months_per_year).cumsum(dim='time_centered')
 
@@ -321,7 +334,7 @@ def integrated_gw (suite, pi_suite='cs495', timeseries_file_um='timeseries_um.nc
         # Find the starting date of the current suite
         start_date = gw_level.time_centered[0]
         # Now calculate global warming timeseries over the previous suite
-        gw_level = global_mean_sat(prev_suite) - baseline_temp
+        gw_level = global_warming(prev_suite, pi_suite=pi_suite, base_dir=base_dir)
         # Find the time index at the branch point
         time_branch = np.argwhere(gw_level.time_centered.data == start_date.data)[0][0]
         # Integrate from the beginning to just before that point
@@ -386,9 +399,7 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
 
     if alternate_var is None:
         # Get baseline global mean SAT
-        ds_pi = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
-        baseline_temp = ds_pi['global_mean_sat'].mean()
-        ds_pi.close()
+        baseline_temp = pi_baseline_temp(pi_suite=pi_suite, base_dir=base_dir)
 
     if offsets is None:
         # Set up dummy list of 0s, same shape as expts
@@ -1021,9 +1032,7 @@ def tipping_stats (base_dir='./'):
     timeseries_file_um = 'timeseries_um.nc'
 
     # Assemble all possible trajectories of global mean temperature anomalies relative to preindustrial
-    ds = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
-    baseline_temp = ds['global_mean_sat'].mean()
-    ds.close()
+    baseline_temp = pi_baseline_temp(pi_suite=pi_suite, base_dir=base_dir)
     warming_ts, suite_strings = all_timeseries_trajectories('global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, static_ice=False, offset=-1*baseline_temp)
     num_trajectories = len(warming_ts)
     # Smooth each
@@ -1212,17 +1221,15 @@ def calc_salinity_bias (base_dir='./'):
         sat = ds['global_mean_sat']
         ds.close()
         return sat
-    # Get preindustrial baseline
-    baseline_temp = global_mean_sat(pi_suite).mean()
     # Get "present-day" warming according to UKESM
-    hist_warming = global_mean_sat(hist_suite).mean() - baseline_temp
+    hist_warming = global_warming(hist_suite, pi_suite=pi_suite, base_dir=base_dir).mean()
     print('UKESM historical 1995-2014 was '+str(hist_warming.data)+'K warmer than preindustrial')
 
     # Loop over ramp-up suites (no static ice)
     ramp_up_bwsalt = None
     for suite in suites_by_scenario['ramp_up']:
         # Get timeseries of global warming relative to PI
-        warming = global_mean_sat(suite) - baseline_temp
+        warming = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
         for t in range(warming.size):
             if warming.isel(time_centered=slice(t,t+num_years*months_per_year)).mean() >= hist_warming:
                 # Care about the 10-year period beginning at this point
@@ -1306,15 +1313,6 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
     timeseries_file_um = 'timeseries_um.nc'
     p0 = 0.05
 
-    # Inner function to read global mean SAT from precomputed timeseries
-    def global_mean_sat (suite):
-        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
-        sat = ds['global_mean_sat']
-        ds.close()
-        return sat
-    # Get preindustrial baseline
-    baseline_temp = global_mean_sat(pi_suite).mean()
-
     if ross_bias is None or fris_bias is None:
         # Salinity biases are not precomputed
         [ross_bias, fris_bias] = calc_salinity_bias(base_dir=base_dir)
@@ -1324,7 +1322,7 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
         warming = None
         bwsalt = None
         for suite in suites_by_scenario['ramp_up']:
-            warming_tmp = global_mean_sat(suite) - baseline_temp
+            warming_tmp = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
             ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
             bwsalt_tmp = ds[region+'_shelf_bwsalt']
             ds.close()
@@ -1367,15 +1365,6 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     p0 = 0.05
     tipping_temp = -1.9
 
-    # Inner function to read global mean SAT from precomputed timeseries
-    def global_mean_sat (suite):
-        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
-        sat = ds['global_mean_sat']
-        ds.close()
-        return sat
-    # Get preindustrial baseline
-    baseline_temp = global_mean_sat(pi_suite).mean()
-
     # Read timeseries from every experiment
     all_bwsalt = []
     all_cavity_temp = []
@@ -1401,7 +1390,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 bwsalt = ds[regions[n]+'_shelf_bwsalt']
                 cavity_temp = ds[regions[n]+'_cavity_temp']
                 ds.close()
-                warming = global_mean_sat(suite) - baseline_temp
+                warming = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
                 # Smooth and align
                 if bwsalt.sizes['time_centered'] < smooth:
                     # Simulation hasn't run long enough to include
@@ -1675,9 +1664,7 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
     print('Reading timeseries')
     # Assemble timeseries, 5-year smoothed
     # First get preindustrial baseline temp
-    ds = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
-    baseline_temp = ds['global_mean_sat'].mean()
-    ds.close()
+    baseline_temp = pi_baseline_temp(pi_suite=pi_suite, base_dir=base_dir)
     # Global mean warming
     warming = build_timeseries_trajectory(suite_list, 'global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, offset=-1*baseline_temp)
     warming = moving_average(warming, smooth)
@@ -3061,6 +3048,7 @@ def plot_problem_trajectories (base_dir='./', in_file='problem_events'):
     
     problems_by_traj = find_problem_trajectories(base_dir=base_dir, in_file=in_file)
     for suite_string in problems_by_traj:
+        suite_list = suite_string.split('-')
         # Check Ross and FRIS tipping/recovery dates
         plot_dates = []
         for region in regions:
@@ -3079,15 +3067,104 @@ def plot_problem_trajectories (base_dir='./', in_file='problem_events'):
         # Shade colours and labels for each suite
         for t in range(len(start_dates)):
             ax.axvspan(start_dates[t], end_dates[t], alpha=0.1, color=stage_colours[t])
-            plt.text(start_dates[t], 1.5, traj[t], ha='left', va='top')
+            plt.text(start_dates[t], 1.5, suite_list[t], ha='left', va='top')
         ax.set_xlim([start_dates[0], end_dates[-1]])
         ax.set_ylim([0.5, 1.5])
         ax.set_yticks([])
-        ax.set_title(trajectory_title(traj))
+        ax.set_title(trajectory_title(suite_list))
         plt.tight_layout()
         fig.show()
 
 
+# Compare global warming and bottom salinity at the time of tipping/recovery between trajectories affected by the geometry bug, and trajectories unaffected.
+def bug_impact_tipping_recovery (base_dir='./', in_file='problem_events'):
+
+    regions = ['ross', 'filchner_ronne']
+    var_names = ['global_warming', 'shelf_bwsalt']
+    timeseries_file = 'timeseries.nc'
+    timeseries_file_um = 'timeseries_um.nc'
+    smooth = 5*months_per_year
+    pi_suite = 'cs495'
+    p0 = 0.05
+
+    all_traj = all_suite_trajectories()
+    problems_by_traj = find_problem_trajectories(base_dir=base_dir, in_file=in_file)
+    baseline_temp = pi_baseline_temp(pi_suite=pi_suite, base_dir=base_dir)
+
+    # Loop over regions
+    for region in regions:
+        # Loop over the variables we want to test
+        for var in var_names:
+            print('\nTesting impact on '+var)                
+            at_tip_problem = []
+            at_tip_noproblem = []
+            at_recovery_problem = []
+            at_recovery_noproblem = []
+            # Check every trajectory
+            for suite_list in all_traj:
+                # Check if it tips
+                suite_string = '-'.join(suite_list)
+                cavity_temp = build_timeseries_trajectory(suite_list, region+'_cavity_temp', base_dir=base_dir, timeseries_file=timeseries_file)
+                cavity_temp = moving_average(cavity_temp, smooth)
+                tips, date_tip, t_tip = check_tip(cavity_temp=cavity_temp, smoothed=True, return_date=True, return_t=True)
+                if tips:
+                    # Now build the data
+                    if var == 'global_warming':
+                        data = build_timeseries_trajectory(suite_list, 'global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, offset=-baseline_temp)
+                    else:
+                        data = build_timeseries_trajectory(suite_list, region+'_'+var, base_dir=base_dir, timeseries_file=timeseries_file)
+                    data = moving_average(data, smooth)
+                    cavity_temp, data = align_timeseries(cavity_temp, data)
+                    tip_data = data.isel(time_centered=t_tip)
+                    # Check if there is a problem before the tipping point
+                    if suite_string in problems_by_traj:
+                        problem = [date <= date_tip for date in problems_by_traj[suite_string]].any()
+                    else:
+                        problem = False
+                    if problem:
+                        at_tip_problem.append(tip_data)
+                    else:
+                        at_tip_noproblem.append(tip_data)
+                    # Check if it recovers
+                    recovers, date_recover, t_recover = check_recover(cavity_temp=cavity_temp, smoothed=True, return_date=True, return_t=True)
+                    if recovers:
+                        recover_data = data.isel(time_centered=t_recover)
+                        # Check if there is a problem before recovery
+                        if suite_string in problems_by_traj:
+                            problem = [date <= date_recover for date in problems_by_traj[suite_string]].any()
+                        else:
+                            problem = False
+                        if problem:
+                            at_recovery_problem.append(recover_data)
+                        else:
+                            at_recovery_noproblem.append(recover_data)
+            # Now check statistics
+            for problem, noproblem, suptitle in zip([at_tip_problem, at_recovery_problem], [at_tip_noproblem, at_recovery_noproblem], ['tipping', 'recovery']):            
+                # Make sure we're not double-counting branched trajectories
+                problem = np.unique(problem)
+                noproblem = np.unique(noproblem)
+                if np.size(problem) == 0:
+                    print('No problems before '+suptitle)
+                elif np.size(noproblem) == 0:
+                    print('Entirely problems before '+suptitle)
+                else:
+                    full = np.concatenate((problem, noproblem), axis=0)
+                    for data, title in zip([full, noproblem, problem], ['all', 'no problems', 'problems']):
+                        print('Mean at '+suptitle+' ('+title+'): '+str(np.mean(data))+', n='+str(np.size(data)))
+                    # Check if problems within range of no-problems
+                    in_range = 0
+                    for x in problem:
+                        if x >= np.amin(noproblem) and x <= np.amax(noproblem):
+                            in_range += 1
+                    print(str(in_range)+' of '+str(np.size(problem))+' problems within range of no-problems')
+                    # Check if significant difference between (1) problems and no-problems, (2) problems and all
+                    for sample, name in zip([noproblem, full], ['no-problems', 'all']):
+                        p_val = ttest_ind(problem, sample, equal_var=False)[1]
+                        if p_val < p0:
+                            print('Significant difference of '+str(np.mean(problem)-np.mean(sample))+' between problems and '+name+', p='+str(p_val))
+                        else:
+                            print('No significant difference between problems and '+name)
+    
 
     
     
