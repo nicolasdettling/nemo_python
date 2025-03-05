@@ -2028,8 +2028,8 @@ def find_stages_start_end (suite_list, base_dir='./', timeseries_file='timeserie
     for suite in suite_list:
         file_path = base_dir+'/'+suite+'/'+timeseries_file
         ds = xr.open_dataset(file_path)
-        stage_start.append(ds.time_centered[0].dt.year.item()-year0)
-        stage_end.append(ds.time_centered[-1].dt.year.item()-year0)
+        stage_start.append(ds.time_centered[0].item())
+        stage_end.append(ds.time_centered[-1].item())
         ds.close()
     # Now deal with overlaps
     stage_end[:-1] = stage_start[1:]
@@ -2088,6 +2088,8 @@ def plot_FW_timeseries (base_dir='./'):
 
     # Find the first and last year of each stage in the simulation
     stage_start, stage_end = find_stages_start_end(suite_list, base_dir=base_dir, timeseries_file=timeseries_files[0])
+    stage_start = [date.year-year0 for date in stage_start]
+    stage_end = [date.year-year0 for date in stage_end]
 
     # Find the time of tipping and recovery for each cavity
     tip_times = [check_tip(suite=suite_string, region=region, return_date=True, base_dir=base_dir)[1] for region in tip_regions]
