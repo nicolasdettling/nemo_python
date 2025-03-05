@@ -3062,11 +3062,16 @@ def plot_problem_trajectories (base_dir='./', in_file='problem_events'):
                 # Dashed lines for tipping and recovery
                 for date, colour in zip(plot_dates, colours):
                     if date is not None:
-                        ax.axvline(date, color=colour, linestyle='dashed')
+                        ax.axvline(date.item(), color=colour, linestyle='dashed')
                 # Shade colours and labels for each suite
                 for t in range(len(start_dates)):
                     ax.axvspan(start_dates[t], end_dates[t], alpha=0.1, color=stage_colours[t])
-                    plt.text(start_dates[t], 2, traj[t], ha='left', va='top')
+                    plt.text(start_dates[t], 1.5, traj[t], ha='left', va='top')
+                ax.set_xlim([start_dates[0], end_dates[-1]])
+                ax.set_ylim([0.5, 1.5])
+                ax.set_yticks([])
+                ax.set_title(trajectory_title(traj))
+                plt.tight_layout()
                 fig.show()
                 
                     
