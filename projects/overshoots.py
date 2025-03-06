@@ -1,3 +1,4 @@
+
 # Analysing TerraFIRMA overshoot simulations with UKESM1.1-ice (NEMO 3.6)
 
 import xarray as xr
@@ -45,7 +46,7 @@ suites_by_scenario = {'piControl_static_ice' : ['cs495'],
                       '4K_stabilise' : ['cz376','db723','db733'],
                       '4K_ramp_down' : ['da892', 'dc123', 'dh859', 'dd210', 'dh541'],
                       '5K_stabilise' : ['cz377','db731','dc324'],
-                      '5K_ramp_down' : ['dc251', 'dc130', 'dg095'], #'dg093', 'dg094'],
+                      '5K_ramp_down' : ['dc251', 'dc130', 'dg095', 'dg093', 'dg094'],
                       '6K_stabilise' : ['cz378'],
                       '6K_ramp_down' : ['de943', 'de962', 'de963', 'dm357', 'dm358', 'dm359']}
 # Choose one ensemble member of each main scenario type for plotting a less-messy timeseries.
