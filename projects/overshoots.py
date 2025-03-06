@@ -3096,7 +3096,7 @@ def bug_impact_tipping_recovery (base_dir='./', in_file='problem_events'):
     for region in regions:
         # Loop over the variables we want to test
         for var in var_names:
-            print('\nTesting impact on '+var)                
+            print('\nTesting impact on '+var+' for '+region)                
             at_tip_problem = []
             at_tip_noproblem = []
             at_recovery_problem = []
@@ -3119,7 +3119,7 @@ def bug_impact_tipping_recovery (base_dir='./', in_file='problem_events'):
                     tip_data = data.isel(time_centered=t_tip)
                     # Check if there is a problem before the tipping point
                     if suite_string in problems_by_traj:
-                        problem = [date <= date_tip for date in problems_by_traj[suite_string]].any()
+                        problem = any([date <= date_tip for date in problems_by_traj[suite_string]])
                     else:
                         problem = False
                     if problem:
@@ -3132,7 +3132,7 @@ def bug_impact_tipping_recovery (base_dir='./', in_file='problem_events'):
                         recover_data = data.isel(time_centered=t_recover)
                         # Check if there is a problem before recovery
                         if suite_string in problems_by_traj:
-                            problem = [date <= date_recover for date in problems_by_traj[suite_string]].any()
+                            problem = any([date <= date_recover for date in problems_by_traj[suite_string]])
                         else:
                             problem = False
                         if problem:
