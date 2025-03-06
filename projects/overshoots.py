@@ -3165,6 +3165,64 @@ def bug_impact_tipping_recovery (base_dir='./', in_file='problem_events'):
                             print('Significant difference of '+str(np.mean(problem)-np.mean(sample))+' between problems and '+name+', p='+str(p_val))
                         else:
                             print('No significant difference between problems and '+name)
+
+
+# Plot the differences between a simulation with the geometry bug, and a re-run version without the bug, to see the recovery timescale.
+def bug_recovery_timescale (base_dir='./'):
+
+    suite_old = 'dc130'
+    suite_new = 'dn966'
+    rampup_suite = 'cx209'
+    timeseries_file = 'timeseries.nc'
+    var_names = ['massloss', 'cavity_temp', 'cavity_salt', 'shelf_bwtemp', 'shelf_bwsalt']
+    regions = ['all', 'ross', 'filchner_ronne']
+    smooth_detrend = 30*months_per_year
+
+    def read_var (suite, var):
+        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+        data = ds[var]
+        ds.close()
+        return data
+
+    for var in var_names:
+        for region in regions:
+            var_full = region+'_'+var
+            # Get std of detrended ramp-up
+            data_rampup = read_var(rampup_suite, var_full)
+            # Take 30-year rolling mean to detrend
+            rampup_smooth = moving_average(data_rampup, smooth_detrend)
+            # Now get difference on correct time indices
+            data_rampup, rampup_smooth = align_timeseries(data_rampup, rampup_smooth)
+            rampup_detrend = data_rampup - rampup_smooth
+            # Now get std
+            std = rampup_detrend.std()
+            # Read data from each simulation
+            data_old = read_var(suite_old, var_full)
+            data_new = read_var(suite_new, var_full)            
+            # Throw away first year of new data, then trim and align: this will remove the entirely of the first problem (resolved the following January)
+            data_new = data_new.isel(time_centered=slice(months_per_year,None))
+            data_old, data_new = align_timeseries(data_old, data_new)
+            # Get difference
+            data_diff = data_old - data_new
+            # Get time axis: years since beginning
+            year0 = data_diff['time_centered'][0].dt.year.item()
+            years = np.array([(date.dt.year.item() - year0) + (date.dt.month.item() - 1)/months_per_year + 0.5 for date in data_diff['time_centered']])
+            # Plot
+            fig, ax = plt.subplots()
+            ax.plot(years, data_diff, '-', color='blue')
+            ax.set_ylabel(data_diff.units)
+            ax2 = ax.twinx()
+            ax2.plot(years, data_diff/std, '-', color='blue')
+            ax2.set_ylabel('std')
+            ax2.axhline(1, color='black', linestyle='dashed')
+            ax2.axhline(-1, color='black', linestyle='dashed')
+            ax2.grid(linestyle='dotted')
+            ax.set_title(var_full)
+            fig.show()
+            
+            
+            
+            
     
 
     
