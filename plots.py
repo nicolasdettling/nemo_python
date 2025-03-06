@@ -216,7 +216,7 @@ def timeseries_plot (datas, labels=None, colours=None, title='', units='', ax=No
 
 
 # Plot timeseries of the same variable in different regions. Can either do for a single simulation (sim_dir is a string) or an initial conditions ensemble (sim_dir is a list of strings). 
-def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], colours=None, timeseries_file='timeseries.nc', smooth=0, fig_name=None, linewidth=None):
+def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross'], colours=None, timeseries_file='timeseries.nc', smooth=0, fig_name=None, linewidth=None, title=None):
 
     if isinstance(sim_dir, str):
         sim_dir = [sim_dir]
@@ -234,7 +234,6 @@ def timeseries_by_region (var_name, sim_dir, regions=['all', 'amundsen_sea', 'be
     datas = []
     labels = []
     colours_plot = []
-    title = None
     units = None
     for region, colour in zip(regions, colours):
         labels.append(region_names[region])
