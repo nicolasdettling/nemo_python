@@ -9,6 +9,7 @@ import matplotlib.animation as animation
 from matplotlib.collections import LineCollection
 from matplotlib.lines import Line2D
 import os
+import shutil
 import subprocess
 import numpy as np
 import cf_xarray as cfxr
@@ -51,18 +52,18 @@ suites_by_scenario = {'piControl_static_ice' : ['cs495'],
                       '6K_ramp_down' : ['de943', 'de962', 'de963', 'dm357', 'dm358', 'dm359']}
 # Choose one ensemble member of each main scenario type for plotting a less-messy timeseries.
 suites_by_scenario_1ens = {'ramp_up': 'cx209',  # First ensemble member for ramp-up and all stabilisation
-                           '1.5K_stabilise': 'cy837', 
+                           '1.5K_stabilise': 'cy837',
                            '2K_stabilise': 'cy838',
                            '3K_stabilise': 'cz375',
                            '4K_stabilise': 'cz376',
                            '5K_stabilise': 'cz377',
                            '6K_stabilise': 'cz378',
-                           '1.5K_ramp_down': 'dc052',  # 50y overshoot, -4 Gt/y for all ramp-downs
-                           '2K_ramp_down': 'dc051',
-                           '3K_ramp_down': 'df028',
-                           '4K_ramp_down': 'dc123',
-                           '5K_ramp_down': 'dc130',
-                           '6K_ramp_down': 'de962'}
+                           '1.5K_ramp_down': 'da697',  # 50y overshoot, -8 Gt/y for all ramp-downs
+                           '2K_ramp_down': 'di335',
+                           '3K_ramp_down': 'df453',
+                           '4K_ramp_down': 'da892',
+                           '5K_ramp_down': 'dc251',
+                           '6K_ramp_down': 'de943'}
 # Dictionary of ramp-down rates
 suites_ramp_down_rates = {'8 Gt/y' : ['di335', 'da800', 'da697', 'da892', 'df453', 'dc251', 'de943', 'dg093', 'dm357'],
                           '4 Gt/y' : ['dc051', 'dc052', 'dc248', 'dc249', 'dc565', 'dd210', 'dc032', 'df028', 'dc123', 'dc130', 'de962', 'dg094', 'dm358'],
@@ -1167,7 +1168,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     var_units = [deg_string+'C', 'Gt/y']
     num_var = len(var_names)
     timeseries_file = 'timeseries.nc'
-    smooth = [10*months_per_year, 30*months_per_year]
+    smooth = [10*months_per_year, 10*months_per_year]
     sim_names, colours, sim_dirs = minimal_expt_list(one_ens=True)
     sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks
     ds = xr.open_dataset(sample_file).squeeze()
@@ -2027,7 +2028,7 @@ def find_stages_start_end (suite_list, base_dir='./', timeseries_file='timeserie
 # Timeseries of various freshwater fluxes, relative to preindustrial baseline, for one trajectory.
 def plot_FW_timeseries (base_dir='./'):
 
-    suite_string = 'cx209-cz377-dc130'
+    suite_string = 'cx209-cz378-de943'
     suite_list = suite_string.split('-')
     pi_suite = 'cs568'  # Want evolving ice PI control so the ice mass is partitioned the same way into calving, basal melting, runoff.
     pi_years = 50
@@ -2358,7 +2359,7 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
     subfig = ['a) ', 'b) ']
     num_regions = len(regions)
     num_snapshots = 4
-    suite_strings = ['cx209-cz376-dc123', 'cx209-cz377-dc130']
+    suite_strings = ['cx209-cz376-da892', 'cx209-cz378-de943']
     year_titles = [['Initial', 'Tipping', '100 years later', 'Recovery'] for n in range(num_regions)]
     mask_pad = 5e4
 
@@ -2995,15 +2996,12 @@ def find_updated_files (suite, base_dir='./'):
     print(str(num_updated)+' of '+str(num_files)+' files affected ('+str(num_updated/num_files*100)+'%)')
 
 
-# Helper function to find all the trajectories affected by the geometry bug.
-# Returns a dictionary of affected trajectories (suite-strings), each corresponding to a list of dates when the problems occur.
-def find_problem_trajectories (base_dir='./', in_file='problem_events'):
+# Helper function to read the list of problem events, and make a dictionary of suites and dates affected.
+def find_problem_suites (base_dir='./', in_file='problem_events'):
 
-    # Read list of files where each problem events start
     f = open(in_file, 'r')
     file_paths = f.read().splitlines()
     f.close()   
-    # Make dictionary of suites and dates for corresponding problems
     problems_by_suite = {}
     for file_path in file_paths:
         # Extract suite name
@@ -3016,6 +3014,14 @@ def find_problem_trajectories (base_dir='./', in_file='problem_events'):
             problems_by_suite[suite] = problems_by_suite[suite] + [date]
         else:
             problems_by_suite[suite] = [date]
+    return problems_by_suite
+
+
+# Helper function to find all the trajectories affected by the geometry bug.
+# Returns a dictionary of affected trajectories (suite-strings), each corresponding to a list of dates when the problems occur.
+def find_problem_trajectories (base_dir='./', in_file='problem_events'):
+
+    problems_by_suite = find_problem_suites(base_dir=base_dir, in_file=in_file)
 
     # Loop through all trajectories
     all_traj = all_suite_trajectories()
@@ -3174,9 +3180,11 @@ def bug_recovery_timescale (base_dir='./'):
     suite_new = 'dn966'
     rampup_suite = 'cx209'
     timeseries_file = 'timeseries.nc'
-    var_names = ['massloss', 'cavity_temp', 'cavity_salt', 'shelf_bwtemp', 'shelf_bwsalt']
+    var_names = ['massloss', 'cavity_temp', 'cavity_salt', 'bwtemp', 'bwsalt', 'shelf_bwsalt']
     regions = ['all', 'ross', 'filchner_ronne']
     smooth_detrend = 30*months_per_year
+    smooth = months_per_year  # Seasonality
+    std_cutoff = 1
 
     def read_var (suite, var):
         ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
@@ -3186,40 +3194,69 @@ def bug_recovery_timescale (base_dir='./'):
 
     for var in var_names:
         for region in regions:
+            if var == 'shelf_bwsalt' and region == 'all':
+                continue
             var_full = region+'_'+var
             # Get std of detrended ramp-up
             data_rampup = read_var(rampup_suite, var_full)
             # Take 30-year rolling mean to detrend
             rampup_smooth = moving_average(data_rampup, smooth_detrend)
+            # Separately take 1-year mean to remove seasonal cycle
+            data_rampup = moving_average(data_rampup, smooth)
             # Now get difference on correct time indices
             data_rampup, rampup_smooth = align_timeseries(data_rampup, rampup_smooth)
             rampup_detrend = data_rampup - rampup_smooth
             # Now get std
             std = rampup_detrend.std()
-            # Read data from each simulation
+            
+            # Read data from each simulation and take 1-year mean
             data_old = read_var(suite_old, var_full)
-            data_new = read_var(suite_new, var_full)            
-            # Throw away first year of new data, then trim and align: this will remove the entirely of the first problem (resolved the following January)
-            data_new = data_new.isel(time_centered=slice(months_per_year,None))
+            data_new = read_var(suite_new, var_full)
+            # Save first non-problem year: year after new simulation starts
+            year0 = data_new['time_centered'][0].dt.year.item()+1
             data_old, data_new = align_timeseries(data_old, data_new)
+            data_old = moving_average(data_old, smooth)
+            data_new = moving_average(data_new, smooth)
             # Get difference
             data_diff = data_old - data_new
-            # Get time axis: years since beginning
-            year0 = data_diff['time_centered'][0].dt.year.item()
+            # Get time axis: years since problem ended
             years = np.array([(date.dt.year.item() - year0) + (date.dt.month.item() - 1)/months_per_year + 0.5 for date in data_diff['time_centered']])
             # Plot
             fig, ax = plt.subplots()
             ax.plot(years, data_diff, '-', color='blue')
-            ax.set_ylabel(data_diff.units)
+            ax.set_xlabel('Years since problem ended')
+            ax.set_ylabel(data_old.units)
+            ax.grid(linestyle='dotted')
+            [y0, y1] = ax.get_ylim()
             ax2 = ax.twinx()
             ax2.plot(years, data_diff/std, '-', color='blue')
+            ax2.set_ylim([y0/std, y1/std])
             ax2.set_ylabel('std')
-            ax2.axhline(1, color='black', linestyle='dashed')
-            ax2.axhline(-1, color='black', linestyle='dashed')
-            ax2.grid(linestyle='dotted')
+            ax2.axhline(std_cutoff, color='black', linestyle='dashed', linewidth=1)
+            ax2.axhline(-std_cutoff, color='black', linestyle='dashed', linewidth=1)
             ax.set_title(var_full)
             fig.show()
-            
+
+
+# Given the recovery timescale determined above (9 years for everything to recover within 1 std), mask out every problem event and the following 9 years in the ocean timeseries. Keep the unmasked versions, but rename them.
+def mask_problems (base_dir='./', in_file='problem_events'):
+
+    timeseries_file = 'timeseries.nc'
+    timeseries_copy = 'timeseries_unmasked.nc'
+
+    problems_by_suite = find_problem_suites(base_dir=base_dir, in_file=in_file)
+    # Loop over affected suites
+    for suite in problems_by_suite:
+        # Make a copy of timeseries
+        shutil.copyfile(base_dir+'/'+suite+'/'+timeseries_file, base_dir+'/'+suite+'/'+timeseries_copy)
+        # Read timeseries and get time axis
+        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+        time = ds['time_centered']
+        
+        
+        
+
+    
             
             
             
