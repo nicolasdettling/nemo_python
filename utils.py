@@ -345,9 +345,6 @@ def moving_average (data, window, dim='time_centered'):
     if window == 0:
         return data
 
-    # Fill NaNs or they will mess up the smoothing
-    data = data.interpolate_na(dim=dim)
-
     # Find axis number of dimension
     dim_axis = 0
     for var in data.sizes:
@@ -365,7 +362,8 @@ def moving_average (data, window, dim='time_centered'):
     # Array of zeros of the same shape as a single time index of data
     zero_base = (data.isel({dim:slice(0,1)})*0).data
     # Do the smoothing in two steps, in numpy world
-    data_cumsum = np.ma.concatenate((zero_base.data, np.ma.cumsum(data.data, axis=dim_axis)), axis=dim_axis)
+    data_np = np.ma.masked_where(np.isnan(data.data), data.data)    
+    data_cumsum = np.ma.concatenate((zero_base.data, np.ma.cumsum(data_np, axis=dim_axis)), axis=dim_axis)
     if centered:
         data_smoothed = (data_cumsum[t_first+radius+1:t_last+radius+1,...] - data_cumsum[t_first-radius:t_last-radius,...])/(2*radius+1)
     else:

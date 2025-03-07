@@ -1572,7 +1572,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     for m in range(len(colours)):
         handles.append(Line2D([0], [0], marker='*', markersize=15, markerfacecolor=colours[m], markeredgecolor='black', label=labels[m], linestyle=''))
     plt.legend(handles=handles, loc='lower right', bbox_to_anchor=(0.85, -0.27))
-    finished_plot(fig, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
+    finished_plot(fig) #, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
 
 
 # Plot Amundsen Sea 500m temperature, barotropic velocity, and zero contour of barotropic streamfunction, averaged over 3 scenarios: (1) piControl, (2) 1.5K stabilisation, (3) 6K stabilisation.
