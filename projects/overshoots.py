@@ -462,6 +462,9 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
                 i = highlight_suites.index(suite)
                 highlight_stype[i] = stype
                 highlight_colours[i] = colour
+            # Interpolate any missing values
+            gw_level = gw_level.interpolate_na(dim='time_centered')
+            data = data.interpolate_na(dim='time_centered')
             # Smooth in time            
             gw_level = moving_average(gw_level, smooth)
             data = moving_average(data, smooth)
@@ -491,6 +494,8 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
         gw_level = build_timeseries_trajectory(highlight_suites, 'global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, offset=-baseline_temp-offset)
         data = build_timeseries_trajectory(highlight_suites, var_name, base_dir=base_dir, timeseries_file=timeseries_file)
         data, gw_level = align_timeseries(data, gw_level)
+        gw_level = gw_level.interpolate_na(dim='time_centered')
+        data = data.interpolate_na(dim='time_centered')
         gw_level = moving_average(gw_level, smooth)
         data = moving_average(data, smooth)
         if data.size != gw_level.size:
@@ -509,8 +514,8 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
                     arrow_loc_stage = arrow_loc[i]
                     for target_temp in arrow_loc_stage:
                         # Find closest data point to this global temperature
-                        dtemp = np.abs(gw_level_stage + temp_correct - target_temp).data
-                        t0 = np.argwhere(dtemp == np.amin(dtemp))[0][0]
+                        dtemp = np.abs(gw_level_stage + temp_correct - target_temp)
+                        t0 = np.argwhere((dtemp == np.amin(dtemp)).data)[0][0]
                         arrow_x.append(gw_level_stage.data[t0]+temp_correct)
                         arrow_y.append(data_stage.data[t0])
                         # Find tangent to the curve over 1-year timescale
