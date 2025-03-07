@@ -3237,15 +3237,16 @@ def bug_impact_tipping_recovery (base_dir='./', in_file='problem_events'):
                             in_range += 1
                     print(str(in_range)+' of '+str(np.size(problem))+' problems within range of no-problems')
                     # Check if significant difference between all combinations of the 3 samples
-                    for sample1, name1 in zip([problem, noproblem, full], ['problems', 'no-problems', 'full']):
-                        for sample2, name2 in zip([problem, noproblem, full], ['problems', 'no-problems', 'full']):
-                            if name1 == name2:
-                                continue
-                            p_val = ttest_ind(sample1, sample2, equal_var=False)[1]
+                    samples = [problem, noproblem, full]
+                    names = ['problems', 'no-problems', 'full']
+                    num_samples = len(samples)
+                    for i in range(num_samples):
+                        for j in range(i+1, num_samples):
+                            p_val = ttest_ind(samples[i], samples[j], equal_var=False)[1]
                             if p_val < p0:
-                                print('Significant difference of '+str(np.mean(sample1)-np.mean(sample2))+' between '+name1+' and '+name2+', p='+str(p_val))
+                                print('Significant difference of '+str(np.mean(samples[i])-np.mean(samples[j]))+' between '+names[i]+' and '+names[j]+', p='+str(p_val))
                             else:
-                                print('No significant difference between '+name1+' and '+name2)
+                                print('No significant difference between '+names[i]+' and '+names[j])
 
 
 # Plot the differences between a simulation with the geometry bug, and a re-run version without the bug, to see the recovery timescale.
