@@ -1574,7 +1574,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     for m in range(len(colours)):
         handles.append(Line2D([0], [0], marker='*', markersize=15, markerfacecolor=colours[m], markeredgecolor='black', label=labels[m], linestyle=''))
     plt.legend(handles=handles, loc='lower right', bbox_to_anchor=(0.85, -0.27))
-    finished_plot(fig) #, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
+    finished_plot(fig, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
 
 
 # Plot Amundsen Sea 500m temperature, barotropic velocity, and zero contour of barotropic streamfunction, averaged over 3 scenarios: (1) piControl, (2) 1.5K stabilisation, (3) 6K stabilisation.
@@ -3155,11 +3155,11 @@ def plot_problem_trajectories (base_dir='./', in_file='problem_events'):
         fig.show()
 
 
-# Compare global warming and bottom salinity at the time of tipping/recovery between trajectories affected by the geometry bug, and trajectories unaffected.
+# Compare global warming at the time of tipping/recovery between trajectories affected by the geometry bug, and trajectories unaffected.
 def bug_impact_tipping_recovery (base_dir='./', in_file='problem_events'):
 
     regions = ['ross', 'filchner_ronne']
-    var_names = ['global_warming', 'shelf_bwsalt']
+    var_names = ['global_warming'] #, 'shelf_bwsalt']
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
     smooth = 5*months_per_year
