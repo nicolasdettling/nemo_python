@@ -385,7 +385,8 @@ def align_timeseries (data1, data2, time_coord='time_centered'):
 # Plot the timeseries of one or more experiments/ensembles (expts can be a string, a list of strings, or a list of lists of string) and one variable against global warming level (relative to preindustrial mean in the given PI suite, unless offsets is not None).
 # Can also use an ocean variable to plot against instead of GW level (eg cavity temperature) with alternate_var='something' (assumed to be within timeseries_file).
 # Can also set offsets as a list of the same shape as expts, with different global warming baselines for each - this is still on top of PI mean, so eg pass 3 for 3K above PI.
-def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None, offsets=None, alternate_var=None, temp_correct=0):
+# Can also set highlight as a suite-string showing a trajectory which should be plotted twice as thick. If highlight_arrows is True, will also plot some arrows along this trajectory: must set arrow_loc = list of lists of global temperatures to plot at for each suite in trajectory.
+def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None, offsets=None, alternate_var=None, temp_correct=0, highlight=None, highlight_arrows=True, arrow_loc=None):
 
     new_ax = ax is None
 
@@ -411,11 +412,22 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
                 offsets.append([0])
             else:
                 offsets.append([0]*len(expt))
+
+    if highlight is None:
+        highlight_suites = []
+    else:
+        highlight_suites = highlight.split('-')
+        if highlight_arrows and arrow_loc is None:
+            raise Exception('Must set arrow_loc')
+    num_highlight = len(highlight_suites)
     
     gw_levels = []
     datas = []
     labels_plot = []
     colours_plot = []
+    lw_plot = []
+    highlight_stype = [None]*num_highlight
+    highlight_colours = [None]*num_highlight
     for expt, label, colour, expt_offsets in zip(expts, labels, colours, offsets):
         if isinstance(expt, str):
             # Generalise to ensemble of 1
@@ -445,6 +457,11 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
                 continue
             # Figure out the scenario type we're actually trying to plot
             stype = data.scenario_type[-1]
+            if suite in highlight_suites:
+                # Save the stype and colour at the right place in the highlight list
+                i = highlight_suites.index(suite)
+                highlight_stype[i] = stype
+                highlight_colours[i] = colour
             # Smooth in time            
             gw_level = moving_average(gw_level, smooth)
             data = moving_average(data, smooth)
@@ -457,6 +474,49 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
         if num_ens > 0:
             labels_plot += [label] + [None]*(num_ens-1)
             colours_plot += [colour]*num_ens
+            lw_plot += [linewidth]*num_ens
+
+    if highlight is not None:
+        # Plot a specific trajectory again in a thicker line
+        if highlight_arrows:
+            arrow_x = []
+            arrow_y = []
+            arrow_dx = []
+            arrow_dy = []
+            arrow_colours = []
+        if alternate_var is not None:
+            raise Exception('Can only highlight trajectories when alternate_var is None')
+        if None in highlight_stype or None in highlight_colours:
+            raise Exception('One or more highlight suites is not in main suite list')
+        gw_level = build_timeseries_trajectory(highlight_suites, 'global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, offset=-baseline_temp-offset)
+        data = build_timeseries_trajectory(highlight_suites, var_name, base_dir=base_dir, timeseries_file=timeseries_file)
+        data, gw_level = align_timeseries(data, gw_level)
+        gw_level = moving_average(gw_level, smooth)
+        data = moving_average(data, smooth)
+        if data.size != gw_level.size:
+            print('Warning: timeseries do not align for highlight trajectory '+highlight+'. Removing from plot.')
+        else:
+            # Select each stage from trajectory and add to plotting list
+            for i in range(num_highlight):
+                gw_level_stage = gw_level.where(data.scenario_type==highlight_stype[i], drop=True)
+                data_stage = data.where(data.scenario_type==highlight_stype[i], drop=True)
+                gw_levels.append(gw_level_stage)
+                datas.append(data_stage)
+                labels_plot += [None]
+                colours_plot += [highlight_colours[i]]
+                lw_plot += [linewidth*3]
+                if highlight_arrows:
+                    arrow_loc_stage = arrow_loc[i]
+                    for target_temp in arrow_loc_stage:
+                        # Find closest data point to this global temperature
+                        dtemp = np.abs(gw_level_stage + temp_correct - target_temp).data
+                        t0 = np.argwhere(dtemp == np.amin(dtemp))[0][0]
+                        arrow_x.append(gw_level_stage.data[t0]+temp_correct)
+                        arrow_y.append(data_stage.data[t0])
+                        # Find tangent to the curve over 1-year timescale
+                        arrow_dx.append(gw_level_stage.data[t0+months_per_year] - gw_level_stage.data[t0-months_per_year])
+                        arrow_dy.append(data_stage.data[t0+months_per_year] - data_stage.data[t0-months_per_year])
+                        arrow_colours.append(highlight_colours[i])                    
 
     # Plot
     if new_ax:
@@ -466,8 +526,11 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
             # Need a bigger plot to make room for a legend
             figsize = (8,5)
         fig, ax = plt.subplots(figsize=figsize)
-    for gw_level, data, colour, label in zip(gw_levels, datas, colours_plot, labels_plot):
-        ax.plot(gw_level+temp_correct, data, '-', color=colour, label=label, linewidth=linewidth)
+    for gw_level, data, colour, label, lw in zip(gw_levels, datas, colours_plot, labels_plot, lw_plot):
+        ax.plot(gw_level+temp_correct, data, '-', color=colour, label=label, linewidth=lw)
+    if highlight_arrows:
+        for x, y, dx, dy, colour in zip(arrow_x, arrow_y, arrow_dx, arrow_dy, arrow_colours):
+            ax.annotate("", xytext=(x,y), xy=(x+dx,y+dy), arrowprops=dict(arrowstyle='fancy', mutation_scale=15, color=colour))
     ax.grid(linestyle='dotted')
     if title is None:
         title = datas[0].long_name
@@ -1162,13 +1225,16 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
 
     pi_suite = 'cs495'
     regions = ['ross', 'filchner_ronne']
+    num_regions = len(regions)
     title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ', r'$\bf{c}$. ', r'$\bf{d}$. ']
+    highlights = ['cx209-cz376-da892', 'cx209-cz378-de943']
+    arrow_loc = [[[1.5, 3.5, 4.6], [5], [4.75, 3.5]], [[1.5, 4.5, 6.5], [], [6.6, 4.9, 3.3]], [[3.5, 4.4], [5.2], [5.1, 4]], [[4, 5.9, 6.4], [6.98], [6.8, 4.7, 3.5]]]
     var_names = ['bwtemp', 'massloss']
     var_titles = ['Bottom temperature on continental shelf and in ice shelf cavities', 'Basal mass loss beneath ice shelves']
     var_units = [deg_string+'C', 'Gt/y']
     num_var = len(var_names)
     timeseries_file = 'timeseries.nc'
-    smooth = [10*months_per_year, 10*months_per_year]
+    smooth = [10*months_per_year, 20*months_per_year]
     sim_names, colours, sim_dirs = minimal_expt_list(one_ens=True)
     sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks
     ds = xr.open_dataset(sample_file).squeeze()
@@ -1177,9 +1243,9 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     gs = plt.GridSpec(2,2)
     gs.update(left=0.07, right=0.98, bottom=0.1, top=0.9, hspace=0.5, wspace=0.16)
     for v in range(num_var):
-        for n in range(len(regions)):
+        for n in range(num_regions):
             ax = plt.subplot(gs[v,n])
-            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth[v], labels=sim_names, colours=colours, linewidth=1, ax=ax, temp_correct=temp_correction[n])
+            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth[v], labels=sim_names, colours=colours, linewidth=0.5, ax=ax, temp_correct=temp_correction[n], highlight=highlights[n], highlight_arrows=True, arrow_loc=arrow_loc[v*num_regions+n])
             ax.set_title(title_prefix[v*2+n]+region_names[regions[n]], fontsize=14)
             if n == 0:
                 ax.set_ylabel(var_units[v], fontsize=12)
@@ -1200,7 +1266,11 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
                 ax2.set_xticks([])
                 ax2.set_yticks([])
         plt.text(0.5, 0.99-0.5*v, var_titles[v], fontsize=16, ha='center', va='top', transform=fig.transFigure)
-    ax.legend(loc='center left', bbox_to_anchor=(-0.6,-0.2), fontsize=11, ncol=3)
+    # Manual legend
+    handles = []
+    for m in range(len(colours)):
+        handles.append(Line2D([0], [0], color=colours[m], label=sim_names[m], linestyle='-', linewidth=1.5))
+    ax.legend(handles=handles, loc='center left', bbox_to_anchor=(-0.6,-0.2), fontsize=11, ncol=3)
     finished_plot(fig, fig_name='figures/temp_massloss_by_gw_panels.png', dpi=300)
 
 
