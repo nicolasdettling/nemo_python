@@ -3243,15 +3243,36 @@ def mask_problems (base_dir='./', in_file='problem_events'):
 
     timeseries_file = 'timeseries.nc'
     timeseries_copy = 'timeseries_unmasked.nc'
+    mask_years = 9
 
     problems_by_suite = find_problem_suites(base_dir=base_dir, in_file=in_file)
     # Loop over affected suites
     for suite in problems_by_suite:
+        print('Processing '+suite)
+        file_path = base_dir+'/'+suite+'/'+timeseries_file
         # Make a copy of timeseries
-        shutil.copyfile(base_dir+'/'+suite+'/'+timeseries_file, base_dir+'/'+suite+'/'+timeseries_copy)
+        shutil.copyfile(file_path, base_dir+'/'+suite+'/'+timeseries_copy)
         # Read timeseries and get time axis
-        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+        ds = xr.open_dataset(file_path)
         time = ds['time_centered']
+        # Loop over problems in this suite
+        masked_months = 0
+        for date in problems_by_suite[suite]:
+            # Find the time index where the problem starts
+            t0 = np.argwhere(time.data==date)[0][0]
+            year0 = time[t0].dt.year
+            month0 = time[t0].dt.month
+            # Mask out that time index, and the rest of that year
+            mask = (time.dt.year == year0)*(time.dt.month >= month0)
+            masked_months += np.count_nonzero(mask)
+            ds = ds.where(~mask)
+            # Now mask out the following 9 full years
+            mask = (time.dt.year > year0)*(time.dt.year <= year0+mask_years)
+            masked_months += np.count_nonzero(mask)
+            ds = ds.where(~mask)
+        print('Masked '+str(masked_months)+' months ('+str(masked_months/ds.sizes['time_centered']*100)+'% of timeseries)')
+        # Overwrite timeseries
+        overwrite_file(ds, file_path)
         
         
         
