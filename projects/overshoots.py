@@ -462,9 +462,6 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
                 i = highlight_suites.index(suite)
                 highlight_stype[i] = stype
                 highlight_colours[i] = colour
-            # Interpolate any missing values
-            gw_level = gw_level.interpolate_na(dim='time_centered')
-            data = data.interpolate_na(dim='time_centered')
             # Smooth in time            
             gw_level = moving_average(gw_level, smooth)
             data = moving_average(data, smooth)
