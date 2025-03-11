@@ -54,7 +54,7 @@ Finally, ARCHER2 has a quirk where it expects booleans, and only booleans, to ha
 
 Copy the configuration setup files (including its custom source code, CPP definitions, and running scripts) from Birgit's shared space to the cfgs/ directory within your NEMO installation:
 
-    cp -r /work/n02/shared/birgal/NEMO_share/AntArc/cfg/ cfgs/
+    cp -r /work/n02/shared/birgal/NEMO_share/AntArc/cfg/ cfgs/AntArc
 
 The input files (atmospheric forcing, boundary conditions, etc) are stored in Birgit's shared space (`/work/n02/shared/birgal/NEMO_share/AntArc/input/`) and these will be linked in when you run a job, so that we don't have to maintain multiple copies.
 
@@ -76,7 +76,15 @@ Assuming you're using the Gnu compilers as suggested, you can compile the eANT02
 
 Once the compilation has completed, save the nemo executable to the EXPREF directory so you don't lose it:
 
-    cp cfgs/eANT025.AntArc/EXP00/nemo cfgs/eANT025.AntArc/EXPREF
+    cp cfgs/eANT025.AntArc/EXP00/nemo cfgs/eANT025.AntArc/EXPREF/
+
+You'll also need to compile an alternate executable with the extra CPP key "key_qco"; we need this just for the first year of the simulation to ensure stability (but it also goes unstable if you use it for too long!) The easiest way to do so is probably:
+
+    ./makenemo -m X86_ARCHER2-Gnu_4.2 -r eANT025.AntArc -n 'eANT025.AntArc_qco' -j 8 add_key 'key_qco'
+
+(You can use this same strategy if you ever want a copy of this configuration with different CPP keys: use the -n flag to set the new name, and add_key or del_key to change the CPP keys.). In this case, move the qco NEMO executable to the original configuration with a new name, and delete the otherwise-unused eANT025.AntArc_qco case:
+
+    mv cfgs/eANT025.AntArc_qco/EXP00/nemo cfgs/eANT025.AntArc/EXPREF/nemo_qco
 
 You will also need to compile the REBUILD_NEMO tool which combines the iceberg processor files into a single iceberg restart file at the end of each run. With the same modules loaded as above, compile the tool:
 
@@ -84,6 +92,7 @@ You will also need to compile the REBUILD_NEMO tool which combines the iceberg p
     ./maketools -m X86_ARCHER2-Gnu_4.2 -n REBUILD_NEMO
 
 You can follow a similar approach to compile any other tools you might want to use down the line, such as DOMAINcfg or WEIGHTS.
+
 # Running a job
 
 Now let's work within the configuration directory:
@@ -98,7 +107,7 @@ The EXPREF/ directory should contain everything you need to run a job. Keep this
 
 You will run your new experiment within NEW_EXP.
 
-The first step is to link in the forcing files using prepare_run.sh; this also copies the XIOS executable from the NOC group. This script will also set up your namelists for the first year, by calling the python script `update_namelists.py`. If you don't want the first year to be 1979, you'll need to change the first argument to `update_namelists.py` near the bottom of prepare_run.sh. Finally, it will set up a directory on JASMIN where the results will be automatically copied every year. Edit this directory as needed.
+The first step is to link in the forcing files using prepare_run.sh; this also copies the XIOS executable from the NOC group. This script will also set up your namelists for the first year, by calling the python script `update_namelists.py`. If you don't want the first year to be 1979, you'll need to change the first argument to `update_namelists.py` near the bottom of prepare_run.sh. Finally, it will set up a directory on JASMIN where the results will be automatically copied every year. Edit this directory location as needed.
 
 Once you're happy, call
 
