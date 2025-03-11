@@ -9,7 +9,7 @@ I recommend you install NEMO in your main work directory
 
     /work/n02/n02/<username>
 
-and save this as an environment variable $WORK (which you'll need later) by adding this line to your ~/.bashrc:
+and save this as an environment variable $WORK (which you'll need later) by adding this line to your `~/.bashrc`:
 
     export WORK=/work/n02/n02/`whoami`
 
@@ -60,7 +60,7 @@ The input files (atmospheric forcing, boundary conditions, etc) are stored in Bi
 
 Also add this configuration to `cfgs/ref_cfgs.txt` so you can use it as a base to compile from, by adding a new line to that file:
 
-    eANT025.L121 OCE ICE
+    eANT025.AntArc OCE ICE
 
 # Compiling the model
 
@@ -76,7 +76,7 @@ Assuming you're using the Gnu compilers as suggested, you can compile the eANT02
 
 Once the compilation has completed, save the nemo executable to the EXPREF directory so you don't lose it:
 
-    cp cfgs/eANT025.L121/EXP00/nemo cfgs/eANT025.AntArc/EXPREF
+    cp cfgs/eANT025.AntArc/EXP00/nemo cfgs/eANT025.AntArc/EXPREF
 
 You will also need to compile the REBUILD_NEMO tool which combines the iceberg processor files into a single iceberg restart file at the end of each run. With the same modules loaded as above, compile the tool:
 
