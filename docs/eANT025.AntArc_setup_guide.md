@@ -56,7 +56,7 @@ Copy the configuration setup files (including its custom source code, CPP defini
 
     cp -r /work/n02/shared/birgal/NEMO_share/AntArc/cfg/ cfgs/
 
-The input files (atmospheric forcing, boundary conditions, etc) are stored in Birgit's shared space (`/work/n02/shared/birgal/NEMO_share/forcing/eANT025.AntArc/`) and these will be linked in when you run a job, so that we don't have to maintain multiple copies.
+The input files (atmospheric forcing, boundary conditions, etc) are stored in Birgit's shared space (`/work/n02/shared/birgal/NEMO_share/AntArc/input/`) and these will be linked in when you run a job, so that we don't have to maintain multiple copies.
 
 Also add this configuration to `cfgs/ref_cfgs.txt` so you can use it as a base to compile from, by adding a new line to that file:
 
