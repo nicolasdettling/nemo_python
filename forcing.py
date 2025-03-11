@@ -562,9 +562,9 @@ def process_era5_forcing(variable, year_start=1979, year_end=2023, era5_folder='
                     var_filled_array = np.empty(src_to_fill.shape)
                     for tind, t in enumerate(src_to_fill.time):
                         var_filled_array[:,:,tind] = extend_into_mask(src_to_fill.isel(time=tind).values, missing_val=-9999, fill_val=np.nan, 
-                                                                     use_2d=True, use_3d=False, num_iters=200)
-                    
+                                                                      use_2d=True, use_3d=False, num_iters=200)
                     data[varname] = (('latitude','longitude','time'), var_filled_array)
+                    data = data.transpose('time','latitude','longitude')
 
                 data.to_netcdf(f'{era5_folder}processed/{variable}_time_y{year}.nc', unlimited_dims={'time':True})
 
