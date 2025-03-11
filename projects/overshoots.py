@@ -1545,10 +1545,10 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 img_down = img
         ax.grid(linestyle='dotted')
         ax.axhline(tipping_temp, color='black', linestyle='dashed')
-        # Plot threshold salinity stars
-        ax.plot(threshold_tip[n], tipping_temp, marker='*', markersize=15, markerfacecolor='Crimson', markeredgecolor='black')
+        # Plot threshold salinity markers
+        ax.plot(threshold_tip[n], tipping_temp, marker='o', markersize=5, markerfacecolor='Crimson', markeredgecolor='black')
         if threshold_recover[n] is not None:
-            ax.plot(threshold_recover[n], tipping_temp, marker='*', markersize=15, markerfacecolor='DodgerBlue', markeredgecolor='black')
+            ax.plot(threshold_recover[n], tipping_temp, marker='o', markersize=5, markerfacecolor='DodgerBlue', markeredgecolor='black')
         ax.set_title(title_prefix[n]+region_names[regions[n]], fontsize=16)
         if n==0:
             ax.set_xlabel('Bottom salinity on continental shelf (psu)', fontsize=12)
@@ -1572,7 +1572,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     labels = ['mean tipping', 'mean recovery']
     handles = []
     for m in range(len(colours)):
-        handles.append(Line2D([0], [0], marker='*', markersize=15, markerfacecolor=colours[m], markeredgecolor='black', label=labels[m], linestyle=''))
+        handles.append(Line2D([0], [0], marker='o', markersize=5, markerfacecolor=colours[m], markeredgecolor='black', label=labels[m], linestyle=''))
     plt.legend(handles=handles, loc='lower right', bbox_to_anchor=(0.85, -0.27))
     finished_plot(fig, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
 
