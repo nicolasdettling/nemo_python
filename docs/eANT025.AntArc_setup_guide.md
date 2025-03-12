@@ -54,9 +54,9 @@ Finally, ARCHER2 has a quirk where it expects booleans, and only booleans, to ha
 
 Copy the configuration setup files (including its custom source code, CPP definitions, and running scripts) from Birgit's shared space to the cfgs/ directory within your NEMO installation:
 
-    cp -r /work/n02/shared/birgal/NEMO_share/AntArc/cfg/ cfgs/AntArc
+    cp -r /work/n02/shared/birgal/NEMO_share/eANT025.AntArc/cfg/ cfgs/eANT025.AntArc/
 
-The input files (atmospheric forcing, boundary conditions, etc) are stored in Birgit's shared space (`/work/n02/shared/birgal/NEMO_share/AntArc/input/`) and these will be linked in when you run a job, so that we don't have to maintain multiple copies.
+The input files (atmospheric forcing, boundary conditions, etc) are stored in Birgit's shared space (`/work/n02/shared/birgal/NEMO_share/eANT025.AntArc/input/`) and these will be linked in when you run a job, so that we don't have to maintain multiple copies.
 
 Also add this configuration to `cfgs/ref_cfgs.txt` so you can use it as a base to compile from, by adding a new line to that file:
 
@@ -107,7 +107,7 @@ The EXPREF/ directory should contain everything you need to run a job. Keep this
 
 You will run your new experiment within NEW_EXP.
 
-The first step is to link in the forcing files using prepare_run.sh; this also copies the XIOS executable from the NOC group. This script will also set up your namelists for the first year, by calling the python script `update_namelists.py`. If you don't want the first year to be 1979, you'll need to change the first argument to `update_namelists.py` near the bottom of prepare_run.sh. Finally, it will set up a directory on JASMIN where the results will be automatically copied every year. Edit this directory location as needed.
+The first step is to link in the forcing files using prepare_run.sh; this also copies the XIOS executable from the NOC group. This script will also set up your namelists for the first year, by calling the python script `update_namelists.py`. If you don't want the first year to be 1979, you'll need to change the first argument to `update_namelists.py` near the bottom of prepare_run.sh. Finally, this script will set up a directory on JASMIN where the results will be automatically copied every year using globus transfer (called by `postproc.sh`); edit this directory location as needed.
 
 Once you're happy, call
 
