@@ -3349,6 +3349,27 @@ def mask_problems (base_dir='./', in_file='problem_events'):
         print('Masked '+str(masked_months)+' months ('+str(masked_months/ds.sizes['time_centered']*100)+'% of timeseries)')
         # Overwrite timeseries
         overwrite_file(ds, file_path)
+
+
+# Confirm that the Ross always tips first, and FRIS always recovers first
+def check_tipping_recovery_order (base_dir='./'):
+
+    all_traj = all_suite_trajectories()
+    for traj in all_traj:
+        suite_string = '-'.join(traj)
+        fris_tip, fris_t = check_tip(suite=suite_string, region='filchner_ronne', return_t=True)
+        if fris_tip:
+            ross_tip, ross_t = check_tip(suite=suite_string, region='ross', return_t=True)
+            if not ross_tip:
+                print(suite_string+': FRIS tips but not Ross')
+            if fris_t < ross_t:
+                print(suite_string+': FRIS tips before Ross')
+            fris_recover, fris_t = check_recover(suite=suite_string, region='filchner_ronne', return_t=True)
+            ross_recover, ross_t = check_recover(suite=suite_string, region='ross', return_t=True)
+            if ross_recover and not fris_recover:
+                print(suite_string+': Ross recovers but not FRIS')
+            if ross_t < fris_t:
+                print(suite_string+': Ross recovers before FRIS')
         
         
         
