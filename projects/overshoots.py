@@ -3357,22 +3357,24 @@ def check_tipping_recovery_order (base_dir='./'):
     smooth = 5*months_per_year
 
     all_traj = all_suite_trajectories()
-    for traj in all_traj:
-        suite_string = '-'.join(traj)
-        fris_temp = moving_average(build_timeseries_trajectory(suite_string, 'filchner_ronne_cavity_temp', base_dir=base_dir), smooth)
-        ross_temp = moving_average(build_timeseries_trajectory(suite_string, 'ross_cavity_temp', base_dir=base_dir), smooth)
+    for suite_list in all_traj:
+        suite_string = '-'.join(suite_list)
+        fris_temp = moving_average(build_timeseries_trajectory(suite_list, 'filchner_ronne_cavity_temp', base_dir=base_dir), smooth)
+        ross_temp = moving_average(build_timeseries_trajectory(suite_list, 'ross_cavity_temp', base_dir=base_dir), smooth)
         fris_tip, fris_t = check_tip(cavity_temp=fris_temp, smoothed=True, return_t=True)
         if fris_tip:
             ross_tip, ross_t = check_tip(cavity_temp=ross_temp, smoothed=True, return_t=True)
             if not ross_tip:
                 print(suite_string+': FRIS tips but not Ross')
-            if fris_t < ross_t:
+            elif fris_t < ross_t:
                 print(suite_string+': FRIS tips before Ross')
             fris_recover, fris_t = check_recover(cavity_temp=fris_temp, smoothed=True, return_t=True)
             ross_recover, ross_t = check_recover(cavity_temp=ross_temp, smoothed=True, return_t=True)
             if ross_recover and not fris_recover:
                 print(suite_string+': Ross recovers but not FRIS')
-            if ross_t < fris_t:
+            elif not ross_recover:
+                continue
+            elif ross_t < fris_t:
                 print(suite_string+': Ross recovers before FRIS')
         
         
