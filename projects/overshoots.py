@@ -2197,7 +2197,7 @@ def plot_FW_timeseries (base_dir='./'):
         ax2.axis('on')
         ax2.set_xticks([])
         ax2.set_yticks([])'''
-    finished_plot(fig, fig_name='figures/FW_timeseries.png', dpi=300)
+    finished_plot(fig) #, fig_name='figures/FW_timeseries.png', dpi=300)
 
 
 # Plot shelf bwsalt and its time-derivative for the Ross and FRIS regions in untipped trajectories, with the given level of smoothing (in years).
@@ -2381,7 +2381,8 @@ def stage_timescales (base_dir='./', fig_dir=None, plot_traj=False):
         gs.update(left=0.1, right=0.99, bottom=0.1, top=0.85, hspace=0.4)
         for r in range(len(regions)):
             ax = plt.subplot(gs[r,0])
-            ax.hist(all_times[r], bins=bins)
+            ax.hist(all_times[r], bins=bins, color='DodgerBlue')
+            ax.set_ylim([0,3.5])
             ax.set_title(region_names[regions[r]], fontsize=12)
             if r==0:
                 ax.set_ylabel('# simulations', fontsize=10)
@@ -2678,7 +2679,7 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
         pi_slr = None
         # Loop over scenarios and check if file exists
         for scenario in suites_by_scenario:
-            if scenario in ['piControl', 'ramp_up_static_ice']:
+            if 'static_ice' in scenario:
                 continue
             for suite in suites_by_scenario[scenario]:
                 if draft:
@@ -2722,7 +2723,7 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
                         continue
                     # Subtract drift
                     slr_trim, pi_slr_trim = align_timeseries(slr, pi_slr, time_coord='time')
-                    if not (slr_trim==slr).all():
+                    if slr_trim.size != slr.size:
                         # Shouldn't have needed to trim the base timeseries
                         raise Exception('Problem with aligning timeseries')
                     data = slr_trim - pi_slr_trim
