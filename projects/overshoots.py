@@ -1377,7 +1377,7 @@ def calc_salinity_bias (base_dir='./'):
     return bias
 
 
-# Calculate the global warming implied by the salinity biases (from above), using a linear regression below 3K for Ross, 5K for FRIS.
+# Calculate the global warming implied by the salinity biases (from above), using a linear regression below 2K for Ross, 4.5K for FRIS.
 def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='./'):
 
     pi_suite = 'cs495'
@@ -1420,7 +1420,7 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
         if p_value > p0:
             raise Exception('No significant trend')
         implied_warming = slope*bwsalt_bias
-        print(region_names[region]+': Salinity bias of '+str(bwsalt_bias)+' psu implies global warming of '+str(implied_warming)+'K')
+        print(region_names[region]+': Salinity bias of '+str(bwsalt_bias)+' psu implies global warming of '+str(implied_warming)+'K; regression has r^2='+str(r_value**2))
 
 
 # Plot cavity-mean temperature beneath Ross and FRIS as a function of shelf-mean bottom water salinity, in all scenarios. Colour the lines based on the global warming level relative to preindustrial, and indicate the magnitude of the salinity bias.
