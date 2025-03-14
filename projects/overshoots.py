@@ -2592,8 +2592,8 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
             data_region.append(data_mean)
             omask_region.append(ocean_mask)
             imask_region.append(ice_mask)
-            # Now read the BISICLES data - just one file
-            ice_file = ice_dir + suite + ice_file_head + suite + ice_file_mid + str(year) + ice_file_tail
+            # Now read the BISICLES data - just one file (stamped with following year)
+            ice_file = ice_dir + suite + ice_file_head + suite + ice_file_mid + str(year+1) + ice_file_tail
             ds_ice = read_bisicles(ice_file, ['xVel', 'yVel', 'activeBasalThicknessSource'], level=0, order=0)
             # Calculate speed
             speed = np.sqrt(ds_ice['xVel']**2 + ds_ice['yVel']**2)
@@ -2611,11 +2611,12 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         ymax = set_bound(omask_region, y, 'max')
         # Add a bit extra to some sides of the mask to show more grounded ice
         if regions[n] == 'ross':
-            xmin -= mask_pad*5
-            ymax += mask_pad*5
+            xmin -= mask_pad*3
+            ymax += mask_pad*3
+            xmax += mask_pad*3
         elif regions[n] == 'filchner_ronne':
-            ymin -= mask_pad*5
-        xmax += mask_pad*5
+            ymin -= mask_pad*3
+            xmax += mask_pad*5
         x_bounds.append([xmin, xmax])
         y_bounds.append([ymin, ymax])            
         # Prepare initial GL and ice front for contouring
@@ -2631,6 +2632,13 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         vmin_real = np.amin([data.where(plot_region).min() for data in data_region])
         vmax_real = np.amax([data.where(plot_region).max() for data in data_region])
         print(regions[n]+' bounds from '+str(vmin_real)+' to '+str(vmax_real))
+    # Get BISICLES coordinates relative to the centre of the domain
+    x_ice = ice_speed_plot[0][0].coords['x']
+    y_ice = ice_speed_plot[0][0].coords['y']
+    x_c = 0.5*(x_ice[0] + x_ice[-1])
+    y_c = 0.5*(y_ice[0] + y_ice[-1])
+    x_ice = x_ice - x_c
+    y_ice = y_ice - y_c
 
     # Plot
     cmap = set_colours(data_plot[0][0], ctype=ctype, vmin=vmin, vmax=vmax)[0]
@@ -2649,7 +2657,8 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
             # Plot the data
             img = ax.pcolormesh(x_edges, y_edges, data_plot[n][m], cmap=cmap, vmin=vmin, vmax=vmax)
             # Plot the ice speed in white to black
-            img_ice = ax.pcolormesh(ice_speed_plot[n][m].coords['x'], ice_speed_plot[n][m].coords['y'], ice_speed_plot[n][m], cmap='Greys', vmin=0, vmax=vmax_speed)
+            # To do: nonlinear colour map?
+            img_ice = ax.pcolormesh(x_ice, y_ice, ice_speed_plot[n][m].squeeze(), cmap='Greys', vmin=0, vmax=vmax_speed)
             # Contour initial GL in given colour
             ax.contour(x, y, omask_GL[n], levels=[0.5], colors=(colour_GL), linewidths=0.5)
             # Contour ice front in white
@@ -2659,16 +2668,16 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
             ax.set_xticks([])
             ax.set_yticks([])
             ax.set_title(year_titles[n][m], fontsize=12)
-        plt.text(0.5, 0.99-0.46*n, subfig[n]+region_names[regions[n]]+' Ice Shelf', ha='center', va='top', fontsize=14, transform=fig.transFigure)
-        plt.text(0.5, 0.95-0.46*n, suite_titles[n], ha='center', va='top', fontsize=10, transform=fig.transFigure)
+        plt.text(0.5, 0.99-0.43*n, subfig[n]+region_names[regions[n]]+' Ice Shelf', ha='center', va='top', fontsize=14, transform=fig.transFigure)
+        plt.text(0.5, 0.95-0.43*n, suite_titles[n], ha='center', va='top', fontsize=10, transform=fig.transFigure)
     cax1 = fig.add_axes([0.51, 0.1, 0.4, 0.02])
     cbar1 = plt.colorbar(img, cax=cax1, orientation='horizontal', extend='both')
     cbar1.ax.tick_params(labelsize=8)
     plt.text(0.49, 0.08, var_title+' ('+units+')', ha='right', va='bottom', fontsize=12, transform=fig.transFigure)
-    cax2 = fig.add_axes([0.51, 0.05, 0.4, 0.02])
+    cax2 = fig.add_axes([0.51, 0.04, 0.4, 0.02])
     cbar2 = plt.colorbar(img_ice, cax=cax2, orientation='horizontal', extend='max')
     cbar2.ax.tick_params(labelsize=8)
-    plt.text(0.49, 0.03, 'Ice sheet speed (m/y)', ha='right', va='bottom', fontsize=12, transform=fig.transFigure)
+    plt.text(0.49, 0.02, 'Ice sheet speed (m/y)', ha='right', va='bottom', fontsize=12, transform=fig.transFigure)
     finished_plot(fig) #, fig_name='figures/map_snapshots_'+var_name+'.png', dpi=300)
 
 
