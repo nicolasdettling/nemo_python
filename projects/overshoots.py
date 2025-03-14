@@ -29,6 +29,7 @@ from ..file_io import read_schmidtko, read_woa
 from ..interpolation import interp_latlon_cf, interp_grid
 from ..diagnostics import barotropic_streamfunction
 from ..plot_utils import set_colours, latlon_axes
+from ..bisicles_utils import read_bisicles
 
 # Global dictionaries of suites - update these as more suites become available!
 
@@ -2431,7 +2432,7 @@ def check_all_nans (base_dir='./'):
                 check_nans(base_dir+'/'+suite+'/'+timeseries_file, var_names=var_names)
 
 
-# Plot a series of maps showing snapshots of the given variable in each cavity for selected scenarios: initial state, tipping point, 100 years later, recovery point. Works for bwtemp, bwsalt, ismr. Later add icevel (BISICLES output).
+# Plot a series of maps showing snapshots of the given variable in each cavity for selected scenarios: initial state, tipping point, 100 years later, recovery point. Works for bwtemp, bwsalt, ismr. Also plot BISICLES ice speed in the grounded ice.
 def map_snapshots (var_name='bwtemp', base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
@@ -2441,6 +2442,11 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
     suite_strings = ['cx209-cz376-da892', 'cx209-cz378-de943']
     year_titles = [['Initial', 'Tipping', '100 years later', 'Recovery'] for n in range(num_regions)]
     mask_pad = 5e4
+    ice_dir = '/gws/nopw/j04/terrafirma/tm17544/TerraFIRMA_overshoots/raw_data/'
+    ice_file_head = '/icesheet/bisicles_'
+    ice_file_mid = 'c_'
+    ice_file_tail = '0101_plot-AIS.hdf5'
+    vmax_speed = 1e3
 
     # Set variable title, NEMO name, units
     if var_name == 'bwtemp':
@@ -2467,8 +2473,6 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         vmax = 20
         ctype = 'ismr'
         colour_GL = 'blue'
-    elif var_name == 'icevel':
-        raise Exception('Not yet coded icevel case')
     else:
         raise Exception('Invalid variable '+var_name)
 
@@ -2509,6 +2513,7 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
     imask_front = []
     x_bounds = []
     y_bounds = []
+    ice_speed_plot = []
     for n in range(num_regions):
         # Find initial, tipping, and recovery years and suites
         tips, date_tip = check_tip(suite=suite_strings[n], region=regions[n], return_date=True, base_dir=base_dir)
@@ -2538,64 +2543,79 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         data_region = []
         omask_region = []
         imask_region = []
+        ice_speed_region = []
         for year, suite in zip(plot_years, plot_suites):
-            if var_name == 'icevel':
-                raise Exception('Not yet coded icevel case')
-            else:
-                # Build a list of the NEMO file patterns to read for this year
-                files_to_read = []
-                for f in os.listdir(base_dir+'/'+suite):
-                    if f.startswith('nemo_'+suite+'o_1m_'+str(year)) and f.endswith('-T.nc'):
-                        date_codes = re.findall(r'\d{4}\d{2}\d{2}', f)
-                        file_pattern = base_dir+'/'+suite+'/nemo_'+suite+'o_1m_'+date_codes[0]+'-'+date_codes[1]+'*-T.nc'
-                        if file_pattern not in files_to_read:
-                            files_to_read.append(file_pattern)
-                files_to_read.sort()
-                # Check there are 12 files
-                if len(files_to_read) != months_per_year:
-                    raise Exception(str(len(files_to_read))+' files found for '+suite+', year '+str(year))
-                # Annually average, carefully with masks
-                data_accum = None
-                ocean_mask = None
-                ice_mask = None
-                for file_pattern in files_to_read:
-                    ds = xr.open_mfdataset(file_pattern)
-                    ds.load()
-                    ds = ds.swap_dims({'time_counter':'time_centered'}).drop_vars(['time_counter'])
-                    data_tmp = ds[nemo_var].where(ds[nemo_var]!=0)
-                    ocean_mask_tmp = region_mask(regions[n], ds)[0]
-                    ice_mask_tmp = region_mask(regions[n], ds, option='cavity')[0]
-                    if data_accum is None:
-                        data_accum = data_tmp
-                        ocean_mask = ocean_mask_tmp
-                        ice_mask = ice_mask_tmp
-                        if n==0:
-                            # Set up plotting coordinates
-                            x, y = polar_stereo(ds['nav_lon'], ds['nav_lat'])
-                            lon_edges = cfxr.bounds_to_vertices(ds['bounds_lon'], 'nvertex')
-                            lat_edges = cfxr.bounds_to_vertices(ds['bounds_lat'], 'nvertex')
-                            x_edges, y_edges = polar_stereo(lon_edges, lat_edges)
-                            x_bg, y_bg = np.meshgrid(np.linspace(x_edges.min(), x_edges.max()), np.linspace(y_edges.min(), y_edges.max()))
-                            mask_bg = np.ones(x_bg.shape)
-                    else:
-                        data_accum = xr.concat([data_accum, data_tmp], dim='time_centered')
-                        # Save most retreated GL
-                        ocean_mask = xr.where(ocean_mask_tmp+ocean_mask, True, False)
-                        ice_mask = xr.where(ice_mask_tmp+ice_mask, True, False)
-                    ds.close()
-                data_mean = data_accum.mean(dim='time_centered')
-                if var_name == 'ismr':
-                    data_mean = convert_ismr(data_mean)
-                data_region.append(data_mean)
-                omask_region.append(ocean_mask)
-                imask_region.append(ice_mask)
+            # Build a list of the NEMO file patterns to read for this year
+            files_to_read = []
+            for f in os.listdir(base_dir+'/'+suite):
+                if f.startswith('nemo_'+suite+'o_1m_'+str(year)) and f.endswith('-T.nc'):
+                    date_codes = re.findall(r'\d{4}\d{2}\d{2}', f)
+                    file_pattern = base_dir+'/'+suite+'/nemo_'+suite+'o_1m_'+date_codes[0]+'-'+date_codes[1]+'*-T.nc'
+                    if file_pattern not in files_to_read:
+                        files_to_read.append(file_pattern)
+            files_to_read.sort()
+            # Check there are 12 files
+            if len(files_to_read) != months_per_year:
+                raise Exception(str(len(files_to_read))+' files found for '+suite+', year '+str(year))
+            # Annually average, carefully with masks
+            data_accum = None
+            ocean_mask = None
+            ice_mask = None
+            for file_pattern in files_to_read:
+                ds = xr.open_mfdataset(file_pattern)
+                ds.load()
+                ds = ds.swap_dims({'time_counter':'time_centered'}).drop_vars(['time_counter'])
+                data_tmp = ds[nemo_var].where(ds[nemo_var]!=0)
+                ocean_mask_tmp = region_mask(regions[n], ds)[0]
+                ice_mask_tmp = region_mask(regions[n], ds, option='cavity')[0]
+                if data_accum is None:
+                    data_accum = data_tmp
+                    ocean_mask = ocean_mask_tmp
+                    ice_mask = ice_mask_tmp
+                    if n==0:
+                        # Set up plotting coordinates
+                        x, y = polar_stereo(ds['nav_lon'], ds['nav_lat'])
+                        lon_edges = cfxr.bounds_to_vertices(ds['bounds_lon'], 'nvertex')
+                        lat_edges = cfxr.bounds_to_vertices(ds['bounds_lat'], 'nvertex')
+                        x_edges, y_edges = polar_stereo(lon_edges, lat_edges)
+                        x_bg, y_bg = np.meshgrid(np.linspace(x_edges.min(), x_edges.max()), np.linspace(y_edges.min(), y_edges.max()))
+                        mask_bg = np.ones(x_bg.shape)
+                else:
+                    data_accum = xr.concat([data_accum, data_tmp], dim='time_centered')
+                    # Save most retreated GL
+                    ocean_mask = xr.where(ocean_mask_tmp+ocean_mask, True, False)
+                    ice_mask = xr.where(ice_mask_tmp+ice_mask, True, False)
+                ds.close()
+            data_mean = data_accum.mean(dim='time_centered')
+            if var_name == 'ismr':
+                data_mean = convert_ismr(data_mean)
+            data_region.append(data_mean)
+            omask_region.append(ocean_mask)
+            imask_region.append(ice_mask)
+            # Now read the BISICLES data - just one file
+            ice_file = ice_dir + suite + ice_file_head + suite + ice_file_mid + str(year) + ice_file_tail
+            ds_ice = read_bisicles(ice_file, ['xVel', 'yVel', 'activeBasalThicknessSource'], level=0, order=0)
+            # Calculate speed
+            speed = np.sqrt(ds_ice['xVel']**2 + ds_ice['yVel']**2)
+            # Only consider regions with nonzero speed and zero basal melt (grounded ice)
+            speed = speed.where(speed > 0)
+            speed = speed.where(ds_ice['activeBasalThicknessSource']==0)
+            ice_speed_region.append(speed)
         data_plot.append(data_region)
         omask_plot.append(omask_region)
+        ice_speed_plot.append(ice_speed_region)
         # Set plotting bounds on x (based on cavity) and y (based on cavity and shelf)
         xmin = set_bound(imask_region, x, 'min')
         xmax = set_bound(imask_region, x, 'max')
         ymin = set_bound(omask_region, y, 'min')
         ymax = set_bound(omask_region, y, 'max')
+        # Add a bit extra to some sides of the mask to show more grounded ice
+        if regions[n] == 'ross':
+            xmin -= mask_pad*5
+            ymax += mask_pad*5
+        elif regions[n] == 'filchner_ronne':
+            ymin -= mask_pad*5
+        xmax += mask_pad*5
         x_bounds.append([xmin, xmax])
         y_bounds.append([ymin, ymax])            
         # Prepare initial GL and ice front for contouring
@@ -2614,39 +2634,42 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
 
     # Plot
     cmap = set_colours(data_plot[0][0], ctype=ctype, vmin=vmin, vmax=vmax)[0]
-    fig = plt.figure(figsize=(7,5))
+    fig = plt.figure(figsize=(7,5.5))
     gs = plt.GridSpec(num_regions, num_snapshots)
-    gs.update(left=0.02, right=0.98, bottom=0.1, top=0.86, wspace=0.1, hspace=0.55)
+    gs.update(left=0.02, right=0.98, bottom=0.15, top=0.86, wspace=0.1, hspace=0.55)
     for n in range(num_regions):
         for m in range(num_snapshots):
             ax = plt.subplot(gs[n,m])
-            if var_name == 'icevel':
-                raise Exception('Not yet coded icevel case')
-            else:            
-                # Shade land in grey
-                omask = omask_plot[n][m].where(omask_plot[n][m])
-                ax.pcolormesh(x_bg, y_bg, mask_bg, cmap=cl.ListedColormap(['DarkGrey']))
-                # Clear open ocean back to white
-                # TODO: this is only continental shelf
-                ax.pcolormesh(x_edges, y_edges, omask, cmap=cl.ListedColormap(['white']))
-                # Plot the data
-                img = ax.pcolormesh(x_edges, y_edges, data_plot[n][m], cmap=cmap, vmin=vmin, vmax=vmax)
-                # Contour initial GL in given colour
-                ax.contour(x, y, omask_GL[n], levels=[0.5], colors=(colour_GL), linewidths=0.5)
-                # Contour ice front in black
-                ax.contour(x, y, imask_front[n], levels=[0.5], colors=('black'), linewidths=0.5)
-                ax.set_xlim(x_bounds[n])
-                ax.set_ylim(y_bounds[n])
-                ax.set_xticks([])
-                ax.set_yticks([])
-                ax.set_title(year_titles[n][m], fontsize=12)
+            # Shade land in grey
+            #omask = omask_plot[n][m].where(omask_plot[n][m])
+            #ax.pcolormesh(x_bg, y_bg, mask_bg, cmap=cl.ListedColormap(['DarkGrey']))
+            # Clear open ocean back to white
+            # TODO: this is only continental shelf
+            #ax.pcolormesh(x_edges, y_edges, omask, cmap=cl.ListedColormap(['white']))
+            # Plot the data
+            img = ax.pcolormesh(x_edges, y_edges, data_plot[n][m], cmap=cmap, vmin=vmin, vmax=vmax)
+            # Plot the ice speed in white to black
+            img_ice = ax.pcolormesh(ice_speed_plot[n][m].coords['x'], ice_speed_plot[n][m].coords['y'], ice_speed_plot[n][m], cmap='Greys', vmin=0, vmax=vmax_speed)
+            # Contour initial GL in given colour
+            ax.contour(x, y, omask_GL[n], levels=[0.5], colors=(colour_GL), linewidths=0.5)
+            # Contour ice front in white
+            ax.contour(x, y, imask_front[n], levels=[0.5], colors=('white'), linewidths=0.5)
+            ax.set_xlim(x_bounds[n])
+            ax.set_ylim(y_bounds[n])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_title(year_titles[n][m], fontsize=12)
         plt.text(0.5, 0.99-0.46*n, subfig[n]+region_names[regions[n]]+' Ice Shelf', ha='center', va='top', fontsize=14, transform=fig.transFigure)
         plt.text(0.5, 0.95-0.46*n, suite_titles[n], ha='center', va='top', fontsize=10, transform=fig.transFigure)
-    cax = fig.add_axes([0.51, 0.05, 0.4, 0.02])
-    cbar = plt.colorbar(img, cax=cax, orientation='horizontal', extend='both')
-    cbar.ax.tick_params(labelsize=8)
-    plt.text(0.49, 0.03, var_title+' ('+units+')', ha='right', va='bottom', fontsize=12, transform=fig.transFigure)
-    finished_plot(fig, fig_name='figures/map_snapshots_'+var_name+'.png', dpi=300)
+    cax1 = fig.add_axes([0.51, 0.1, 0.4, 0.02])
+    cbar1 = plt.colorbar(img, cax=cax1, orientation='horizontal', extend='both')
+    cbar1.ax.tick_params(labelsize=8)
+    plt.text(0.49, 0.08, var_title+' ('+units+')', ha='right', va='bottom', fontsize=12, transform=fig.transFigure)
+    cax2 = fig.add_axes([0.51, 0.05, 0.4, 0.02])
+    cbar2 = plt.colorbar(img_ice, cax=cax2, orientation='horizontal', extend='max')
+    cbar2.ax.tick_params(labelsize=8)
+    plt.text(0.49, 0.03, 'Ice sheet speed (m/y)', ha='right', va='bottom', fontsize=12, transform=fig.transFigure)
+    finished_plot(fig) #, fig_name='figures/map_snapshots_'+var_name+'.png', dpi=300)
 
 
 def plot_SLR_timeseries (base_dir='./', draft=False):
