@@ -340,13 +340,23 @@ def add_months (year, month, num_months):
 
 
 # Smooth the given DataArray with a moving average of the given window, over the given dimension (default time_centered).
-def moving_average (data, window, dim='time_centered'):
+# per_year = the number of time indices per year (default 12 for monthly data); used to interpolate any missing values while preserving the seasonal cycle.
+def moving_average (data, window, dim='time_centered', per_year=12):
 
     if window == 0:
         return data
 
     # Interpolate any missing values
-    data = data.interpolate_na(dim=dim)
+    if any(data.isnull()):
+        # Loop over months (or however many indices are in the seasonal cycle)
+        for t in range(per_year):
+            # Select this month
+            data_tmp = data[t::per_year]
+            # Interpolate NaNs
+            data_tmp = data_tmp.interpolate_na(dim=dim)
+            # Put back into main array
+            data_tmp = data_tmp.reindex_like(data)
+            data = xr.where(data.isnull(), data_tmp, data)
 
     # Find axis number of dimension
     dim_axis = 0
