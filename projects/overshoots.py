@@ -1111,6 +1111,7 @@ def tipping_stats (base_dir='./'):
     all_temp_recover = []
     all_tips = []
     threshold_bounds = []
+    all_recovery_floor = []
     for r in range(len(regions)):
         # Assemble all possible trajectories of cavity mean temperature
         cavity_temp_ts = all_timeseries_trajectories(regions[r]+'_cavity_temp', base_dir=base_dir, static_ice=False)[0]
@@ -1120,6 +1121,7 @@ def tipping_stats (base_dir='./'):
         suites_recovered = []        
         warming_at_recovery = []
         tips = []
+        recovery_floor = None
         for n in range(num_trajectories):
             # Smooth and trim/align with warming timeseries
             cavity_temp = moving_average(cavity_temp_ts[n], smooth)
@@ -1139,6 +1141,13 @@ def tipping_stats (base_dir='./'):
                     #print(suite_strings[n]+' recovers at '+str(recover_warming.item()))
                     suites_recovered.append(suite_strings[n])
                     warming_at_recovery.append(recover_warming)
+                else:
+                    # Find the final temperature, and keep track of the coolest temperature at which a tipped trajectory still hasn't recovered.
+                    final_temp = warming.isel(time_centered=-1).item()
+                    if recovery_floor is None:
+                        recovery_floor = final_temp
+                    else:
+                        recovery_floor = min(recovery_floor, final_temp)
             tips.append(traj_tips)
         tips = np.array(tips)
         # Now throw out duplicates, eg if tipping happened before a suite branched into multiple trajectories, should only count it once for the statistics.
@@ -1147,7 +1156,11 @@ def tipping_stats (base_dir='./'):
         warming_at_tip = np.unique(warming_at_tip)
         warming_at_recovery = np.unique(warming_at_recovery)
         # Find maximum warming in each trajectory
-        max_warming = np.array([warming_ts[n].max() for n in range(num_trajectories)])                
+        max_warming = np.array([warming_ts[n].max() for n in range(num_trajectories)])
+        # Check if recovery_floor is actually outside the range of warming_at_recovery
+        if recovery_floor >= np.min(warming_at_recovery):
+            recovery_floor = None
+        
         # Print some statistics about which ones tipped and recovered
         print('\n'+regions[r]+':')
         print(str(len(suites_tipped))+' trajectories tip, '+str(len(warming_at_tip))+' unique')
@@ -1157,10 +1170,13 @@ def tipping_stats (base_dir='./'):
         else:
             print(str(len(suites_recovered))+' tipped trajectories recover ('+str(len(suites_recovered)/len(suites_tipped)*100)+'%), '+str(len(warming_at_recovery))+' unique')
             print('Global warming at time of recovery has mean '+str(np.mean(warming_at_recovery)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery))+'K')
+        if recovery_floor is not None:
+            print('Trajectories as cool as '+str(recovery_floor+temp_correction[r])+'K still have not recovered')
         # Save results for plotting
         all_temp_tip.append(warming_at_tip)
         all_temp_recover.append(warming_at_recovery)
         all_tips.append(tips)
+        all_recovery_floor.append(recovery_floor)
 
         # Find bounds on threshold
         # Find coolest instance of tipping
@@ -1180,20 +1196,19 @@ def tipping_stats (base_dir='./'):
     for r in range(len(regions)):
         ax = plt.subplot(gs[r,0])
         # Violin plots: warming level at time of tipping (red), recovery (blue)
-        violin_data = [np.array(all_temp_tip[r])+temp_correction[r]]
-        y_pos = [3]
-        colours = ['Crimson']
-        # Check if there are instances of recovery to show - can streamline this once FRIS recovery starts
-        if len(all_temp_recover[r]) > 0:
-            violin_data.append(np.array(all_temp_recover[r])+temp_correction[r])
-            y_pos.append(2)
-            colours.append('DodgerBlue')
+        violin_data = [np.array(all_temp_tip[r])+temp_correction[r], np.array(all_temp_recover[r])+temp_correction[r]]
+        y_pos = [3, 2]
+        colours = ['Crimson', 'DodgerBlue']
         violins = ax.violinplot(violin_data, y_pos, vert=False, showmeans=True)
         # Set colours of violin bodies and lines
         for pc, colour in zip(violins['bodies'], colours):
             pc.set_facecolor(colour)
         for bar in ['cmeans', 'cmins', 'cmaxes', 'cbars']:
             violins[bar].set_colors(colours)
+        if all_recovery_floor[r] is not None:
+            # Plot dotted blue line and open marker showing that recovery violin plot will extend at least this far
+            ax.plot([all_recovery_floor[r]+temp_correction[r], np.amin(all_temp_recover[r])+temp_correction[r]], [2, 2], color='DodgerBlue', linestyle='dotted', linewidth=1)
+            ax.plot(all_recovery_floor[r]+temp_correction[r], 2, 'o', markersize=4, markeredgecolor='DodgerBlue', color='white')
         # Bottom row: peak warming in each trajectory, plotted in red (tips) or grey (doesn't tip)
         # Start with the grey, to make sure the red is visible where they overlap
         ax.plot(max_warming[~all_tips[r]]+temp_correction[r], np.ones(np.count_nonzero(~all_tips[r])), 'o', markersize=4, color='DarkGrey')
@@ -1218,6 +1233,8 @@ def tipping_stats (base_dir='./'):
     handles = []
     for m in range(len(colours)):
         handles.append(Line2D([0], [0], marker='o', markersize=4, color=colours[m], label=labels[m], linestyle=''))
+    if any([x is not None for x in all_recovery_floor]):
+        handles.append(Line2D([0], [0], marker='o', markersisze=4, color='white', markeredgecolor='DodgerBlue', label='not yet recovered', linestyle=''))
     plt.legend(handles=handles, loc='center left', bbox_to_anchor=(-0.35, 1.2), fontsize=9)
     finished_plot(fig, fig_name='figures/tipping_stats.png', dpi=300)
     
