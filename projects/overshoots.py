@@ -2200,21 +2200,10 @@ def plot_FW_timeseries (base_dir='./'):
     ax.set_ylabel(units)
     ax.set_xlim([stage_start[0], stage_end[-1]])
     ax.set_title('Antarctic freshwater fluxes (anomalies from preindustrial)', fontsize=14)    
-    plt.text(616, -12.5, 'years', ha='left', va='top')
+    plt.text(616, -14.5, 'years', ha='left', va='top')
     plt.text(0.5, 0.01, trajectory_title(suite_string), ha='center', va='bottom', transform=fig.transFigure, fontsize=12)
     ax.legend(loc='upper left')
-    '''n == 1:
-        # Little map showing regions
-        masks = [region_mask(region, ds_grid, option='cavity')[0] for region in ismr_regions]
-        ax2 = inset_axes(ax, '15%', '35%', loc='lower left', borderpad=2)
-        ax2.axis('equal')
-        for r in range(len(ismr_regions)-1):
-            mask = region_mask(ismr_regions[r], ds_grid, option='cavity')[0]
-            circumpolar_plot(mask, ds_grid, ax=ax2, make_cbar=False, ctype=colours[r], lat_max=-66, shade_land=(r==0), title='')
-        ax2.axis('on')
-        ax2.set_xticks([])
-        ax2.set_yticks([])'''
-    finished_plot(fig) #, fig_name='figures/FW_timeseries.png', dpi=300)
+    finished_plot(fig, fig_name='figures/FW_timeseries.png', dpi=300)
 
 
 # Plot shelf bwsalt and its time-derivative for the Ross and FRIS regions in untipped trajectories, with the given level of smoothing (in years).
