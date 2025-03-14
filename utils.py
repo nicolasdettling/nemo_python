@@ -343,8 +343,6 @@ def add_months (year, month, num_months):
 # per_year = the number of time indices per year (default 12 for monthly data); used to interpolate any missing values while preserving the seasonal cycle.
 def moving_average (data, window, dim='time_centered', per_year=12):
 
-    xr.set_options(keep_attrs=True)
-
     if window == 0:
         return data
 
@@ -358,7 +356,8 @@ def moving_average (data, window, dim='time_centered', per_year=12):
             data_tmp = data_tmp.interpolate_na(dim=dim)
             # Put back into main array
             data_tmp = data_tmp.reindex_like(data)
-            data = xr.where(data.isnull(), data_tmp, data)
+            index = data.isnull()
+            data[index] = data_tmp[index]
 
     # Find axis number of dimension
     dim_axis = 0
