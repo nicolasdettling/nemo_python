@@ -545,13 +545,13 @@ def process_era5_forcing(variable, year_start=1979, year_end=2023, era5_folder='
         # convert time dimension to unlimited so that NEMO reads in the calendar correctly
         for filename in glob.glob(f'{era5_folder}{variable}*y{year}.nc'):
             with xr.open_dataset(filename, mode='a') as data:
-                print(filename)
+                print('Processing', filename)
                 try:
                     data = data.rename({'valid_time':'time'})
                 except:
-                    continue
+                    pass
+                
                 variable = filename.split('files/')[1].split('_')[0]
-
                 if variable in ['msdwlwrf','msdwswrf','t2m','sph2m','d2m','msl']: 
                     print(f'Filling land for variable {variable} year {year}')
                     if variable=='sph2m':
@@ -565,7 +565,7 @@ def process_era5_forcing(variable, year_start=1979, year_end=2023, era5_folder='
                                                                       use_2d=True, use_3d=False, num_iters=200)
                     data[varname] = (('latitude','longitude','time'), var_filled_array)
                     data = data.transpose('time','latitude','longitude')
-
+               
                 data.to_netcdf(f'{era5_folder}processed/{variable}_time_y{year}.nc', unlimited_dims={'time':True})
 
     return
