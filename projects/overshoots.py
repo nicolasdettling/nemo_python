@@ -1246,27 +1246,26 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     pi_suite = 'cs495'
     regions = ['ross', 'filchner_ronne']
     num_regions = len(regions)
-    title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ', r'$\bf{c}$. ', r'$\bf{d}$. ']
     highlights = ['cx209-cz376-da892', 'cx209-cz378-de943']
     arrow_loc = [[[1.5, 3.5, 4.6], [5], [4.75, 3.5]], [[1.5, 4.5, 6.5], [], [6.6, 4.9, 3.3]], [[3.5, 4.4], [5.2], [5.1, 4]], [[4, 5.9, 6.4], [6.98], [6.8, 4.7, 3.5]]]
-    var_names = ['bwtemp', 'massloss']
-    var_titles = ['Bottom temperature on continental shelf and in ice shelf cavities', 'Basal mass loss beneath ice shelves']
+    var_names = ['cavity_temp', 'massloss']
+    var_titles = ['a) Ocean temperature in ice shelf cavities', 'b) Basal mass loss beneath ice shelves']
     var_units = [deg_string+'C', 'Gt/y']
     num_var = len(var_names)
     timeseries_file = 'timeseries.nc'
     smooth = [10*months_per_year, 20*months_per_year]
     sim_names, colours, sim_dirs = minimal_expt_list(one_ens=True)
-    sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks
-    ds = xr.open_dataset(sample_file).squeeze()
+    #sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks
+    #ds = xr.open_dataset(sample_file).squeeze()
 
-    fig = plt.figure(figsize=(10,7.5))
+    fig = plt.figure(figsize=(9,7))
     gs = plt.GridSpec(2,2)
-    gs.update(left=0.07, right=0.98, bottom=0.1, top=0.9, hspace=0.5, wspace=0.16)
+    gs.update(left=0.08, right=0.98, bottom=0.1, top=0.92, hspace=0.47, wspace=0.15)
     for v in range(num_var):
         for n in range(num_regions):
             ax = plt.subplot(gs[v,n])
             plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth[v], labels=sim_names, colours=colours, linewidth=0.5, ax=ax, temp_correct=temp_correction[n], highlight=highlights[n], highlight_arrows=True, arrow_loc=arrow_loc[v*num_regions+n])
-            ax.set_title(title_prefix[v*2+n]+region_names[regions[n]], fontsize=14)
+            ax.set_title(region_names[regions[n]], fontsize=14)
             if n == 0:
                 ax.set_ylabel(var_units[v], fontsize=12)
             else:
@@ -1276,7 +1275,9 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
             else:
                 ax.set_xlabel('')
             ax.set_xlim([temp_correction[n],temp_correction[n]+8])
-            if v==0:
+            if v == 0:
+                ax.axhline(-1.9, color='black', linestyle='dashed', linewidth=0.75)
+            '''if v==0:
                 # Inset panel in top left showing region
                 mask = region_mask(regions[n], ds, option='all')[0]
                 ax2 = inset_axes(ax, "25%", "40%", loc='upper left')
@@ -1284,8 +1285,8 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
                 circumpolar_plot(mask, ds, ax=ax2, make_cbar=False, ctype='IndianRed', lat_max=-66, shade_land=True)
                 ax2.axis('on')
                 ax2.set_xticks([])
-                ax2.set_yticks([])
-        plt.text(0.5, 0.99-0.5*v, var_titles[v], fontsize=16, ha='center', va='top', transform=fig.transFigure)
+                ax2.set_yticks([])'''
+        plt.text(0.5, 0.99-0.485*v, var_titles[v], fontsize=16, ha='center', va='top', transform=fig.transFigure)
     # Manual legend
     handles = []
     for m in range(len(colours)):
