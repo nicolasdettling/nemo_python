@@ -439,7 +439,7 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
                 # Flag to skip this suite
                 continue            
             # Join with the parent suite so there isn't a gap when simulations branch and smoothing is applied.
-            if suites_branched[suite] is not None:
+            if suite in suites_branched and suites_branched[suite] is not None:
                 suite_list = [suites_branched[suite], suite]
             else:
                 suite_list = [suite]
@@ -961,6 +961,8 @@ def build_timeseries_trajectory (suite_list, var_name, base_dir='./', timeseries
                     stype = 0
                 elif 'ramp_down' in scenario:
                     stype = -1
+                elif 'piControl' in scenario:
+                    stype = 2
                 else:
                     raise Exception('invalid scenario type')
                 break
@@ -1241,7 +1243,8 @@ def tipping_stats (base_dir='./'):
     
 
 # Plot: (1) bottom temperature on continental shelf and in cavities, and (2) ice shelf basal mass loss as a function of global warming level, for 2 different regions, showing ramp-up, stabilise, and ramp-down in different colours
-def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
+# Set static_ice=True to make supplementary version comparing static ice cases
+def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
 
     pi_suite = 'cs495'
     regions = ['ross', 'filchner_ronne']
@@ -1254,7 +1257,12 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     num_var = len(var_names)
     timeseries_file = 'timeseries.nc'
     smooth = [10*months_per_year, 20*months_per_year]
-    sim_names, colours, sim_dirs = minimal_expt_list(one_ens=True)
+    if static_ice:
+        sim_names = ['Ramp up (evolving ice)', 'Ramp up (static ice)', 'piControl (evolving ice)', 'piControl (static ice)']
+        colours = ['Crimson', 'DarkMagenta', 'DarkBlue', 'RoyalBlue']
+        sim_dirs = [[suites_by_scenario['ramp_up'][0]], [suites_by_scenario['ramp_up_static_ice'][0]], [suites_by_scenario['piControl'][0]], [suites_by_scenario['piControl_static_ice'][0]]]
+    else:
+        sim_names, colours, sim_dirs = minimal_expt_list(one_ens=True)
     #sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks
     #ds = xr.open_dataset(sample_file).squeeze()
 
@@ -1264,7 +1272,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     for v in range(num_var):
         for n in range(num_regions):
             ax = plt.subplot(gs[v,n])
-            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth[v], labels=sim_names, colours=colours, linewidth=0.5, ax=ax, temp_correct=temp_correction[n], highlight=highlights[n], highlight_arrows=True, arrow_loc=arrow_loc[v*num_regions+n])
+            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth[v], labels=sim_names, colours=colours, linewidth=0.5, ax=ax, temp_correct=temp_correction[n], highlight=(highlights[n] if not static_ice else None), highlight_arrows=(not static_ice), arrow_loc=arrow_loc[v*num_regions+n])
             ax.set_title(region_names[regions[n]], fontsize=14)
             if n == 0:
                 ax.set_ylabel(var_units[v], fontsize=12)
@@ -1291,8 +1299,12 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
     handles = []
     for m in range(len(colours)):
         handles.append(Line2D([0], [0], color=colours[m], label=sim_names[m], linestyle='-', linewidth=1.5))
-    ax.legend(handles=handles, loc='center left', bbox_to_anchor=(-0.6,-0.2), fontsize=11, ncol=3)
-    finished_plot(fig, fig_name='figures/temp_massloss_by_gw_panels.png', dpi=300)
+    ax.legend(handles=handles, loc='center left', bbox_to_anchor=(-0.6,-0.2), fontsize=11, ncol=len(sim_names))
+    fig_name = 'figures/temp_massloss_by_gw_panels'
+    if static_ice:
+        fig_name += '_static_ice'
+    fig_name += '.png'
+    finished_plot(fig) #, fig_name='figures/temp_massloss_by_gw_panels.png', dpi=300)
 
 
 # Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS. To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
