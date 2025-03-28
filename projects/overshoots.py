@@ -1252,15 +1252,15 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
     highlights = ['cx209-cz376-da892', 'cx209-cz378-de943']
     arrow_loc = [[[1.5, 3.5, 4.6], [5], [4.75, 3.5]], [[1.5, 4.5, 6.5], [], [6.6, 4.9, 3.3]], [[3.5, 4.4], [5.2], [5.1, 4]], [[4, 5.9, 6.4], [6.98], [6.8, 4.7, 3.5]]]
     var_names = ['cavity_temp', 'massloss']
-    var_titles = ['a) Ocean temperature in ice shelf cavities', 'b) Basal mass loss beneath ice shelves']
+    var_titles = ['a) Ocean temperature in ice shelf cavities', 'b) Melting beneath ice shelves']
     var_units = [deg_string+'C', 'Gt/y']
     num_var = len(var_names)
     timeseries_file = 'timeseries.nc'
     smooth = [10*months_per_year, 20*months_per_year]
     if static_ice:
-        sim_names = ['Ramp up (evolving ice)', 'Ramp up (static ice)', 'piControl (evolving ice)', 'piControl (static ice)']
-        colours = ['Crimson', 'DarkMagenta', 'DarkBlue', 'RoyalBlue']
-        sim_dirs = [[suites_by_scenario['ramp_up'][0]], [suites_by_scenario['ramp_up_static_ice'][0]], [suites_by_scenario['piControl'][0]], [suites_by_scenario['piControl_static_ice'][0]]]
+        sim_names = ['Ramp up (evolving ice)', 'Ramp up (static ice)']
+        colours = ['Crimson', 'DarkMagenta']
+        sim_dirs = [[suites_by_scenario['ramp_up'][0]], [suites_by_scenario['ramp_up_static_ice'][0]]]
     else:
         sim_names, colours, sim_dirs = minimal_expt_list(one_ens=True)
     #sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks
@@ -1272,7 +1272,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
     for v in range(num_var):
         for n in range(num_regions):
             ax = plt.subplot(gs[v,n])
-            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth[v], labels=sim_names, colours=colours, linewidth=0.5, ax=ax, temp_correct=temp_correction[n], highlight=(highlights[n] if not static_ice else None), highlight_arrows=(not static_ice), arrow_loc=arrow_loc[v*num_regions+n])
+            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth[v], labels=sim_names, colours=colours, linewidth=(1 if static_ice else 0.5), ax=ax, temp_correct=temp_correction[n], highlight=(highlights[n] if not static_ice else None), highlight_arrows=(not static_ice), arrow_loc=arrow_loc[v*num_regions+n])
             ax.set_title(region_names[regions[n]], fontsize=14)
             if n == 0:
                 ax.set_ylabel(var_units[v], fontsize=12)
@@ -1304,7 +1304,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
     if static_ice:
         fig_name += '_static_ice'
     fig_name += '.png'
-    finished_plot(fig) #, fig_name=fig_name, dpi=300)
+    finished_plot(fig, fig_name=fig_name, dpi=300)
 
 
 # Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS. To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
