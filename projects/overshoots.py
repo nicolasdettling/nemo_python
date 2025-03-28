@@ -23,7 +23,7 @@ from ..timeseries import update_simulation_timeseries, update_simulation_timeser
 from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, timeseries_plot, circumpolar_plot
 from ..plot_utils import truncate_colourmap
 from ..utils import moving_average, add_months, rotate_vector, polar_stereo, convert_ismr
-from ..grid import region_mask, calc_geometry
+from ..grid import region_mask, calc_geometry, build_ice_mask
 from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year, rho_fw, rho_ice, sec_per_year, vaf_to_gmslr
 from ..file_io import read_schmidtko, read_woa
 from ..interpolation import interp_latlon_cf, interp_grid
@@ -2460,10 +2460,24 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
     ice_file_mid = 'c_'
     ice_file_tail = '0101_plot-AIS.hdf5'
     vmax_speed = 1e3
+    sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks and shelf break contour
+    labels = ['LABT', 'FT']
+    lon0 = [-163, -37]
+    lat0 = [-78, -77]
+    lon1 = [-158, -26]
+    lat1 = [-75, -77]
+    lont = [-157, -22]
+    latt = [-74, -77]
+    depth0 = 1500
+
+    ds_grid = xr.open_dataset(sample_file).squeeze()
+    bathy0, draft0, ocean_mask0, ice_mask0 = calc_geometry(ds_grid)
+    # Mask cavities out of bathymetry for shelf break contour
+    bathy0 = bathy0.where(np.invert(ice_mask0))
 
     # Set variable title, NEMO name, units
     if var_name == 'bwtemp':
-        var_title = 'Bottom ocean temperature'
+        var_title = 'Temperature at seafloor'
         units = deg_string+'C'
         nemo_var = 'tob'
         vmin = -2
@@ -2471,7 +2485,7 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         ctype = 'RdBu_r'
         colour_GL = 'yellow'
     elif var_name == 'bwsalt':
-        var_title = 'Bottom ocean salinity'
+        var_title = 'Salinity at seafloor'
         units = 'psu'
         nemo_var = 'sob'
         vmin = 33
@@ -2521,7 +2535,6 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
     
     # Loop over regions and read all the things we need
     data_plot = []
-    omask_plot = []
     omask_GL = []
     imask_front = []
     x_bounds = []
@@ -2549,6 +2562,8 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         # Now locate the years and suites we want to plot
         plot_years = [start_years[0], date_tip.dt.year.item(), date_tip.dt.year.item()+100, date_recover.dt.year.item()]
         plot_suites = [find_suite(year, suite_list, start_years) for year in plot_years]
+        for year, suite, title in zip(plot_years, plot_suites, year_titles[n]):
+            print(regions[n]+' '+title+': '+str(year-start_years[suite_list.index(suite)])+' years into '+suite)
         # Add the tipping and recovery years (since initial) to the titles
         for m in [1, 3]:
             year_titles[n][m] += ' (year '+str(plot_years[m]-plot_years[0])+')'
@@ -2615,7 +2630,6 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
             speed = speed.where(ds_ice['activeBasalThicknessSource']==0)
             ice_speed_region.append(speed)
         data_plot.append(data_region)
-        omask_plot.append(omask_region)
         ice_speed_plot.append(ice_speed_region)
         # Set plotting bounds on x (based on cavity) and y (based on cavity and shelf)
         xmin = set_bound(imask_region, x, 'min')
@@ -2624,11 +2638,13 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         ymax = set_bound(omask_region, y, 'max')
         # Add a bit extra to some sides of the mask to show more grounded ice
         if regions[n] == 'ross':
-            xmin -= mask_pad*3
+            xmin -= mask_pad*4
             ymax += mask_pad*3
             xmax += mask_pad*3
+            ymin += mask_pad*5
         elif regions[n] == 'filchner_ronne':
-            ymin -= mask_pad*3
+            xmin += mask_pad*3
+            ymin -= mask_pad*2
             xmax += mask_pad*5
         x_bounds.append([xmin, xmax])
         y_bounds.append([ymin, ymax])            
@@ -2655,43 +2671,69 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
 
     # Plot
     cmap = set_colours(data_plot[0][0], ctype=ctype, vmin=vmin, vmax=vmax)[0]
-    fig = plt.figure(figsize=(7,5.5))
+    fig = plt.figure(figsize=(7,6))
     gs = plt.GridSpec(num_regions, num_snapshots)
-    gs.update(left=0.02, right=0.98, bottom=0.15, top=0.86, wspace=0.1, hspace=0.55)
+    gs.update(left=0.02, right=0.98, bottom=0.23, top=0.89, wspace=0.1, hspace=0.5)
     for n in range(num_regions):
         for m in range(num_snapshots):
             ax = plt.subplot(gs[n,m])
-            # Shade land in grey
-            #omask = omask_plot[n][m].where(omask_plot[n][m])
-            #ax.pcolormesh(x_bg, y_bg, mask_bg, cmap=cl.ListedColormap(['DarkGrey']))
-            # Clear open ocean back to white
-            # TODO: this is only continental shelf
-            #ax.pcolormesh(x_edges, y_edges, omask, cmap=cl.ListedColormap(['white']))
             # Plot the data
             img = ax.pcolormesh(x_edges, y_edges, data_plot[n][m], cmap=cmap, vmin=vmin, vmax=vmax)
             # Plot the ice speed in white to black
-            # To do: nonlinear colour map?
-            img_ice = ax.pcolormesh(x_ice, y_ice, ice_speed_plot[n][m].squeeze(), cmap='Greys', vmin=0, vmax=vmax_speed)
-            # Contour initial GL in given colour
+            img_ice = ax.pcolormesh(x_ice, y_ice, ice_speed_plot[n][m].squeeze(), cmap='Greys', norm=cl.PowerNorm(0.5, vmax=vmax_speed))
+            # Contour initial GL
             ax.contour(x, y, omask_GL[n], levels=[0.5], colors=(colour_GL), linewidths=0.5)
-            # Contour ice front in white
+            # Contour ice front
             ax.contour(x, y, imask_front[n], levels=[0.5], colors=('white'), linewidths=0.5)
+            # Contour shelf break
+            ax.contour(x, y, bathy0, levels=[depth0], colors=('DarkMagenta'), linewidths=0.5)
             ax.set_xlim(x_bounds[n])
             ax.set_ylim(y_bounds[n])
             ax.set_xticks([])
             ax.set_yticks([])
             ax.set_title(year_titles[n][m], fontsize=12)
-        plt.text(0.5, 0.99-0.43*n, subfig[n]+region_names[regions[n]]+' Ice Shelf', ha='center', va='top', fontsize=14, transform=fig.transFigure)
-        plt.text(0.5, 0.95-0.43*n, suite_titles[n], ha='center', va='top', fontsize=10, transform=fig.transFigure)
-    cax1 = fig.add_axes([0.51, 0.1, 0.4, 0.02])
+            if m == 1:
+                # Label troughs during tipping point
+                x0, y0 = polar_stereo(lon0[n], lat0[n])
+                x1, y1 = polar_stereo(lon1[n], lat1[n])
+                xt, yt = polar_stereo(lont[n], latt[n])
+                ax.plot([x0, x1], [y0, y1], color='black', linewidth=0.5)
+                plt.text(xt, yt, labels[n], ha='center', va='center', fontsize=9)                    
+        plt.text(0.5, 0.99-0.395*n, subfig[n]+region_names[regions[n]]+' Ice Shelf', ha='center', va='top', fontsize=14, transform=fig.transFigure)
+        plt.text(0.5, 0.96-0.395*n, suite_titles[n], ha='center', va='top', fontsize=10, transform=fig.transFigure)
+    cax1 = fig.add_axes([0.41, 0.17, 0.45, 0.02])
     cbar1 = plt.colorbar(img, cax=cax1, orientation='horizontal', extend='both')
     cbar1.ax.tick_params(labelsize=8)
-    plt.text(0.49, 0.08, var_title+' ('+units+')', ha='right', va='bottom', fontsize=12, transform=fig.transFigure)
-    cax2 = fig.add_axes([0.51, 0.04, 0.4, 0.02])
+    plt.text(0.635, 0.12, var_title+' ('+units+')', ha='center', va='center', fontsize=10, transform=fig.transFigure)
+    cax2 = fig.add_axes([0.41, 0.07, 0.45, 0.02])
     cbar2 = plt.colorbar(img_ice, cax=cax2, orientation='horizontal', extend='max')
     cbar2.ax.tick_params(labelsize=8)
-    plt.text(0.49, 0.02, 'Ice sheet speed (m/y)', ha='right', va='bottom', fontsize=12, transform=fig.transFigure)
-    finished_plot(fig) #, fig_name='figures/map_snapshots_'+var_name+'.png', dpi=300)
+    plt.text(0.635, 0.02, 'Ice sheet speed (m/y)', ha='center', va='center', fontsize=10, transform=fig.transFigure)
+    # Inset map showing regions
+    ax2 = fig.add_axes([0.16, 0.01, 0.2, 0.2])
+    ax2.axis('equal')
+    # Shade open ocean in light blue, cavities in grey
+    circumpolar_plot(ocean_mask0.where(ocean_mask0), ds_grid, ax=ax2, make_cbar=False, ctype='LightSkyBlue', lat_max=-66, shade_land=False)
+    circumpolar_plot(ice_mask0.where(ice_mask0), ds_grid, ax=ax2, make_cbar=False, ctype='DarkGrey', lat_max=-66, shade_land=False)
+    ax2.set_title('')
+    ax2.axis('on')
+    ax2.set_xticks([])
+    ax2.set_yticks([])
+    for n in range(num_regions):
+        [xmin, xmax] = x_bounds[n]
+        [ymin, ymax] = y_bounds[n]
+        corners_x = [xmin, xmax, xmax, xmin, xmin]
+        corners_y = [ymax, ymax, ymin, ymin, ymax]
+        ax2.plot(corners_x, corners_y, color='black', linewidth=0.5)
+        xpos = (3*xmin+xmax)/4
+        if n == 0:
+            ypos = (3*ymin+ymax)/4
+            label = 'a'
+        elif n == 1:
+            ypos = (ymin+3*ymax)/4
+            label = 'b'
+        plt.text(xpos, ypos, label, ha='center', va='center', fontsize=10)
+    finished_plot(fig, fig_name='figures/map_snapshots_'+var_name+'.png', dpi=300)
 
 
 def plot_SLR_timeseries (base_dir='./', draft=False):
