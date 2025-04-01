@@ -158,7 +158,7 @@ def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year,
     import glob
     from datetime import datetime
 
-    if expt not in ['LE2', 'piControl', 'SF-AAER', 'SF-BMB', 'SF-GHG', 'SF-EE']:
+    if expt not in ['LE2', 'piControl', 'SF-AAER', 'SF-BMB', 'SF-GHG', 'SF-EE', 'SF-xAER']:
         raise Exception(f'Invalid experiment {expt}')
     if freq not in ['daily', 'monthly']:
         raise Exception(f'Frequency can be either daily or monthly, but is specified as {freq}')
@@ -167,20 +167,14 @@ def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year,
             raise Exception(f'Ensemble member {ensemble_member} is not available')
 
     # list of single-forcing experiment names
-    SF_expts = ['SF-AAER', 'SF-BMB', 'SF-GHG', 'SF-EE']
+    SF_expts = ['SF-AAER', 'SF-BMB', 'SF-GHG', 'SF-EE', 'SF-xAER']
 
     # define start of filename stub
     if expt == 'LE2':
         if (year <= 2014) and (year >= 1850):
-            if int(ensemble_member[2]) % 2 == 0: # if even decade, then it's part of cmip6
-                start_stub = 'b.e21.BHISTcmip6.f09_g17.'
-            else:
-                start_stub = 'b.e21.BHISTsmbb.f09_g17.'
+            start_stub = 'b.e21.BHISTsmbb.f09_g17.'
         elif year <= 2100 and (year >=2015):
-            if int(ensemble_member[2]) % 2 == 0: # if even decade, then it's part of cmip6
-                start_stub = 'b.e21.BSSP370cmip6.f09_g17.'
-            else:
-                start_stub = 'b.e21.BSSP370smbb.f09_g17.'
+            start_stub = 'b.e21.BSSP370smbb.f09_g17.'
         else:
             raise Exception('Not a valid year for the specified experiment and ensemble member')
     elif expt=='piControl':
@@ -210,9 +204,9 @@ def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year,
         file_list  = glob.glob(f'{base_dir}{expt}/raw/{start_stub}-{expt}.001{domain_stub}{var_name}*')    
     elif expt in SF_expts:
         if (year < 2015):
-            file_list  = glob.glob(f'{base_dir}single-forcing/raw/{start_stub}-{expt}.{ensemble_member}{domain_stub}{var_name}*')
+            file_list  = glob.glob(f'{base_dir}{expt}/raw/{start_stub}-{expt}.{ensemble_member}{domain_stub}{var_name}*')
         else:
-            file_list  = glob.glob(f'{base_dir}single-forcing/raw/{start_stub}-{expt}-SSP370.{ensemble_member}{domain_stub}{var_name}*') 
+            file_list  = glob.glob(f'{base_dir}{expt}/raw/{start_stub}-{expt}-SSP370.{ensemble_member}{domain_stub}{var_name}*') 
 
     found_date = False
     for file in file_list:
@@ -232,9 +226,9 @@ def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year,
         file_path = f'{base_dir}{expt}/raw/{start_stub}-{expt}.001{domain_stub}{var_name}.{date_range}.nc'
     elif expt in SF_expts:
         if (year < 2015):
-            file_path = f'{base_dir}single-forcing/raw/{start_stub}-{expt}.{ensemble_member}{domain_stub}{var_name}.{date_range}.nc'
+            file_path = f'{base_dir}{expt}/raw/{start_stub}-{expt}.{ensemble_member}{domain_stub}{var_name}.{date_range}.nc'
         else:
-            file_path = f'{base_dir}single-forcing/raw/{start_stub}-{expt}-SSP370.{ensemble_member}{domain_stub}{var_name}.{date_range}.nc'
+            file_path = f'{base_dir}{expt}/raw/{start_stub}-{expt}-SSP370.{ensemble_member}{domain_stub}{var_name}.{date_range}.nc'
 
     return file_path
 
@@ -249,7 +243,7 @@ def find_processed_cesm2_file(expt, var_name, ensemble_member, year,
     import glob
     from datetime import datetime
 
-    if expt not in ['LE2', 'piControl', 'SF-AAER', 'SF-BMB', 'SF-GHG', 'SF-EE']:
+    if expt not in ['LE2', 'piControl', 'SF-AAER', 'SF-BMB', 'SF-GHG', 'SF-EE', 'SF-xAER']:
         raise Exception(f'Invalid experiment {expt}')
     if expt=='LE2':
         if ensemble_member not in cesm2_ensemble_members:
@@ -261,10 +255,7 @@ def find_processed_cesm2_file(expt, var_name, ensemble_member, year,
             raise Exception('Not a valid year for the specified experiment and ensemble member')
 
     # set the experiment directory
-    if expt in ['SF-AAER', 'SF-BMB', 'SF-GHG', 'SF-EE']:
-        expt_dir = f'{base_dir}single-forcing/'
-    else:
-        expt_dir = f'{base_dir}{expt}'
+    expt_dir = f'{base_dir}{expt}'
 
     if bias_corr:
         file_list = glob.glob(f'{expt_dir}/bias-corrected/CESM2-{expt}_ens{ensemble_member}_{var_name}_bias_corr_y*')
