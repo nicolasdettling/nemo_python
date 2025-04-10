@@ -1472,6 +1472,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     tipping_temp = -1.9
 
     # Read timeseries from every experiment
+    # TODO: something weird going on at end of dc123: last 2 months are very fresh. Filesystem error? Try again after pulling from MASS and regenerating timeseries.
     all_bwsalt = []
     all_cavity_temp = []
     all_warming = []
@@ -1575,6 +1576,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
             else:
                 img_down = img
             # Keep track of the saltiest point and associated temperature
+            # TO DO: actually want mean initial salinity.
             t0 = all_bwsalt[n][m].argmax()
             salt0_tmp = all_bwsalt[n][m][t0]
             temp0_tmp = all_cavity_temp[n][m][t0]
