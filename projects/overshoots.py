@@ -1237,7 +1237,7 @@ def tipping_stats (base_dir='./'):
     for m in range(len(colours)):
         handles.append(Line2D([0], [0], marker='o', markersize=4, color=colours[m], label=labels[m], linestyle=''))
     if any([x is not None for x in all_recovery_floor]):
-        handles.append(Line2D([0], [0], marker='o', markersisze=4, color='white', markeredgecolor='DodgerBlue', label='not yet recovered', linestyle=''))
+        handles.append(Line2D([0], [0], marker='o', markersize=4, color='white', markeredgecolor='DodgerBlue', label='not yet recovered', linestyle=''))
     plt.legend(handles=handles, loc='center left', bbox_to_anchor=(-0.35, 1.2), fontsize=9)
     finished_plot(fig, fig_name='figures/tipping_stats.png', dpi=300)
     
@@ -1460,8 +1460,9 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     regions = ['ross', 'filchner_ronne']
     title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ']
     bwsalt_bias = [-0.13443893, -0.11137423]  # Precomputed above
-    bias_print_x = [34.4, 34.1]
-    bias_print_y = -1
+    obs_fresh_ross = 0.17  # From Jacobs 2022
+    #bias_print_x = [34.4, 34.1]
+    #bias_print_y = -1
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
     smooth = 5*months_per_year
@@ -1562,11 +1563,10 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     for n in range(len(regions)):
         ax = plt.subplot(gs[0,n])
         for m in range(num_suites):
-            #ax.plot(all_bwsalt[n][m], all_cavity_temp[n][m], '-', linewidth=1)
             # Plot each line with colour varying by global warming level
             points = np.array([all_bwsalt[n][m].data, all_cavity_temp[n][m].data]).T.reshape(-1,1,2)
             segments = np.concatenate([points[:-1], points[1:]], axis=1)
-            lc = LineCollection(segments, cmap=truncate_colourmap(cmap[direction[m]], minval=0.1), norm=norm) #.3), norm=norm)
+            lc = LineCollection(segments, cmap=truncate_colourmap(cmap[direction[m]], minval=0.2), norm=norm) #.3), norm=norm)
             lc.set_array(all_warming[n][m].data)
             lc.set_linewidth(1)
             img = ax.add_collection(lc)
@@ -1574,6 +1574,13 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 img_up = img
             else:
                 img_down = img
+            # Keep track of the saltiest point and associated temperature
+            t0 = all_bwsalt[n][m].argmax()
+            salt0_tmp = all_bwsalt[n][m][t0]
+            temp0_tmp = all_cavity_temp[n][m][t0]
+            if m == 0 or salt0_tmp > salt0:
+                salt0 = salt0_tmp
+                temp0 = all_cavity_temp[n][m][t0]
         ax.grid(linestyle='dotted')
         ax.axhline(tipping_temp, color='black', linestyle='dashed')
         # Plot threshold salinity markers
@@ -1584,13 +1591,17 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
         if n==0:
             ax.set_xlabel('Bottom salinity on continental shelf (psu)', fontsize=12)
             ax.set_ylabel('Temperature in ice shelf cavity ('+deg_string+'C)', fontsize=12)
-        '''# Indicate salinity bias
-        x_start = bias_print_x[n]
-        x_end = bias_print_x[n] + np.abs(bwsalt_bias[n])
-        ax.plot([x_start, x_end], [bias_print_y]*2, color='black')
-        ax.plot([x_start]*2, [bias_print_y-0.05, bias_print_y+0.05], color='black')
-        ax.plot([x_end]*2, [bias_print_y-0.05, bias_print_y+0.05], color='black')
-        plt.text(0.5*(x_start+x_end), bias_print_y+0.3, 'Salinity bias of\n'+str(np.round(bwsalt_bias[n],3))+' psu', fontsize=10, color='black', ha='center', va='center')'''
+        # Indicate fresh bias
+        x_start = salt0.item()
+        x_end = x_start + np.abs(bwsalt_bias[n])
+        ax.plot([x_start, x_end], [temp0]*2, color='Grey', linewidth=1, markersize=3, marker='o')
+        plt.text(0.5*(x_start+x_end), temp0-0.08, 'bias', ha='center', va='top', color='Grey', fontsize=9)
+        if n == 0:
+            # Indicate observed freshening
+            x_start = x_end - obs_fresh_ross
+            y_obs = -1.75
+            ax.plot([x_start, x_end], [y_obs]*2, color='DarkBlue', linewidth=1, markersize=3, marker='o')
+            plt.text(0.5*(x_start+x_end), y_obs+0.06, 'observed\nfreshening', ha='center', va='bottom', color='DarkSlateBlue', fontsize=9)
     # Two colour bars: yellow/orange/red on the way up, yellow/green/blue on the way down
     cbar = plt.colorbar(img_up, cax=cax1, orientation='horizontal')
     cbar.set_ticklabels([])
@@ -1605,7 +1616,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     for m in range(len(colours)):
         handles.append(Line2D([0], [0], marker='o', markersize=5, markerfacecolor=colours[m], markeredgecolor='black', label=labels[m], linestyle=''))
     plt.legend(handles=handles, loc='lower right', bbox_to_anchor=(0.85, -0.27))
-    finished_plot(fig, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
+    finished_plot(fig) #, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
 
 
 # Plot Amundsen Sea 500m temperature, barotropic velocity, and zero contour of barotropic streamfunction, averaged over 3 scenarios: (1) piControl, (2) 1.5K stabilisation, (3) 6K stabilisation.
