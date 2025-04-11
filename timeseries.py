@@ -210,7 +210,7 @@ def calc_timeseries (var, ds_nemo, name_remapping='', nemo_mesh='',
             depth_3d = xr.broadcast(ds_nemo['deptht'], ds_nemo['so'])[0].where(ds_nemo['so']!=0)
             # Get depth in bottom cell: approximately equal to pressure in dbar
             press = depth_3d.max(dim='deptht')
-            data_xy = gsw.SA_from_SP(SP, press, ds['nav_lon'], ds['nav_lat'])
+            data_xy = gsw.SA_from_SP(SP, press, ds_nemo['nav_lon'], ds_nemo['nav_lat'])
         else:
             data_xy = ds_nemo[nemo_var]
         data = (data_xy*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])

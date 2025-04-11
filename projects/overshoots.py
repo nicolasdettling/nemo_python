@@ -87,26 +87,15 @@ temp_correction = [1.0087846842764405, 0.8065649751736049]  # Precomputed by war
 def update_overshoot_timeseries (suite_id, base_dir='./', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
 
     # Construct list of timeseries types for T-grid
-    regions = ['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross']
-    var_names = ['massloss', 'draft', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt']
-    # A couple extra things for a few regions
-    regions_btw = ['amundsen_sea', 'bellingshausen_sea']
-    var_names_btw = ['temp', 'salt']
-    depth_btw = '_btw_200_700m'
+    regions = ['all', 'ross', 'filchner_ronne', 'west_antarctica', 'east_antarctica']
+    var_names = ['massloss', 'draft', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_bwsalt', 'shelf_bwSA']
     timeseries_types = []
     # All combinations of region and variable
     for region in regions:
         for var in var_names:
             timeseries_types.append(region+'_'+var)
-        if region in regions_btw:
-            for var in var_names_btw:
-                timeseries_types.append(region+'_'+var+depth_btw)
-    timeseries_types += ['west_antarctica_bwtemp', 'west_antarctica_bwsalt', 'west_antarctica_massloss', 'filchner_ronne_shelf_bwsalt', 'ross_shelf_bwsalt', 'amery_bwsalt']
 
     update_simulation_timeseries(suite_id, timeseries_types, timeseries_file='timeseries.nc', sim_dir=base_dir+'/'+suite_id+'/', freq='m', halo=True, gtype='T')
-
-    # Now for u-grid
-    #update_simulation_timeseries(suite_id, ['drake_passage_transport'], timeseries_file='timeseries_u.nc', sim_dir=base_dir+'/'+suite_id+'/', freq='m', halo=True, gtype='U', domain_cfg=domain_cfg)
 
     # Now for UM
     update_simulation_timeseries_um(suite_id, ['global_mean_sat'], timeseries_file='timeseries_um.nc', sim_dir=base_dir+'/'+suite_id+'/', stream='p5')
