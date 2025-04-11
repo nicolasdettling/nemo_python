@@ -2271,7 +2271,7 @@ def plot_untipped_salinity (smooth=30, base_dir='./'):
 def stage_timescales (base_dir='./', fig_dir=None, plot_traj=False):
 
     regions = ['ross', 'filchner_ronne']
-    smooth = 10*months_per_year
+    smooth = 10*months_per_year  # Not used for tipping/recovery date
     titles = ['Bottom salinity on continental shelf', 'Temperature in cavity', 'Basal mass loss']
     units = ['psu', deg_string+'C', 'Gt/y']
     stypes = [1, 0, -1]
@@ -3478,6 +3478,26 @@ def check_tipping_recovery_order (base_dir='./'):
                 continue
             elif ross_t < fris_t:
                 print(suite_string+': Ross recovers before FRIS')
+
+
+# Check if any ramp-downs tip.
+def check_rampdown_tip (base_dir='./'):
+
+    regions = ['ross', 'filchner_ronne']
+    trajectories = all_suite_trajectories()
+    smooth = 5*months_per_year
+
+    for region in regions:
+        for suite_list in trajectories:
+            suite_string = '-'.join(suite_list)
+            cavity_temp = moving_average(build_timeseries_trajectory(suite_list, region+'_cavity_temp', base_dir=base_dir), smooth)
+            tips, tip_t = check_tip(cavity_temp=cavity_temp, smoothed=False, return_t=True)
+            if tips:
+                stype = cavity_temp.scenario_type[tip_t]
+                if stype == -1:
+                    print(suite_string+' tips during ramp-down')
+            
+        
         
         
         
