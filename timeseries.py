@@ -3,7 +3,7 @@ import numpy as np
 import os
 import glob
 from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year, deg_string, gkg_string, drake_passage_lon0, drake_passage_lat_bounds
-from .utils import add_months, closest_point, month_convert
+from .utils import add_months, closest_point, month_convert, select_bottom
 from .grid import single_cavity_mask, region_mask, calc_geometry
 from .diagnostics import transport, weddell_gyre_transport
 
@@ -12,6 +12,7 @@ from .diagnostics import transport, weddell_gyre_transport
 # <region>_massloss: basal mass loss from the given ice shelf or region of multiple ice shelves (eg brunt, amundsen_sea)
 # <region>_draft: area-averaged ice draft from the given ice shelf or region of multiple ice shelves - only useful if there's a coupled ice sheet
 # <region>_bwtemp, <region>_bwsalt: area-averaged bottom water temperature or salinity from the given region or cavity (eg ross_cavity, ross_shelf, ross)
+# <region>_bwSA: as for bwsalt, but convert from practical salinity (assumes NEMO3.6 input) to absolute salinity
 # <region>_temp, <region>_salt: volume-averaged temperature or salinity from the given region or cavity
 # <region>_temp_btw_xxx_yyy_m, <region>_salt_btw_xxx_yyy_m: volume-averaged temperature or salinity from the given region or cavity, between xxx and yyy metres (positive integers, shallowest first)
 # drake_passage_transport: zonal transport across Drake Passage (need to pass path to domain_cfg)
@@ -62,6 +63,12 @@ def calc_timeseries (var, ds_nemo, name_remapping='', nemo_mesh='',
         option = 'area_avg'
         region = var[:var.index('_bwsalt')]
         nemo_var = 'sob'
+        units = gkg_string
+        title = 'Bottom salinity'
+    elif var.endswith('_bwSA'):
+        option = 'area_avg'
+        region = var[:var.index('_bwsalt')]
+        nemo_var = 'bwSA'  # will trigger special case
         units = gkg_string
         title = 'Bottom salinity'
     elif var.endswith('_ssh'):
@@ -196,6 +203,13 @@ def calc_timeseries (var, ds_nemo, name_remapping='', nemo_mesh='',
         dA = ds_nemo['area']*mask
         if nemo_var == 'draft':
             data_xy = calc_geometry(ds_nemo, keep_time_dim=True)[1]
+        elif nemo_var == 'bwSA':
+            import gsw
+            SP = ds_nemo['sob']
+            # Get depth in metres at every point, with land masked
+            depth_3d = xr.broadcast(ds_nemo['deptht'], ds_nemo['so']).where(ds_nemo['so']!=0)
+            press = select_bottom(depth_3d, 'deptht')
+            data_xy = gsw.SA_from_SP(SP, press, ds['nav_lon'], ds['nav_lat'])
         else:
             data_xy = ds_nemo[nemo_var]
         data = (data_xy*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
