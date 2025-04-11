@@ -67,7 +67,7 @@ def calc_timeseries (var, ds_nemo, name_remapping='', nemo_mesh='',
         title = 'Bottom salinity'
     elif var.endswith('_bwSA'):
         option = 'area_avg'
-        region = var[:var.index('_bwsalt')]
+        region = var[:var.index('_bwSA')]
         nemo_var = 'bwSA'  # will trigger special case
         units = gkg_string
         title = 'Bottom salinity'
