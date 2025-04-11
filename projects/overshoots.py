@@ -3491,11 +3491,11 @@ def check_rampdown_tip (base_dir='./'):
         for suite_list in trajectories:
             suite_string = '-'.join(suite_list)
             cavity_temp = moving_average(build_timeseries_trajectory(suite_list, region+'_cavity_temp', base_dir=base_dir), smooth)
-            tips, tip_t = check_tip(cavity_temp=cavity_temp, smoothed=False, return_t=True)
+            tips, tip_t = check_tip(cavity_temp=cavity_temp, smoothed=True, return_t=True)
             if tips:
                 stype = cavity_temp.scenario_type[tip_t]
                 if stype == -1:
-                    print(suite_string+' tips during ramp-down')
+                    print(suite_string+': '+region+' tips during ramp-down')
             
         
         
