@@ -3,7 +3,7 @@ import numpy as np
 import os
 import glob
 from .constants import region_points, region_names, rho_fw, rho_ice, sec_per_year, deg_string, gkg_string, drake_passage_lon0, drake_passage_lat_bounds
-from .utils import add_months, closest_point, month_convert, select_bottom
+from .utils import add_months, closest_point, month_convert
 from .grid import single_cavity_mask, region_mask, calc_geometry
 from .diagnostics import transport, weddell_gyre_transport
 
@@ -207,8 +207,9 @@ def calc_timeseries (var, ds_nemo, name_remapping='', nemo_mesh='',
             import gsw
             SP = ds_nemo['sob']
             # Get depth in metres at every point, with land masked
-            depth_3d = xr.broadcast(ds_nemo['deptht'], ds_nemo['so']).where(ds_nemo['so']!=0)
-            press = select_bottom(depth_3d, 'deptht')
+            depth_3d = xr.broadcast(ds_nemo['deptht'], ds_nemo['so'])[0].where(ds_nemo['so']!=0)
+            # Get depth in bottom cell: approximately equal to pressure in dbar
+            press = depth_3d.max(dim='deptht')
             data_xy = gsw.SA_from_SP(SP, press, ds['nav_lon'], ds['nav_lat'])
         else:
             data_xy = ds_nemo[nemo_var]
