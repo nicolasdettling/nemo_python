@@ -2301,6 +2301,7 @@ def stage_timescales (base_dir='./', fig_dir=None, plot_traj=False):
     stab_to_tip_all = []
     tip_to_melt_max_all = []
     ramp_down_to_recovery_all = []
+    tip_to_recovery_all = []
     ramp_down_to_min_s_all = []
     # Loop over regions
     for region in regions:
@@ -2310,6 +2311,7 @@ def stage_timescales (base_dir='./', fig_dir=None, plot_traj=False):
         stab_to_tip = []
         tip_to_melt_max = []
         ramp_down_to_recovery = []
+        tip_to_recovery = []
         ramp_down_to_min_s = []
         # Loop over trajectories
         for suite_string, shelf_bwsalt, cavity_temp, massloss in zip(suite_strings, all_shelf_bwsalt, all_cavity_temp, all_massloss):
@@ -2337,6 +2339,9 @@ def stage_timescales (base_dir='./', fig_dir=None, plot_traj=False):
                 tip_to_melt_max.append(years_between(tip_time, melt_max_time))
                 # Check for trajectories which recover
                 recovers, recover_time = check_recover(cavity_temp=cavity_temp, smoothed=False, return_date=True, base_dir=base_dir)
+                if recovers:
+                    # Save years between tipping and recovery
+                    tip_to_recovery.append(years_between(tip_time, recover_time))
                 # Check for trajectories which have a ramp-down
                 ramp_down_time = stype_date(cavity_temp, -1)
                 if ramp_down_time is not None and recovers:
@@ -2388,6 +2393,7 @@ def stage_timescales (base_dir='./', fig_dir=None, plot_traj=False):
                 finished_plot(fig, fig_name=fig_name)
         stab_to_tip_all.append(np.unique(stab_to_tip))
         tip_to_melt_max_all.append(np.unique(tip_to_melt_max))
+        tip_to_recovery_all.append(np.unique(tip_to_recovery))
         ramp_down_to_recovery_all.append(np.unique(ramp_down_to_recovery))
         ramp_down_to_min_s_all.append(np.unique(ramp_down_to_min_s))
 
@@ -2421,7 +2427,7 @@ def stage_timescales (base_dir='./', fig_dir=None, plot_traj=False):
             fig_name = None
         finished_plot(fig, fig_name=fig_name)
 
-    for all_times, title, abbrev in zip([stab_to_tip_all, tip_to_melt_max_all, ramp_down_to_recovery_all, ramp_down_to_min_s_all], ['climate stabilisation and tipping', 'tipping and maximum basal mass loss', 'ramp-down and recovery', 'ramp-down and minimum salinity'], ['stab_to_tip', 'tip_to_melt_max', 'ramp_down_to_recovery', 'ramp_down_to_min_s']):
+    for all_times, title, abbrev in zip([stab_to_tip_all, tip_to_melt_max_all, tip_to_recovery_all, ramp_down_to_recovery_all, ramp_down_to_min_s_all], ['climate stabilisation and tipping', 'tipping and maximum basal mass loss', 'tipping and recovery', 'ramp-down and recovery', 'ramp-down and minimum salinity'], ['stab_to_tip', 'tip_to_melt_max', 'tip_to_recovery', 'ramp_down_to_recovery', 'ramp_down_to_min_s']):
         plot_histogram(all_times, 'Time between '+title, abbrev)
 
         
