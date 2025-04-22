@@ -1218,17 +1218,17 @@ def tipping_stats (base_dir='./'):
         violin_data = [np.array(all_temp_tip[r])+temp_correction[r], np.array(all_temp_recover[r])+temp_correction[r]]
         y_pos = [3, 2]
         colours = ['Crimson', 'DodgerBlue']
-        violins = ax.violinplot(violin_data, y_pos, vert=False, showextrema=False)
+        violins = ax.violinplot(violin_data, y_pos, vert=False, showextrema=False, showmeans=True)
         # Set colours of violin bodies and lines
         for pc, colour in zip(violins['bodies'], colours):
             pc.set_facecolor(colour)
-        #for bar in ['cmeans', 'cmins', 'cmaxes', 'cbars']:
-            #violins[bar].set_colors(colours)
+        for bar in ['cmeans']:
+            violins[bar].set_colors(colours)
         # Plot individual data points
         ax.plot(np.array(all_temp_tip[r])+temp_correction[r], 3*np.ones(len(all_temp_tip[r])), 'o', markersize=3, color='Crimson')
         ax.plot(np.array(all_temp_recover[r])+temp_correction[r], 2*np.ones(len(all_temp_recover[r])), 'o', markersize=3, color='DodgerBlue')
         if regions[r] == 'ross':
-            ax.plot(np.array(warming_at_recovery_fris_tip)+temp_correction[r], 2*np.ones(len(warming_at_recovery_fris_tip)), 'o', markersize=3, color='DarkOrchid')            
+            ax.plot(np.array(warming_at_recovery_fris_tip)+temp_correction[r], 2*np.ones(len(warming_at_recovery_fris_tip)), 'o', markersize=3, color='DarkOrchid')
         '''if all_recovery_floor[r] is not None:
             # Plot dotted blue line and open marker showing that recovery violin plot will extend at least this far
             ax.plot([all_recovery_floor[r]+temp_correction[r], np.amin(all_temp_recover[r])+temp_correction[r]], [2, 2], color='DodgerBlue', linestyle='dotted', linewidth=1)
