@@ -1083,6 +1083,7 @@ def check_recover (suite=None, region=None, cavity_temp=None, smoothed=False, re
 def tipping_stats (base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
+    title_prefix = ['a) ', 'b) ']
     bias_print_x = [4.5, 2.5]
     bias_print_y = 1.5
     pi_suite = 'cs495'
@@ -1224,10 +1225,10 @@ def tipping_stats (base_dir='./'):
         #for bar in ['cmeans', 'cmins', 'cmaxes', 'cbars']:
             #violins[bar].set_colors(colours)
         # Plot individual data points
-        ax.plot(np.array(all_temp_tip[r])+temp_correction[r], 3, 'o', markersize=2, color='Crimson')
-        ax.plot(np.array(all_temp_recover[r])+temp_correction[r], 2, 'o', markersize=2, color='DodgerBlue')
+        ax.plot(np.array(all_temp_tip[r])+temp_correction[r], 3*np.ones(len(all_temp_tip[r])), 'o', markersize=3, color='Crimson')
+        ax.plot(np.array(all_temp_recover[r])+temp_correction[r], 2*np.ones(len(all_temp_recover[r])), 'o', markersize=3, color='DodgerBlue')
         if regions[r] == 'ross':
-            ax.plot(np.array(warming_at_recovery_fris_tip)+temp_correction[r], 2, 'o', markersize=2, color='DarkOrchid')            
+            ax.plot(np.array(warming_at_recovery_fris_tip)+temp_correction[r], 2*np.ones(len(warming_at_recovery_fris_tip)), 'o', markersize=3, color='DarkOrchid')            
         '''if all_recovery_floor[r] is not None:
             # Plot dotted blue line and open marker showing that recovery violin plot will extend at least this far
             ax.plot([all_recovery_floor[r]+temp_correction[r], np.amin(all_temp_recover[r])+temp_correction[r]], [2, 2], color='DodgerBlue', linestyle='dotted', linewidth=1)
@@ -1243,7 +1244,7 @@ def tipping_stats (base_dir='./'):
         ax.plot(threshold_bounds[r][1]*np.ones(2), [0, 0.9], color='black', linestyle='dashed', linewidth=1)
         plt.text(threshold_bounds[r][1]+0.05, 0.5, 'always tips', ha='left', va='center', fontsize=9)
         plt.arrow(threshold_bounds[r][1]+0.05, 0.2, 0.3, 0, head_width=0.1, head_length=0.08)
-        ax.set_title(region_names[regions[r]], fontsize=14)
+        ax.set_title(title_prefix[r]+region_names[regions[r]], fontsize=14)
         ax.set_xlim([1.5, 7])
         ax.set_ylim([0, 4])
         ax.set_yticks(np.arange(1,4))
@@ -1259,7 +1260,7 @@ def tipping_stats (base_dir='./'):
     if any([x is not None for x in all_recovery_floor]):
         handles.append(Line2D([0], [0], marker='o', markersize=4, color='white', markeredgecolor='DodgerBlue', label='not yet recovered', linestyle=''))
     plt.legend(handles=handles, loc='center left', bbox_to_anchor=(-0.35, 1.2), fontsize=9)
-    finished_plot(fig) #, fig_name='figures/tipping_stats.png', dpi=300)
+    finished_plot(fig, fig_name='figures/tipping_stats.png', dpi=300)
     
 
 # Plot: (1) bottom temperature on continental shelf and in cavities, and (2) ice shelf basal mass loss as a function of global warming level, for 2 different regions, showing ramp-up, stabilise, and ramp-down in different colours
@@ -1484,7 +1485,7 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
 def plot_ross_fris_by_bwsalt (base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
-    title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ']
+    title_prefix = ['a) ', 'b) ']
     bwsalt_bias = [-0.13443893, -0.11137423]  # Precomputed above. For TEOS-10, this is [-0.13509758, -0.11196334]
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
