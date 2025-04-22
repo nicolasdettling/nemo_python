@@ -15,7 +15,7 @@ import numpy as np
 import cf_xarray as cfxr
 import re
 import datetime
-from scipy.stats import ttest_ind, linregress
+from scipy.stats import ttest_ind, linregress, ttest_1samp
 from tqdm import tqdm
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
@@ -1177,9 +1177,12 @@ def tipping_stats (base_dir='./'):
             print(str(len(suites_recovered))+' tipped trajectories recover ('+str(len(suites_recovered)/len(suites_tipped)*100)+'%), '+str(len(warming_at_recovery))+' unique')
             print('Global warming at time of recovery has mean '+str(np.mean(warming_at_recovery)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery))+'K')
             if regions[r] == 'ross':
-                print('If FRIS also tips, Ross recovery happens at mean '+str(np.mean(warming_at_recovery_fris_tip)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery_fris_tip))+'K')
-                print('If FRIS does not tip, Ross recovery happens at mean '+str(np.mean(warming_at_recovery_fris_notip)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery_fris_notip))+'K')
-                p_val = ttest_ind(warming_at_recovery_fris_tip, warming_at_recovery_fris_notip, equal_var=False)[1]
+                print('If FRIS also tips, Ross recovery happens at mean '+str(np.mean(warming_at_recovery_fris_tip)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery_fris_tip))+'K, n='+str(len(warming_at_recovery_fris_tip)))
+                print('If FRIS does not tip, Ross recovery happens at mean '+str(np.mean(warming_at_recovery_fris_notip)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery_fris_notip))+'K, n='+str(len(warming_at_recovery_fris_notip)))
+                if len(warming_at_recovery_fris_tip) == 1:
+                    p_val = ttest_1samp(warming_at_recovery_fris_notip, warming_at_recovery_fris_tip)[1]
+                else:
+                    p_val = ttest_ind(warming_at_recovery_fris_tip, warming_at_recovery_fris_notip, equal_var=False)[1]
                 distinct = p_val < p0
                 if distinct:
                     print('Significant difference (p='+str(p_val)+')')
