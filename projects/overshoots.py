@@ -1480,8 +1480,8 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
     title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ']
-    bwsalt_bias = [-0.13443893, -0.11137423]  # Precomputed above  # TO DO: recalculate with absolute salinity
-    obs_fresh_ross = 0.17  # From Jacobs 2022; absolute salinity
+    bwsalt_bias = [-0.13443893, -0.11137423]  # Precomputed above  # If absolute salinity: [-0.13509758, -0.11196334]
+    #obs_fresh_ross = 0.17  # From Jacobs 2022; absolute salinity
     #bias_print_x = [34.4, 34.1]
     #bias_print_y = -1
     timeseries_file = 'timeseries.nc'
@@ -1514,7 +1514,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 elif 'ramp_up' in scenario or 'stabilise' in scenario:
                     direction.append(0)
                 ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
-                bwsalt = ds[regions[n]+'_shelf_bwSA']
+                bwsalt = ds[regions[n]+'_shelf_bwsalt']
                 cavity_temp = ds[regions[n]+'_cavity_temp']
                 ds.close()
                 warming = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
@@ -1545,7 +1545,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
         bwsalt_recover = []
         for suite_list in suite_lists:
             cavity_temp = moving_average(build_timeseries_trajectory(suite_list, region+'_cavity_temp', base_dir=base_dir), smooth)
-            bwsalt = moving_average(build_timeseries_trajectory(suite_list, region+'_shelf_bwSA', base_dir=base_dir), smooth)
+            bwsalt = moving_average(build_timeseries_trajectory(suite_list, region+'_shelf_bwsalt', base_dir=base_dir), smooth)
             tips, t_tip = check_tip(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)
             if tips:
                 bwsalt_tip.append(bwsalt.isel(time_centered=t_tip))
@@ -1595,14 +1595,14 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 img_up = img
             else:
                 img_down = img
-            # Keep track of the saltiest point and associated temperature
+            '''# Keep track of the saltiest point and associated temperature
             # TO DO: actually want mean initial salinity.
             t0 = all_bwsalt[n][m].argmax()
             salt0_tmp = all_bwsalt[n][m][t0]
             temp0_tmp = all_cavity_temp[n][m][t0]
             if m == 0 or salt0_tmp > salt0:
                 salt0 = salt0_tmp
-                temp0 = all_cavity_temp[n][m][t0]
+                temp0 = all_cavity_temp[n][m][t0]'''
         ax.grid(linestyle='dotted')
         ax.axhline(tipping_temp, color='black', linestyle='dashed')
         # Plot threshold salinity markers
@@ -1611,9 +1611,9 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
             ax.plot(threshold_recover[n], tipping_temp, marker='o', markersize=5, markerfacecolor='DodgerBlue', markeredgecolor='black')
         ax.set_title(title_prefix[n]+region_names[regions[n]], fontsize=16)
         if n==0:
-            ax.set_xlabel('Bottom salinity on continental shelf', fontsize=12)
+            ax.set_xlabel('Bottom salinity on continental shelf (psu)', fontsize=12)
             ax.set_ylabel('Temperature in ice shelf cavity ('+deg_string+'C)', fontsize=12)
-        # Indicate fresh bias
+        '''# Indicate fresh bias
         x_start = salt0.item()
         x_end = x_start + np.abs(bwsalt_bias[n])
         ax.plot([x_start, x_end], [temp0]*2, color='Grey', linewidth=1, markersize=3, marker='o')
@@ -1623,7 +1623,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
             x_start = x_end - obs_fresh_ross
             y_obs = -1.75
             ax.plot([x_start, x_end], [y_obs]*2, color='DarkBlue', linewidth=1, markersize=3, marker='o')
-            plt.text(0.5*(x_start+x_end), y_obs+0.06, 'observed\nfreshening', ha='center', va='bottom', color='DarkSlateBlue', fontsize=9)
+            plt.text(0.5*(x_start+x_end), y_obs+0.06, 'observed\nfreshening', ha='center', va='bottom', color='DarkSlateBlue', fontsize=9)'''
     # Two colour bars: yellow/orange/red on the way up, yellow/green/blue on the way down
     cbar = plt.colorbar(img_up, cax=cax1, orientation='horizontal')
     cbar.set_ticklabels([])
