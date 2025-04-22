@@ -1217,16 +1217,21 @@ def tipping_stats (base_dir='./'):
         violin_data = [np.array(all_temp_tip[r])+temp_correction[r], np.array(all_temp_recover[r])+temp_correction[r]]
         y_pos = [3, 2]
         colours = ['Crimson', 'DodgerBlue']
-        violins = ax.violinplot(violin_data, y_pos, vert=False, showmeans=True)
+        violins = ax.violinplot(violin_data, y_pos, vert=False, showextrema=False)
         # Set colours of violin bodies and lines
         for pc, colour in zip(violins['bodies'], colours):
             pc.set_facecolor(colour)
-        for bar in ['cmeans', 'cmins', 'cmaxes', 'cbars']:
-            violins[bar].set_colors(colours)
-        if all_recovery_floor[r] is not None:
+        #for bar in ['cmeans', 'cmins', 'cmaxes', 'cbars']:
+            #violins[bar].set_colors(colours)
+        # Plot individual data points
+        ax.plot(np.array(all_temp_tip[r])+temp_correction[r], 3, 'o', markersize=2, color='Crimson')
+        ax.plot(np.array(all_temp_recover[r])+temp_correction[r], 2, 'o', markersize=2, color='DodgerBlue')
+        if regions[r] == 'ross':
+            ax.plot(np.array(warming_at_recovery_fris_tip)+temp_correction[r], 2, 'o', markersize=2, color='DarkOrchid')            
+        '''if all_recovery_floor[r] is not None:
             # Plot dotted blue line and open marker showing that recovery violin plot will extend at least this far
             ax.plot([all_recovery_floor[r]+temp_correction[r], np.amin(all_temp_recover[r])+temp_correction[r]], [2, 2], color='DodgerBlue', linestyle='dotted', linewidth=1)
-            ax.plot(all_recovery_floor[r]+temp_correction[r], 2, 'o', markersize=4, markeredgecolor='DodgerBlue', color='white')
+            ax.plot(all_recovery_floor[r]+temp_correction[r], 2, 'o', markersize=4, markeredgecolor='DodgerBlue', color='white')'''
         # Bottom row: peak warming in each trajectory, plotted in red (tips) or grey (doesn't tip)
         # Start with the grey, to make sure the red is visible where they overlap
         ax.plot(max_warming[~all_tips[r]]+temp_correction[r], np.ones(np.count_nonzero(~all_tips[r])), 'o', markersize=4, color='DarkGrey')
@@ -1246,15 +1251,15 @@ def tipping_stats (base_dir='./'):
         ax.grid(linestyle='dotted')       
     ax.set_xlabel('Global warming ('+deg_string+'C), corrected', fontsize=10)
     # Manual legend
-    colours = ['Crimson', 'DarkGrey']
-    labels = ['tips', 'does not tip']
+    colours = ['Crimson', 'DarkGrey', 'DodgerBlue', 'DarkOrchid']
+    labels = ['tips', 'does not tip', 'recovers', 'Ross recovers\n(tipped FRIS)']
     handles = []
     for m in range(len(colours)):
         handles.append(Line2D([0], [0], marker='o', markersize=4, color=colours[m], label=labels[m], linestyle=''))
     if any([x is not None for x in all_recovery_floor]):
         handles.append(Line2D([0], [0], marker='o', markersize=4, color='white', markeredgecolor='DodgerBlue', label='not yet recovered', linestyle=''))
     plt.legend(handles=handles, loc='center left', bbox_to_anchor=(-0.35, 1.2), fontsize=9)
-    finished_plot(fig, fig_name='figures/tipping_stats.png', dpi=300)
+    finished_plot(fig) #, fig_name='figures/tipping_stats.png', dpi=300)
     
 
 # Plot: (1) bottom temperature on continental shelf and in cavities, and (2) ice shelf basal mass loss as a function of global warming level, for 2 different regions, showing ramp-up, stabilise, and ramp-down in different colours
