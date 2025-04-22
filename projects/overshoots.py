@@ -1089,6 +1089,7 @@ def tipping_stats (base_dir='./'):
     smooth = 5*months_per_year
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
+    p0 = 0.05
 
     # Assemble all possible trajectories of global mean temperature anomalies relative to preindustrial
     baseline_temp = pi_baseline_temp(pi_suite=pi_suite, base_dir=base_dir)
@@ -1112,6 +1113,9 @@ def tipping_stats (base_dir='./'):
         warming_at_tip = []
         suites_recovered = []        
         warming_at_recovery = []
+        if regions[r] == 'ross':
+            warming_at_recovery_fris_tip = []
+            warming_at_recovery_fris_notip = []
         tips = []
         recovery_floor = None
         for n in range(num_trajectories):
@@ -1133,6 +1137,13 @@ def tipping_stats (base_dir='./'):
                     #print(suite_strings[n]+' recovers at '+str(recover_warming.item()))
                     suites_recovered.append(suite_strings[n])
                     warming_at_recovery.append(recover_warming)
+                    if regions[r] == 'ross':
+                        # Check if FRIS tipped
+                        fris_tip = check_tip(suite=suite_strings[n], region='filchner_ronne')
+                        if fris_tip:
+                            warming_at_recovery_fris_tip.append(recover_warming)
+                        else:
+                            warming_at_recovery_fris_notip.append(recover_warming)
                 else:
                     # Find the final temperature, and keep track of the coolest temperature at which a tipped trajectory still hasn't recovered.
                     final_temp = warming.isel(time_centered=-1).item()
@@ -1147,6 +1158,9 @@ def tipping_stats (base_dir='./'):
         # This assumes it's impossible for two distinct suites to tip at exactly the same global warming level, to machine precision. I think I'm happy with this!
         warming_at_tip = np.unique(warming_at_tip)
         warming_at_recovery = np.unique(warming_at_recovery)
+        if regions[r] == 'ross':
+            warming_at_recovery_fris_tip = np.unique(warming_at_recovery_fris_tip)
+            warming_at_recovery_fris_notip = np.unique(warming_at_recovery_fris_notip)
         # Find maximum warming in each trajectory
         max_warming = np.array([warming_ts[n].max() for n in range(num_trajectories)])
         # Check if recovery_floor is actually outside the range of warming_at_recovery
@@ -1162,6 +1176,15 @@ def tipping_stats (base_dir='./'):
         else:
             print(str(len(suites_recovered))+' tipped trajectories recover ('+str(len(suites_recovered)/len(suites_tipped)*100)+'%), '+str(len(warming_at_recovery))+' unique')
             print('Global warming at time of recovery has mean '+str(np.mean(warming_at_recovery)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery))+'K')
+            if regions[r] == 'ross':
+                print('If FRIS also tips, Ross recovery happens at mean '+str(np.mean(warming_at_recovery_fris_tip)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery_fris_tip))+'K')
+                print('If FRIS does not tip, Ross recovery happens at mean '+str(np.mean(warming_at_recovery_fris_notip)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery_fris_notip))+'K')
+                p_val = ttest_ind(warming_at_recovery_fris_tip, warming_at_recovery_fris_notip, equal_var=False)[1]
+                distinct = p_val < p0
+                if distinct:
+                    print('Significant difference (p='+str(p_val)+')')
+                else:
+                    print('No significant difference (p='+str(p_val)+')')
         if recovery_floor is not None:
             print('Trajectories as cool as '+str(recovery_floor+temp_correction[r])+'K still have not recovered')
         # Save results for plotting
@@ -1213,7 +1236,7 @@ def tipping_stats (base_dir='./'):
         plt.text(threshold_bounds[r][1]+0.05, 0.5, 'always tips', ha='left', va='center', fontsize=9)
         plt.arrow(threshold_bounds[r][1]+0.05, 0.2, 0.3, 0, head_width=0.1, head_length=0.08)
         ax.set_title(region_names[regions[r]], fontsize=14)
-        ax.set_xlim([2, 7])
+        ax.set_xlim([1.5, 7])
         ax.set_ylim([0, 4])
         ax.set_yticks(np.arange(1,4))
         ax.set_yticklabels(['peak warming', 'at time of recovery', 'at time of tipping'])
