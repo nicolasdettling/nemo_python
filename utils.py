@@ -602,6 +602,17 @@ def convert_to_teos10(dataset, var='PracSal'):
 def convert_ismr (sowflisf):
 
     return -sowflisf/rho_ice*sec_per_year
+
+
+# Read absolute bottom salinity from a NEMO dataset in EOS80.
+def bwsalt_abs (ds_nemo):
+    import gsw
+    SP = ds_nemo['sob']
+    # Get depth in metres at every point, with land masked
+    depth_3d = xr.broadcast(ds_nemo['deptht'], ds_nemo['so'])[0].where(ds_nemo['so']!=0)
+    # Get depth in bottom cell: approximately equal to pressure in dbar
+    press = depth_3d.max(dim='deptht')
+    return gsw.SA_from_SP(SP, press, ds_nemo['nav_lon'], ds_nemo['nav_lat'])
     
 
     

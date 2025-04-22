@@ -22,7 +22,7 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um, check_nans, fix_missing_months, calc_timeseries, overwrite_file
 from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, timeseries_plot, circumpolar_plot
 from ..plot_utils import truncate_colourmap
-from ..utils import moving_average, add_months, rotate_vector, polar_stereo, convert_ismr
+from ..utils import moving_average, add_months, rotate_vector, polar_stereo, convert_ismr, bwsalt_abs
 from ..grid import region_mask, calc_geometry, build_ice_mask
 from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year, rho_fw, rho_ice, sec_per_year, vaf_to_gmslr
 from ..file_io import read_schmidtko, read_woa
@@ -1324,7 +1324,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
 
 # Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS. To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
 # Before running this on Jasmin, do "source ~/pyenv/bin/activate" so we can use gsw
-def calc_salinity_bias (base_dir='./'):
+def calc_salinity_bias (base_dir='./', eos='eos08'):
 
     regions = ['ross', 'filchner_ronne']
     pi_suite = 'cs495'  # Preindustrial, static cavities
@@ -1333,7 +1333,6 @@ def calc_salinity_bias (base_dir='./'):
     num_years = 10
     schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/schmidtko_TS.txt'
     woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_decav_*00_04.nc'
-    eos = 'eos80'
 
     # Inner function to read global mean SAT from precomputed timeseries
     def global_mean_sat (suite):
@@ -1364,6 +1363,13 @@ def calc_salinity_bias (base_dir='./'):
             file_path = base_dir+'/'+suite+'/nemo_'+suite+'o_1m_'+str(year_start)+str(month_start).zfill(2)+'01-'+str(year_end)+str(month_end).zfill(2)+'01_grid-T.nc'
             ds = xr.open_dataset(file_path)
             bwsalt = ds['sob']
+            if eos == 'teos10':
+                # Convert to absolute salinity
+                bwsalt = bwsalt_abs(ds)
+            elif eos == 'eos80':
+                bwsalt = ds['sob']
+            else:
+                raise Exception('Invalid EOS '+eos)
             if ramp_up_bwsalt is None:
                 # Initialise
                 ramp_up_bwsalt = bwsalt
@@ -1474,8 +1480,8 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
     title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ']
-    bwsalt_bias = [-0.13443893, -0.11137423]  # Precomputed above
-    obs_fresh_ross = 0.17  # From Jacobs 2022
+    bwsalt_bias = [-0.13443893, -0.11137423]  # Precomputed above  # TO DO: recalculate with absolute salinity
+    obs_fresh_ross = 0.17  # From Jacobs 2022; absolute salinity
     #bias_print_x = [34.4, 34.1]
     #bias_print_y = -1
     timeseries_file = 'timeseries.nc'
@@ -1487,7 +1493,6 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     tipping_temp = -1.9
 
     # Read timeseries from every experiment
-    # TODO: something weird going on at end of dc123: last 2 months are very fresh. Filesystem error? Try again after pulling from MASS and regenerating timeseries.
     all_bwsalt = []
     all_cavity_temp = []
     all_warming = []
@@ -1509,7 +1514,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 elif 'ramp_up' in scenario or 'stabilise' in scenario:
                     direction.append(0)
                 ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
-                bwsalt = ds[regions[n]+'_shelf_bwsalt']
+                bwsalt = ds[regions[n]+'_shelf_bwSA']
                 cavity_temp = ds[regions[n]+'_cavity_temp']
                 ds.close()
                 warming = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
@@ -1540,7 +1545,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
         bwsalt_recover = []
         for suite_list in suite_lists:
             cavity_temp = moving_average(build_timeseries_trajectory(suite_list, region+'_cavity_temp', base_dir=base_dir), smooth)
-            bwsalt = moving_average(build_timeseries_trajectory(suite_list, region+'_shelf_bwsalt', base_dir=base_dir), smooth)
+            bwsalt = moving_average(build_timeseries_trajectory(suite_list, region+'_shelf_bwSA', base_dir=base_dir), smooth)
             tips, t_tip = check_tip(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)
             if tips:
                 bwsalt_tip.append(bwsalt.isel(time_centered=t_tip))
@@ -1606,7 +1611,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
             ax.plot(threshold_recover[n], tipping_temp, marker='o', markersize=5, markerfacecolor='DodgerBlue', markeredgecolor='black')
         ax.set_title(title_prefix[n]+region_names[regions[n]], fontsize=16)
         if n==0:
-            ax.set_xlabel('Bottom salinity on continental shelf (psu)', fontsize=12)
+            ax.set_xlabel('Bottom salinity on continental shelf', fontsize=12)
             ax.set_ylabel('Temperature in ice shelf cavity ('+deg_string+'C)', fontsize=12)
         # Indicate fresh bias
         x_start = salt0.item()
