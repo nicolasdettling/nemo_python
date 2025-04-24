@@ -340,13 +340,24 @@ def add_months (year, month, num_months):
 
 
 # Smooth the given DataArray with a moving average of the given window, over the given dimension (default time_centered).
-def moving_average (data, window, dim='time_centered'):
+# per_year = the number of time indices per year (default 12 for monthly data); used to interpolate any missing values while preserving the seasonal cycle.
+def moving_average (data, window, dim='time_centered', per_year=12):
 
     if window == 0:
         return data
 
-    # Fill NaNs or they will mess up the smoothing
-    data = data.interpolate_na(dim=dim)
+    # Interpolate any missing values
+    if any(data.isnull()):
+        # Loop over months (or however many indices are in the seasonal cycle)
+        for t in range(per_year):
+            # Select this month
+            data_tmp = data[t::per_year]
+            # Interpolate NaNs
+            data_tmp = data_tmp.interpolate_na(dim=dim)
+            # Put back into main array
+            data_tmp = data_tmp.reindex_like(data)
+            index = data.isnull()
+            data[index] = data_tmp[index]
 
     # Find axis number of dimension
     dim_axis = 0
@@ -365,7 +376,8 @@ def moving_average (data, window, dim='time_centered'):
     # Array of zeros of the same shape as a single time index of data
     zero_base = (data.isel({dim:slice(0,1)})*0).data
     # Do the smoothing in two steps, in numpy world
-    data_cumsum = np.ma.concatenate((zero_base.data, np.ma.cumsum(data.data, axis=dim_axis)), axis=dim_axis)
+    data_np = np.ma.masked_where(np.isnan(data.data), data.data)    
+    data_cumsum = np.ma.concatenate((zero_base.data, np.ma.cumsum(data_np, axis=dim_axis)), axis=dim_axis)
     if centered:
         data_smoothed = (data_cumsum[t_first+radius+1:t_last+radius+1,...] - data_cumsum[t_first-radius:t_last-radius,...])/(2*radius+1)
     else:
@@ -590,6 +602,17 @@ def convert_to_teos10(dataset, var='PracSal'):
 def convert_ismr (sowflisf):
 
     return -sowflisf/rho_ice*sec_per_year
+
+
+# Read absolute bottom salinity from a NEMO dataset in EOS80.
+def bwsalt_abs (ds_nemo):
+    import gsw
+    SP = ds_nemo['sob']
+    # Get depth in metres at every point, with land masked
+    depth_3d = xr.broadcast(ds_nemo['deptht'], ds_nemo['so'])[0].where(ds_nemo['so']!=0)
+    # Get depth in bottom cell: approximately equal to pressure in dbar
+    press = depth_3d.max(dim='deptht')
+    return gsw.SA_from_SP(SP, press, ds_nemo['nav_lon'], ds_nemo['nav_lat'])
     
 
     

@@ -1,31 +1,35 @@
+
 # Analysing TerraFIRMA overshoot simulations with UKESM1.1-ice (NEMO 3.6)
 
 import xarray as xr
+import netCDF4 as nc
 import matplotlib.pyplot as plt
 import matplotlib.colors as cl
 import matplotlib.animation as animation
 from matplotlib.collections import LineCollection
 from matplotlib.lines import Line2D
 import os
+import shutil
 import subprocess
 import numpy as np
 import cf_xarray as cfxr
 import re
 import datetime
-from scipy.stats import ttest_ind, linregress
+from scipy.stats import ttest_ind, linregress, ttest_1samp
 from tqdm import tqdm
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 from ..timeseries import update_simulation_timeseries, update_simulation_timeseries_um, check_nans, fix_missing_months, calc_timeseries, overwrite_file
 from ..plots import timeseries_by_region, timeseries_by_expt, finished_plot, timeseries_plot, circumpolar_plot
 from ..plot_utils import truncate_colourmap
-from ..utils import moving_average, add_months, rotate_vector, polar_stereo, convert_ismr
-from ..grid import region_mask, calc_geometry
+from ..utils import moving_average, add_months, rotate_vector, polar_stereo, convert_ismr, bwsalt_abs
+from ..grid import region_mask, calc_geometry, build_ice_mask
 from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year, rho_fw, rho_ice, sec_per_year, vaf_to_gmslr
 from ..file_io import read_schmidtko, read_woa
 from ..interpolation import interp_latlon_cf, interp_grid
 from ..diagnostics import barotropic_streamfunction
 from ..plot_utils import set_colours, latlon_axes
+from ..bisicles_utils import read_bisicles
 
 # Global dictionaries of suites - update these as more suites become available!
 
@@ -44,23 +48,23 @@ suites_by_scenario = {'piControl_static_ice' : ['cs495'],
                       '4K_stabilise' : ['cz376','db723','db733'],
                       '4K_ramp_down' : ['da892', 'dc123', 'dh859', 'dd210', 'dh541'],
                       '5K_stabilise' : ['cz377','db731','dc324'],
-                      '5K_ramp_down' : ['dc251', 'dc130', 'dg095'], #'dg093', 'dg094'],
+                      '5K_ramp_down' : ['dc251', 'dc130', 'dg095', 'dg093', 'dg094'],
                       '6K_stabilise' : ['cz378'],
                       '6K_ramp_down' : ['de943', 'de962', 'de963', 'dm357', 'dm358', 'dm359']}
 # Choose one ensemble member of each main scenario type for plotting a less-messy timeseries.
 suites_by_scenario_1ens = {'ramp_up': 'cx209',  # First ensemble member for ramp-up and all stabilisation
-                           '1.5K_stabilise': 'cy837', 
+                           '1.5K_stabilise': 'cy837',
                            '2K_stabilise': 'cy838',
                            '3K_stabilise': 'cz375',
                            '4K_stabilise': 'cz376',
                            '5K_stabilise': 'cz377',
                            '6K_stabilise': 'cz378',
-                           '1.5K_ramp_down': 'dc052',  # 50y overshoot, -4 Gt/y for all ramp-downs
-                           '2K_ramp_down': 'dc051',
-                           '3K_ramp_down': 'df028',
-                           '4K_ramp_down': 'dc123',
-                           '5K_ramp_down': 'dc130',
-                           '6K_ramp_down': 'de962'}
+                           '1.5K_ramp_down': 'da697',  # 50y overshoot, -8 Gt/y for all ramp-downs
+                           '2K_ramp_down': 'di335',
+                           '3K_ramp_down': 'df453',
+                           '4K_ramp_down': 'da892',
+                           '5K_ramp_down': 'dc251',
+                           '6K_ramp_down': 'de943'}
 # Dictionary of ramp-down rates
 suites_ramp_down_rates = {'8 Gt/y' : ['di335', 'da800', 'da697', 'da892', 'df453', 'dc251', 'de943', 'dg093', 'dm357'],
                           '4 Gt/y' : ['dc051', 'dc052', 'dc248', 'dc249', 'dc565', 'dd210', 'dc032', 'df028', 'dc123', 'dc130', 'de962', 'dg094', 'dm358'],
@@ -83,26 +87,15 @@ temp_correction = [1.0087846842764405, 0.8065649751736049]  # Precomputed by war
 def update_overshoot_timeseries (suite_id, base_dir='./', domain_cfg='/gws/nopw/j04/terrafirma/kaight/input_data/grids/domcfg_eORCA1v2.2x.nc'):
 
     # Construct list of timeseries types for T-grid
-    regions = ['all', 'amundsen_sea', 'bellingshausen_sea', 'larsen', 'filchner_ronne', 'east_antarctica', 'amery', 'ross']
-    var_names = ['massloss', 'draft', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_temp', 'shelf_salt']
-    # A couple extra things for a few regions
-    regions_btw = ['amundsen_sea', 'bellingshausen_sea']
-    var_names_btw = ['temp', 'salt']
-    depth_btw = '_btw_200_700m'
+    regions = ['all', 'ross', 'filchner_ronne', 'west_antarctica', 'east_antarctica']
+    var_names = ['massloss', 'draft', 'bwtemp', 'bwsalt', 'cavity_temp', 'cavity_salt', 'shelf_bwsalt', 'shelf_bwSA']
     timeseries_types = []
     # All combinations of region and variable
     for region in regions:
         for var in var_names:
             timeseries_types.append(region+'_'+var)
-        if region in regions_btw:
-            for var in var_names_btw:
-                timeseries_types.append(region+'_'+var+depth_btw)
-    timeseries_types += ['west_antarctica_bwtemp', 'west_antarctica_bwsalt', 'west_antarctica_massloss', 'filchner_ronne_shelf_bwsalt', 'ross_shelf_bwsalt', 'amery_bwsalt']
 
     update_simulation_timeseries(suite_id, timeseries_types, timeseries_file='timeseries.nc', sim_dir=base_dir+'/'+suite_id+'/', freq='m', halo=True, gtype='T')
-
-    # Now for u-grid
-    #update_simulation_timeseries(suite_id, ['drake_passage_transport'], timeseries_file='timeseries_u.nc', sim_dir=base_dir+'/'+suite_id+'/', freq='m', halo=True, gtype='U', domain_cfg=domain_cfg)
 
     # Now for UM
     update_simulation_timeseries_um(suite_id, ['global_mean_sat'], timeseries_file='timeseries_um.nc', sim_dir=base_dir+'/'+suite_id+'/', stream='p5')
@@ -297,6 +290,21 @@ def plot_all_timeseries_by_expt (base_dir='./', regions=['all', 'amundsen_sea', 
         timeseries_by_expt(var, sim_dirs, sim_names=sim_names, colours=colours, timeseries_file=fname, smooth=smooth, linewidth=1, fig_name=None if fig_dir is None else (fig_dir+'/'+var+'_master.png'))
 
 
+# Helper function to read global mean SAT
+def global_temp (suite, base_dir='./', timeseries_file_um='timeseries_um.nc'):
+    ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
+    sat = ds['global_mean_sat']
+    ds.close()
+    return sat
+# Helper function to get baseline PI global temp
+def pi_baseline_temp (pi_suite='cs495', base_dir='./'):
+    return global_temp(pi_suite, base_dir=base_dir).mean()
+# Helper function to get global warming relative to preindustrial
+def global_warming (suite, pi_suite='cs495', base_dir='./'):
+    baseline = pi_baseline_temp(pi_suite=pi_suite, base_dir=base_dir)
+    return global_temp(suite, base_dir=base_dir) - baseline    
+
+
 # Calculate the integrated global warming relative to preindustrial mean, in Kelvin-years, for the given suite (starting from the beginning of the relevant ramp-up simulation). Returns a timeseries over the given experiment, with the first value being the sum of all branched-from experiments before then.
 def integrated_gw (suite, pi_suite='cs495', timeseries_file_um='timeseries_um.nc', base_dir='./'):
 
@@ -307,10 +315,8 @@ def integrated_gw (suite, pi_suite='cs495', timeseries_file_um='timeseries_um.nc
         ds.close()
         return sat
 
-    # Get baseline global mean SAT
-    baseline_temp = global_mean_sat(pi_suite).mean()
     # Get timeseries of global warming relative to preindustrial, in this suite
-    gw_level = global_mean_sat(suite) - baseline_temp
+    gw_level = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
     # Indefinite integral over time
     integrated_gw = (gw_level/months_per_year).cumsum(dim='time_centered')
 
@@ -320,7 +326,7 @@ def integrated_gw (suite, pi_suite='cs495', timeseries_file_um='timeseries_um.nc
         # Find the starting date of the current suite
         start_date = gw_level.time_centered[0]
         # Now calculate global warming timeseries over the previous suite
-        gw_level = global_mean_sat(prev_suite) - baseline_temp
+        gw_level = global_warming(prev_suite, pi_suite=pi_suite, base_dir=base_dir)
         # Find the time index at the branch point
         time_branch = np.argwhere(gw_level.time_centered.data == start_date.data)[0][0]
         # Integrate from the beginning to just before that point
@@ -369,7 +375,8 @@ def align_timeseries (data1, data2, time_coord='time_centered'):
 # Plot the timeseries of one or more experiments/ensembles (expts can be a string, a list of strings, or a list of lists of string) and one variable against global warming level (relative to preindustrial mean in the given PI suite, unless offsets is not None).
 # Can also use an ocean variable to plot against instead of GW level (eg cavity temperature) with alternate_var='something' (assumed to be within timeseries_file).
 # Can also set offsets as a list of the same shape as expts, with different global warming baselines for each - this is still on top of PI mean, so eg pass 3 for 3K above PI.
-def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None, offsets=None, alternate_var=None, temp_correct=0):
+# Can also set highlight as a suite-string showing a trajectory which should be plotted twice as thick. If highlight_arrows is True, will also plot some arrows along this trajectory: must set arrow_loc = list of lists of global temperatures to plot at for each suite in trajectory.
+def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name=None, timeseries_file='timeseries.nc', timeseries_file_um='timeseries_um.nc', smooth=24, labels=None, colours=None, linewidth=1, title=None, units=None, ax=None, offsets=None, alternate_var=None, temp_correct=0, highlight=None, highlight_arrows=True, arrow_loc=None):
 
     new_ax = ax is None
 
@@ -385,9 +392,7 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
 
     if alternate_var is None:
         # Get baseline global mean SAT
-        ds_pi = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
-        baseline_temp = ds_pi['global_mean_sat'].mean()
-        ds_pi.close()
+        baseline_temp = pi_baseline_temp(pi_suite=pi_suite, base_dir=base_dir)
 
     if offsets is None:
         # Set up dummy list of 0s, same shape as expts
@@ -397,11 +402,22 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
                 offsets.append([0])
             else:
                 offsets.append([0]*len(expt))
+
+    if highlight is None:
+        highlight_suites = []
+    else:
+        highlight_suites = highlight.split('-')
+        if highlight_arrows and arrow_loc is None:
+            raise Exception('Must set arrow_loc')
+    num_highlight = len(highlight_suites)
     
     gw_levels = []
     datas = []
     labels_plot = []
     colours_plot = []
+    lw_plot = []
+    highlight_stype = [None]*num_highlight
+    highlight_colours = [None]*num_highlight
     for expt, label, colour, expt_offsets in zip(expts, labels, colours, offsets):
         if isinstance(expt, str):
             # Generalise to ensemble of 1
@@ -412,7 +428,7 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
                 # Flag to skip this suite
                 continue            
             # Join with the parent suite so there isn't a gap when simulations branch and smoothing is applied.
-            if suites_branched[suite] is not None:
+            if suite in suites_branched and suites_branched[suite] is not None:
                 suite_list = [suites_branched[suite], suite]
             else:
                 suite_list = [suite]
@@ -431,6 +447,11 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
                 continue
             # Figure out the scenario type we're actually trying to plot
             stype = data.scenario_type[-1]
+            if suite in highlight_suites:
+                # Save the stype and colour at the right place in the highlight list
+                i = highlight_suites.index(suite)
+                highlight_stype[i] = stype
+                highlight_colours[i] = colour
             # Smooth in time            
             gw_level = moving_average(gw_level, smooth)
             data = moving_average(data, smooth)
@@ -443,6 +464,51 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
         if num_ens > 0:
             labels_plot += [label] + [None]*(num_ens-1)
             colours_plot += [colour]*num_ens
+            lw_plot += [linewidth]*num_ens
+
+    if highlight is not None:
+        # Plot a specific trajectory again in a thicker line
+        if highlight_arrows:
+            arrow_x = []
+            arrow_y = []
+            arrow_dx = []
+            arrow_dy = []
+            arrow_colours = []
+        if alternate_var is not None:
+            raise Exception('Can only highlight trajectories when alternate_var is None')
+        if None in highlight_stype or None in highlight_colours:
+            raise Exception('One or more highlight suites is not in main suite list')
+        gw_level = build_timeseries_trajectory(highlight_suites, 'global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, offset=-baseline_temp-offset)
+        data = build_timeseries_trajectory(highlight_suites, var_name, base_dir=base_dir, timeseries_file=timeseries_file)
+        data, gw_level = align_timeseries(data, gw_level)
+        gw_level = gw_level.interpolate_na(dim='time_centered')
+        data = data.interpolate_na(dim='time_centered')
+        gw_level = moving_average(gw_level, smooth)
+        data = moving_average(data, smooth)
+        if data.size != gw_level.size:
+            print('Warning: timeseries do not align for highlight trajectory '+highlight+'. Removing from plot.')
+        else:
+            # Select each stage from trajectory and add to plotting list
+            for i in range(num_highlight):
+                gw_level_stage = gw_level.where(data.scenario_type==highlight_stype[i], drop=True)
+                data_stage = data.where(data.scenario_type==highlight_stype[i], drop=True)
+                gw_levels.append(gw_level_stage)
+                datas.append(data_stage)
+                labels_plot += [None]
+                colours_plot += [highlight_colours[i]]
+                lw_plot += [linewidth*3]
+                if highlight_arrows:
+                    arrow_loc_stage = arrow_loc[i]
+                    for target_temp in arrow_loc_stage:
+                        # Find closest data point to this global temperature
+                        dtemp = np.abs(gw_level_stage + temp_correct - target_temp)
+                        t0 = np.argwhere((dtemp == np.amin(dtemp)).data)[0][0]
+                        arrow_x.append(gw_level_stage.data[t0]+temp_correct)
+                        arrow_y.append(data_stage.data[t0])
+                        # Find tangent to the curve over 1-year timescale
+                        arrow_dx.append(gw_level_stage.data[t0+months_per_year] - gw_level_stage.data[t0-months_per_year])
+                        arrow_dy.append(data_stage.data[t0+months_per_year] - data_stage.data[t0-months_per_year])
+                        arrow_colours.append(highlight_colours[i])                    
 
     # Plot
     if new_ax:
@@ -452,8 +518,11 @@ def plot_by_gw_level (expts, var_name, pi_suite='cs495', base_dir='./', fig_name
             # Need a bigger plot to make room for a legend
             figsize = (8,5)
         fig, ax = plt.subplots(figsize=figsize)
-    for gw_level, data, colour, label in zip(gw_levels, datas, colours_plot, labels_plot):
-        ax.plot(gw_level+temp_correct, data, '-', color=colour, label=label, linewidth=linewidth)
+    for gw_level, data, colour, label, lw in zip(gw_levels, datas, colours_plot, labels_plot, lw_plot):
+        ax.plot(gw_level+temp_correct, data, '-', color=colour, label=label, linewidth=lw)
+    if highlight_arrows:
+        for x, y, dx, dy, colour in zip(arrow_x, arrow_y, arrow_dx, arrow_dy, arrow_colours):
+            ax.annotate("", xytext=(x,y), xy=(x+dx,y+dy), arrowprops=dict(arrowstyle='fancy', mutation_scale=15, color=colour))
     ax.grid(linestyle='dotted')
     if title is None:
         title = datas[0].long_name
@@ -881,6 +950,8 @@ def build_timeseries_trajectory (suite_list, var_name, base_dir='./', timeseries
                     stype = 0
                 elif 'ramp_down' in scenario:
                     stype = -1
+                elif 'piControl' in scenario:
+                    stype = 2
                 else:
                     raise Exception('invalid scenario type')
                 break
@@ -1012,17 +1083,17 @@ def check_recover (suite=None, region=None, cavity_temp=None, smoothed=False, re
 def tipping_stats (base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
+    title_prefix = ['a) ', 'b) ']
     bias_print_x = [4.5, 2.5]
     bias_print_y = 1.5
     pi_suite = 'cs495'
     smooth = 5*months_per_year
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
+    p0 = 0.05
 
     # Assemble all possible trajectories of global mean temperature anomalies relative to preindustrial
-    ds = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
-    baseline_temp = ds['global_mean_sat'].mean()
-    ds.close()
+    baseline_temp = pi_baseline_temp(pi_suite=pi_suite, base_dir=base_dir)
     warming_ts, suite_strings = all_timeseries_trajectories('global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, static_ice=False, offset=-1*baseline_temp)
     num_trajectories = len(warming_ts)
     # Smooth each
@@ -1034,6 +1105,7 @@ def tipping_stats (base_dir='./'):
     all_temp_recover = []
     all_tips = []
     threshold_bounds = []
+    all_recovery_floor = []
     for r in range(len(regions)):
         # Assemble all possible trajectories of cavity mean temperature
         cavity_temp_ts = all_timeseries_trajectories(regions[r]+'_cavity_temp', base_dir=base_dir, static_ice=False)[0]
@@ -1042,7 +1114,11 @@ def tipping_stats (base_dir='./'):
         warming_at_tip = []
         suites_recovered = []        
         warming_at_recovery = []
+        if regions[r] == 'ross':
+            warming_at_recovery_fris_tip = []
+            warming_at_recovery_fris_notip = []
         tips = []
+        recovery_floor = None
         for n in range(num_trajectories):
             # Smooth and trim/align with warming timeseries
             cavity_temp = moving_average(cavity_temp_ts[n], smooth)
@@ -1059,8 +1135,23 @@ def tipping_stats (base_dir='./'):
                     recover_warming = warming.isel(time_centered=t_recovers)
                     if np.isnan(recover_warming):
                         continue
+                    #print(suite_strings[n]+' recovers at '+str(recover_warming.item()))
                     suites_recovered.append(suite_strings[n])
                     warming_at_recovery.append(recover_warming)
+                    if regions[r] == 'ross':
+                        # Check if FRIS tipped
+                        fris_tip = check_tip(suite=suite_strings[n], region='filchner_ronne')
+                        if fris_tip:
+                            warming_at_recovery_fris_tip.append(recover_warming)
+                        else:
+                            warming_at_recovery_fris_notip.append(recover_warming)
+                else:
+                    # Find the final temperature, and keep track of the coolest temperature at which a tipped trajectory still hasn't recovered.
+                    final_temp = warming.isel(time_centered=-1).item()
+                    if recovery_floor is None:
+                        recovery_floor = final_temp
+                    else:
+                        recovery_floor = min(recovery_floor, final_temp)
             tips.append(traj_tips)
         tips = np.array(tips)
         # Now throw out duplicates, eg if tipping happened before a suite branched into multiple trajectories, should only count it once for the statistics.
@@ -1068,8 +1159,15 @@ def tipping_stats (base_dir='./'):
         # This assumes it's impossible for two distinct suites to tip at exactly the same global warming level, to machine precision. I think I'm happy with this!
         warming_at_tip = np.unique(warming_at_tip)
         warming_at_recovery = np.unique(warming_at_recovery)
+        if regions[r] == 'ross':
+            warming_at_recovery_fris_tip = np.unique(warming_at_recovery_fris_tip)
+            warming_at_recovery_fris_notip = np.unique(warming_at_recovery_fris_notip)
         # Find maximum warming in each trajectory
-        max_warming = np.array([warming_ts[n].max() for n in range(num_trajectories)])                
+        max_warming = np.array([warming_ts[n].max() for n in range(num_trajectories)])
+        # Check if recovery_floor is actually outside the range of warming_at_recovery
+        if recovery_floor >= np.min(warming_at_recovery):
+            recovery_floor = None
+        
         # Print some statistics about which ones tipped and recovered
         print('\n'+regions[r]+':')
         print(str(len(suites_tipped))+' trajectories tip, '+str(len(warming_at_tip))+' unique')
@@ -1079,10 +1177,25 @@ def tipping_stats (base_dir='./'):
         else:
             print(str(len(suites_recovered))+' tipped trajectories recover ('+str(len(suites_recovered)/len(suites_tipped)*100)+'%), '+str(len(warming_at_recovery))+' unique')
             print('Global warming at time of recovery has mean '+str(np.mean(warming_at_recovery)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery))+'K')
+            if regions[r] == 'ross':
+                print('If FRIS also tips, Ross recovery happens at mean '+str(np.mean(warming_at_recovery_fris_tip)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery_fris_tip))+'K, n='+str(len(warming_at_recovery_fris_tip)))
+                print('If FRIS does not tip, Ross recovery happens at mean '+str(np.mean(warming_at_recovery_fris_notip)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery_fris_notip))+'K, n='+str(len(warming_at_recovery_fris_notip)))
+                if len(warming_at_recovery_fris_tip) == 1:
+                    p_val = ttest_1samp(warming_at_recovery_fris_notip, warming_at_recovery_fris_tip)[1]
+                else:
+                    p_val = ttest_ind(warming_at_recovery_fris_tip, warming_at_recovery_fris_notip, equal_var=False)[1]
+                distinct = p_val < p0
+                if distinct:
+                    print('Significant difference (p='+str(p_val)+')')
+                else:
+                    print('No significant difference (p='+str(p_val)+')')
+        if recovery_floor is not None:
+            print('Trajectories as cool as '+str(recovery_floor+temp_correction[r])+'K still have not recovered')
         # Save results for plotting
         all_temp_tip.append(warming_at_tip)
         all_temp_recover.append(warming_at_recovery)
         all_tips.append(tips)
+        all_recovery_floor.append(recovery_floor)
 
         # Find bounds on threshold
         # Find coolest instance of tipping
@@ -1102,20 +1215,24 @@ def tipping_stats (base_dir='./'):
     for r in range(len(regions)):
         ax = plt.subplot(gs[r,0])
         # Violin plots: warming level at time of tipping (red), recovery (blue)
-        violin_data = [np.array(all_temp_tip[r])+temp_correction[r]]
-        y_pos = [3]
-        colours = ['Crimson']
-        # Check if there are instances of recovery to show - can streamline this once FRIS recovery starts
-        if len(all_temp_recover[r]) > 0:
-            violin_data.append(np.array(all_temp_recover[r])+temp_correction[r])
-            y_pos.append(2)
-            colours.append('DodgerBlue')
-        violins = ax.violinplot(violin_data, y_pos, vert=False, showmeans=True)
+        violin_data = [np.array(all_temp_tip[r])+temp_correction[r], np.array(all_temp_recover[r])+temp_correction[r]]
+        y_pos = [3, 2]
+        colours = ['Crimson', 'DodgerBlue']
+        violins = ax.violinplot(violin_data, y_pos, vert=False, showextrema=False, showmeans=True)
         # Set colours of violin bodies and lines
         for pc, colour in zip(violins['bodies'], colours):
             pc.set_facecolor(colour)
-        for bar in ['cmeans', 'cmins', 'cmaxes', 'cbars']:
+        for bar in ['cmeans']:
             violins[bar].set_colors(colours)
+        # Plot individual data points
+        ax.plot(np.array(all_temp_tip[r])+temp_correction[r], 3*np.ones(len(all_temp_tip[r])), 'o', markersize=3, color='Crimson')
+        ax.plot(np.array(all_temp_recover[r])+temp_correction[r], 2*np.ones(len(all_temp_recover[r])), 'o', markersize=3, color='DodgerBlue')
+        if regions[r] == 'ross':
+            ax.plot(np.array(warming_at_recovery_fris_tip)+temp_correction[r], 2*np.ones(len(warming_at_recovery_fris_tip)), 'o', markersize=3, color='DarkOrchid')
+        '''if all_recovery_floor[r] is not None:
+            # Plot dotted blue line and open marker showing that recovery violin plot will extend at least this far
+            ax.plot([all_recovery_floor[r]+temp_correction[r], np.amin(all_temp_recover[r])+temp_correction[r]], [2, 2], color='DodgerBlue', linestyle='dotted', linewidth=1)
+            ax.plot(all_recovery_floor[r]+temp_correction[r], 2, 'o', markersize=4, markeredgecolor='DodgerBlue', color='white')'''
         # Bottom row: peak warming in each trajectory, plotted in red (tips) or grey (doesn't tip)
         # Start with the grey, to make sure the red is visible where they overlap
         ax.plot(max_warming[~all_tips[r]]+temp_correction[r], np.ones(np.count_nonzero(~all_tips[r])), 'o', markersize=4, color='DarkGrey')
@@ -1127,47 +1244,57 @@ def tipping_stats (base_dir='./'):
         ax.plot(threshold_bounds[r][1]*np.ones(2), [0, 0.9], color='black', linestyle='dashed', linewidth=1)
         plt.text(threshold_bounds[r][1]+0.05, 0.5, 'always tips', ha='left', va='center', fontsize=9)
         plt.arrow(threshold_bounds[r][1]+0.05, 0.2, 0.3, 0, head_width=0.1, head_length=0.08)
-        ax.set_title(region_names[regions[r]], fontsize=14)
-        ax.set_xlim([2, 7])
+        ax.set_title(title_prefix[r]+region_names[regions[r]], fontsize=14)
+        ax.set_xlim([1.5, 7])
         ax.set_ylim([0, 4])
         ax.set_yticks(np.arange(1,4))
         ax.set_yticklabels(['peak warming', 'at time of recovery', 'at time of tipping'])
         ax.grid(linestyle='dotted')       
     ax.set_xlabel('Global warming ('+deg_string+'C), corrected', fontsize=10)
     # Manual legend
-    colours = ['Crimson', 'DarkGrey']
-    labels = ['tips', 'does not tip']
+    colours = ['Crimson', 'DarkGrey', 'DodgerBlue', 'DarkOrchid']
+    labels = ['tips', 'does not tip', 'recovers', 'Ross recovers\n(tipped FRIS)']
     handles = []
     for m in range(len(colours)):
         handles.append(Line2D([0], [0], marker='o', markersize=4, color=colours[m], label=labels[m], linestyle=''))
+    if any([x is not None for x in all_recovery_floor]):
+        handles.append(Line2D([0], [0], marker='o', markersize=4, color='white', markeredgecolor='DodgerBlue', label='not yet recovered', linestyle=''))
     plt.legend(handles=handles, loc='center left', bbox_to_anchor=(-0.35, 1.2), fontsize=9)
     finished_plot(fig, fig_name='figures/tipping_stats.png', dpi=300)
     
 
 # Plot: (1) bottom temperature on continental shelf and in cavities, and (2) ice shelf basal mass loss as a function of global warming level, for 2 different regions, showing ramp-up, stabilise, and ramp-down in different colours
-def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
+# Set static_ice=True to make supplementary version comparing static ice cases
+def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
 
     pi_suite = 'cs495'
     regions = ['ross', 'filchner_ronne']
-    title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ', r'$\bf{c}$. ', r'$\bf{d}$. ']
-    var_names = ['bwtemp', 'massloss']
-    var_titles = ['Bottom temperature on continental shelf and in ice shelf cavities', 'Basal mass loss beneath ice shelves']
+    num_regions = len(regions)
+    highlights = ['cx209-cz376-da892', 'cx209-cz378-de943']
+    arrow_loc = [[[1.5, 3.5, 4.6], [5], [4.75, 3.5]], [[1.5, 4.5, 6.5], [], [6.6, 4.9, 3.3]], [[3.5, 4.4], [5.2], [5.1, 4]], [[4, 5.9, 6.4], [6.98], [6.8, 4.7, 3.5]]]
+    var_names = ['cavity_temp', 'massloss']
+    var_titles = ['a) Ocean temperature in ice shelf cavities', 'b) Melting beneath ice shelves']
     var_units = [deg_string+'C', 'Gt/y']
     num_var = len(var_names)
     timeseries_file = 'timeseries.nc'
-    smooth = [10*months_per_year, 30*months_per_year]
-    sim_names, colours, sim_dirs = minimal_expt_list(one_ens=True)
-    sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks
-    ds = xr.open_dataset(sample_file).squeeze()
+    smooth = [10*months_per_year, 20*months_per_year]
+    if static_ice:
+        sim_names = ['Ramp up (evolving ice)', 'Ramp up (static ice)']
+        colours = ['Crimson', 'DarkMagenta']
+        sim_dirs = [[suites_by_scenario['ramp_up'][0]], [suites_by_scenario['ramp_up_static_ice'][0]]]
+    else:
+        sim_names, colours, sim_dirs = minimal_expt_list(one_ens=True)
+    #sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks
+    #ds = xr.open_dataset(sample_file).squeeze()
 
-    fig = plt.figure(figsize=(10,7.5))
+    fig = plt.figure(figsize=(9,7))
     gs = plt.GridSpec(2,2)
-    gs.update(left=0.07, right=0.98, bottom=0.1, top=0.9, hspace=0.5, wspace=0.16)
+    gs.update(left=0.08, right=0.98, bottom=0.1, top=0.92, hspace=0.47, wspace=0.15)
     for v in range(num_var):
-        for n in range(len(regions)):
+        for n in range(num_regions):
             ax = plt.subplot(gs[v,n])
-            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth[v], labels=sim_names, colours=colours, linewidth=1, ax=ax, temp_correct=temp_correction[n])
-            ax.set_title(title_prefix[v*2+n]+region_names[regions[n]], fontsize=14)
+            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth[v], labels=sim_names, colours=colours, linewidth=(1 if static_ice else 0.5), ax=ax, temp_correct=temp_correction[n], highlight=(highlights[n] if not static_ice else None), highlight_arrows=(not static_ice), arrow_loc=arrow_loc[v*num_regions+n])
+            ax.set_title(region_names[regions[n]], fontsize=14)
             if n == 0:
                 ax.set_ylabel(var_units[v], fontsize=12)
             else:
@@ -1177,7 +1304,9 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
             else:
                 ax.set_xlabel('')
             ax.set_xlim([temp_correction[n],temp_correction[n]+8])
-            if v==0:
+            if v == 0:
+                ax.axhline(-1.9, color='black', linestyle='dashed', linewidth=0.75)
+            '''if v==0:
                 # Inset panel in top left showing region
                 mask = region_mask(regions[n], ds, option='all')[0]
                 ax2 = inset_axes(ax, "25%", "40%", loc='upper left')
@@ -1185,15 +1314,23 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./'):
                 circumpolar_plot(mask, ds, ax=ax2, make_cbar=False, ctype='IndianRed', lat_max=-66, shade_land=True)
                 ax2.axis('on')
                 ax2.set_xticks([])
-                ax2.set_yticks([])
-        plt.text(0.5, 0.99-0.5*v, var_titles[v], fontsize=16, ha='center', va='top', transform=fig.transFigure)
-    ax.legend(loc='center left', bbox_to_anchor=(-0.6,-0.2), fontsize=11, ncol=3)
-    finished_plot(fig, fig_name='figures/temp_massloss_by_gw_panels.png', dpi=300)
+                ax2.set_yticks([])'''
+        plt.text(0.5, 0.99-0.485*v, var_titles[v], fontsize=16, ha='center', va='top', transform=fig.transFigure)
+    # Manual legend
+    handles = []
+    for m in range(len(colours)):
+        handles.append(Line2D([0], [0], color=colours[m], label=sim_names[m], linestyle='-', linewidth=1.5))
+    ax.legend(handles=handles, loc='center left', bbox_to_anchor=(-0.6,-0.2), fontsize=11, ncol=len(sim_names))
+    fig_name = 'figures/temp_massloss_by_gw_panels'
+    if static_ice:
+        fig_name += '_static_ice'
+    fig_name += '.png'
+    finished_plot(fig, fig_name=fig_name, dpi=300)
 
 
 # Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS. To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
 # Before running this on Jasmin, do "source ~/pyenv/bin/activate" so we can use gsw
-def calc_salinity_bias (base_dir='./'):
+def calc_salinity_bias (base_dir='./', eos='eos08'):
 
     regions = ['ross', 'filchner_ronne']
     pi_suite = 'cs495'  # Preindustrial, static cavities
@@ -1202,7 +1339,6 @@ def calc_salinity_bias (base_dir='./'):
     num_years = 10
     schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/schmidtko_TS.txt'
     woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_decav_*00_04.nc'
-    eos = 'eos80'
 
     # Inner function to read global mean SAT from precomputed timeseries
     def global_mean_sat (suite):
@@ -1210,17 +1346,15 @@ def calc_salinity_bias (base_dir='./'):
         sat = ds['global_mean_sat']
         ds.close()
         return sat
-    # Get preindustrial baseline
-    baseline_temp = global_mean_sat(pi_suite).mean()
     # Get "present-day" warming according to UKESM
-    hist_warming = global_mean_sat(hist_suite).mean() - baseline_temp
+    hist_warming = global_warming(hist_suite, pi_suite=pi_suite, base_dir=base_dir).mean()
     print('UKESM historical 1995-2014 was '+str(hist_warming.data)+'K warmer than preindustrial')
 
     # Loop over ramp-up suites (no static ice)
     ramp_up_bwsalt = None
     for suite in suites_by_scenario['ramp_up']:
         # Get timeseries of global warming relative to PI
-        warming = global_mean_sat(suite) - baseline_temp
+        warming = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
         for t in range(warming.size):
             if warming.isel(time_centered=slice(t,t+num_years*months_per_year)).mean() >= hist_warming:
                 # Care about the 10-year period beginning at this point
@@ -1235,6 +1369,13 @@ def calc_salinity_bias (base_dir='./'):
             file_path = base_dir+'/'+suite+'/nemo_'+suite+'o_1m_'+str(year_start)+str(month_start).zfill(2)+'01-'+str(year_end)+str(month_end).zfill(2)+'01_grid-T.nc'
             ds = xr.open_dataset(file_path)
             bwsalt = ds['sob']
+            if eos == 'teos10':
+                # Convert to absolute salinity
+                bwsalt = bwsalt_abs(ds)
+            elif eos == 'eos80':
+                bwsalt = ds['sob']
+            else:
+                raise Exception('Invalid EOS '+eos)
             if ramp_up_bwsalt is None:
                 # Initialise
                 ramp_up_bwsalt = bwsalt
@@ -1294,7 +1435,7 @@ def calc_salinity_bias (base_dir='./'):
     return bias
 
 
-# Calculate the global warming implied by the salinity biases (from above), using a linear regression below 3K for Ross, 5K for FRIS.
+# Calculate the global warming implied by the salinity biases (from above), using a linear regression below 2K for Ross, 4.5K for FRIS.
 def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='./'):
 
     pi_suite = 'cs495'
@@ -1303,15 +1444,6 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
     p0 = 0.05
-
-    # Inner function to read global mean SAT from precomputed timeseries
-    def global_mean_sat (suite):
-        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
-        sat = ds['global_mean_sat']
-        ds.close()
-        return sat
-    # Get preindustrial baseline
-    baseline_temp = global_mean_sat(pi_suite).mean()
 
     if ross_bias is None or fris_bias is None:
         # Salinity biases are not precomputed
@@ -1322,7 +1454,7 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
         warming = None
         bwsalt = None
         for suite in suites_by_scenario['ramp_up']:
-            warming_tmp = global_mean_sat(suite) - baseline_temp
+            warming_tmp = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
             ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
             bwsalt_tmp = ds[region+'_shelf_bwsalt']
             ds.close()
@@ -1346,17 +1478,15 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
         if p_value > p0:
             raise Exception('No significant trend')
         implied_warming = slope*bwsalt_bias
-        print(region_names[region]+': Salinity bias of '+str(bwsalt_bias)+' psu implies global warming of '+str(implied_warming)+'K')
+        print(region_names[region]+': Salinity bias of '+str(bwsalt_bias)+' psu implies global warming of '+str(implied_warming)+'K; regression has r^2='+str(r_value**2))
 
 
 # Plot cavity-mean temperature beneath Ross and FRIS as a function of shelf-mean bottom water salinity, in all scenarios. Colour the lines based on the global warming level relative to preindustrial, and indicate the magnitude of the salinity bias.
 def plot_ross_fris_by_bwsalt (base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
-    title_prefix = [r'$\bf{a}$. ', r'$\bf{b}$. ']
-    bwsalt_bias = [-0.13443893, -0.11137423]  # Precomputed above
-    bias_print_x = [34.4, 34.1]
-    bias_print_y = -1
+    title_prefix = ['a) ', 'b) ']
+    bwsalt_bias = [-0.13443893, -0.11137423]  # Precomputed above. For TEOS-10, this is [-0.13509758, -0.11196334]
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
     smooth = 5*months_per_year
@@ -1364,15 +1494,6 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     cmap = ['YlOrRd', 'YlGnBu'] #['Reds', 'Blues']
     p0 = 0.05
     tipping_temp = -1.9
-
-    # Inner function to read global mean SAT from precomputed timeseries
-    def global_mean_sat (suite):
-        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file_um)
-        sat = ds['global_mean_sat']
-        ds.close()
-        return sat
-    # Get preindustrial baseline
-    baseline_temp = global_mean_sat(pi_suite).mean()
 
     # Read timeseries from every experiment
     all_bwsalt = []
@@ -1399,7 +1520,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 bwsalt = ds[regions[n]+'_shelf_bwsalt']
                 cavity_temp = ds[regions[n]+'_cavity_temp']
                 ds.close()
-                warming = global_mean_sat(suite) - baseline_temp
+                warming = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
                 # Smooth and align
                 if bwsalt.sizes['time_centered'] < smooth:
                     # Simulation hasn't run long enough to include
@@ -1425,17 +1546,21 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     for region in regions:
         bwsalt_tip = []
         bwsalt_recover = []
+        freshening_to_tip = []
         for suite_list in suite_lists:
             cavity_temp = moving_average(build_timeseries_trajectory(suite_list, region+'_cavity_temp', base_dir=base_dir), smooth)
             bwsalt = moving_average(build_timeseries_trajectory(suite_list, region+'_shelf_bwsalt', base_dir=base_dir), smooth)
+            bwSA = moving_average(build_timeseries_trajectory(suite_list, region+'_shelf_bwSA', base_dir=base_dir), smooth)
             tips, t_tip = check_tip(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)
             if tips:
                 bwsalt_tip.append(bwsalt.isel(time_centered=t_tip))
+                freshening_to_tip.append(bwSA.isel(time_centered=t_tip) - bwSA.isel(time_centered=0))
                 recovers, t_recover = check_recover(cavity_temp=cavity_temp, smoothed=True, return_t=True, base_dir=base_dir)
                 if recovers:
                     bwsalt_recover.append(bwsalt.isel(time_centered=t_recover))
         bwsalt_tip = np.unique(bwsalt_tip)
         bwsalt_recover = np.unique(bwsalt_recover)
+        freshening_to_tip = np.unique(freshening_to_tip)
         # Print some statistics
         print(region)
         print('Shelf salinity at tipping has mean '+str(np.mean(bwsalt_tip))+' psu, std '+str(np.std(bwsalt_tip))+' psu')
@@ -1452,6 +1577,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 print('No significant difference (p='+str(p_val)+')')
         else:
             threshold_recover.append(None)
+        print('Freshening of absolute salinity between beginning of ramp-up and tipping point has mean '+str(np.mean(freshening_to_tip))+', std '+str(np.std(freshening_to_tip)))
 
     # Set up colour map to vary with global warming level
     norm = plt.Normalize(np.amin(temp_correction), max_warming)
@@ -1466,11 +1592,10 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     for n in range(len(regions)):
         ax = plt.subplot(gs[0,n])
         for m in range(num_suites):
-            #ax.plot(all_bwsalt[n][m], all_cavity_temp[n][m], '-', linewidth=1)
             # Plot each line with colour varying by global warming level
             points = np.array([all_bwsalt[n][m].data, all_cavity_temp[n][m].data]).T.reshape(-1,1,2)
             segments = np.concatenate([points[:-1], points[1:]], axis=1)
-            lc = LineCollection(segments, cmap=truncate_colourmap(cmap[direction[m]], minval=0.1), norm=norm) #.3), norm=norm)
+            lc = LineCollection(segments, cmap=truncate_colourmap(cmap[direction[m]], minval=0.2), norm=norm) #.3), norm=norm)
             lc.set_array(all_warming[n][m].data)
             lc.set_linewidth(1)
             img = ax.add_collection(lc)
@@ -1480,21 +1605,14 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                 img_down = img
         ax.grid(linestyle='dotted')
         ax.axhline(tipping_temp, color='black', linestyle='dashed')
-        # Plot threshold salinity stars
-        ax.plot(threshold_tip[n], tipping_temp, marker='*', markersize=15, markerfacecolor='Crimson', markeredgecolor='black')
+        # Plot threshold salinity markers
+        ax.plot(threshold_tip[n], tipping_temp, marker='o', markersize=5, markerfacecolor='Crimson', markeredgecolor='black')
         if threshold_recover[n] is not None:
-            ax.plot(threshold_recover[n], tipping_temp, marker='*', markersize=15, markerfacecolor='DodgerBlue', markeredgecolor='black')
+            ax.plot(threshold_recover[n], tipping_temp, marker='o', markersize=5, markerfacecolor='DodgerBlue', markeredgecolor='black')
         ax.set_title(title_prefix[n]+region_names[regions[n]], fontsize=16)
         if n==0:
             ax.set_xlabel('Bottom salinity on continental shelf (psu)', fontsize=12)
             ax.set_ylabel('Temperature in ice shelf cavity ('+deg_string+'C)', fontsize=12)
-        '''# Indicate salinity bias
-        x_start = bias_print_x[n]
-        x_end = bias_print_x[n] + np.abs(bwsalt_bias[n])
-        ax.plot([x_start, x_end], [bias_print_y]*2, color='black')
-        ax.plot([x_start]*2, [bias_print_y-0.05, bias_print_y+0.05], color='black')
-        ax.plot([x_end]*2, [bias_print_y-0.05, bias_print_y+0.05], color='black')
-        plt.text(0.5*(x_start+x_end), bias_print_y+0.3, 'Salinity bias of\n'+str(np.round(bwsalt_bias[n],3))+' psu', fontsize=10, color='black', ha='center', va='center')'''
     # Two colour bars: yellow/orange/red on the way up, yellow/green/blue on the way down
     cbar = plt.colorbar(img_up, cax=cax1, orientation='horizontal')
     cbar.set_ticklabels([])
@@ -1507,7 +1625,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
     labels = ['mean tipping', 'mean recovery']
     handles = []
     for m in range(len(colours)):
-        handles.append(Line2D([0], [0], marker='*', markersize=15, markerfacecolor=colours[m], markeredgecolor='black', label=labels[m], linestyle=''))
+        handles.append(Line2D([0], [0], marker='o', markersize=5, markerfacecolor=colours[m], markeredgecolor='black', label=labels[m], linestyle=''))
     plt.legend(handles=handles, loc='lower right', bbox_to_anchor=(0.85, -0.27))
     finished_plot(fig, fig_name='figures/ross_fris_by_bwsalt.png', dpi=300)
 
@@ -1673,9 +1791,7 @@ def dashboard_animation (suite_string, region, base_dir='./', out_dir='animation
     print('Reading timeseries')
     # Assemble timeseries, 5-year smoothed
     # First get preindustrial baseline temp
-    ds = xr.open_dataset(base_dir+'/'+pi_suite+'/'+timeseries_file_um)
-    baseline_temp = ds['global_mean_sat'].mean()
-    ds.close()
+    baseline_temp = pi_baseline_temp(pi_suite=pi_suite, base_dir=base_dir)
     # Global mean warming
     warming = build_timeseries_trajectory(suite_list, 'global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, offset=-1*baseline_temp)
     warming = moving_average(warming, smooth)
@@ -2019,10 +2135,25 @@ def sfc_FW_timeseries (suite='cx209', base_dir='./'):
     update_simulation_timeseries(suite, ['all_iceberg_melt', 'all_pminuse', 'all_runoff', 'all_seaice_meltfreeze'], timeseries_file='timeseries_sfc.nc', sim_dir=base_dir+'/'+suite+'/', freq='m', halo=True, gtype='T')
 
 
+# Helper function to get the start and end dates of each suite-segment in a trajectory
+def find_stages_start_end (suite_list, base_dir='./', timeseries_file='timeseries.nc'):
+    stage_start = []
+    stage_end = []
+    for suite in suite_list:
+        file_path = base_dir+'/'+suite+'/'+timeseries_file
+        ds = xr.open_dataset(file_path)
+        stage_start.append(ds.time_centered[0].item())
+        stage_end.append(ds.time_centered[-1].item())
+        ds.close()
+    # Now deal with overlaps
+    stage_end[:-1] = stage_start[1:]
+    return stage_start, stage_end
+
+
 # Timeseries of various freshwater fluxes, relative to preindustrial baseline, for one trajectory.
 def plot_FW_timeseries (base_dir='./'):
 
-    suite_string = 'cx209-cz377-dc130'
+    suite_string = 'cx209-cz378-de943'
     suite_list = suite_string.split('-')
     pi_suite = 'cs568'  # Want evolving ice PI control so the ice mass is partitioned the same way into calving, basal melting, runoff.
     pi_years = 50
@@ -2070,16 +2201,9 @@ def plot_FW_timeseries (base_dir='./'):
     #    ismr_plot.append(data)
 
     # Find the first and last year of each stage in the simulation
-    stage_start = []
-    stage_end = []
-    for suite in suite_list:
-        file_path = base_dir+'/'+suite+'/'+timeseries_files[0]
-        ds = xr.open_dataset(file_path)
-        stage_start.append(ds.time_centered[0].dt.year.item()-year0)
-        stage_end.append(ds.time_centered[-1].dt.year.item()-year0)
-        ds.close()
-    # Now deal with overlaps
-    stage_end[:-1] = stage_start[1:]
+    stage_start, stage_end = find_stages_start_end(suite_list, base_dir=base_dir, timeseries_file=timeseries_files[0])
+    stage_start = [date.year-year0 for date in stage_start]
+    stage_end = [date.year-year0 for date in stage_end]
 
     # Find the time of tipping and recovery for each cavity
     tip_times = [check_tip(suite=suite_string, region=region, return_date=True, base_dir=base_dir)[1] for region in tip_regions]
@@ -2112,20 +2236,9 @@ def plot_FW_timeseries (base_dir='./'):
     ax.set_ylabel(units)
     ax.set_xlim([stage_start[0], stage_end[-1]])
     ax.set_title('Antarctic freshwater fluxes (anomalies from preindustrial)', fontsize=14)    
-    plt.text(616, -12.5, 'years', ha='left', va='top')
+    plt.text(616, -14.5, 'years', ha='left', va='top')
     plt.text(0.5, 0.01, trajectory_title(suite_string), ha='center', va='bottom', transform=fig.transFigure, fontsize=12)
     ax.legend(loc='upper left')
-    '''n == 1:
-        # Little map showing regions
-        masks = [region_mask(region, ds_grid, option='cavity')[0] for region in ismr_regions]
-        ax2 = inset_axes(ax, '15%', '35%', loc='lower left', borderpad=2)
-        ax2.axis('equal')
-        for r in range(len(ismr_regions)-1):
-            mask = region_mask(ismr_regions[r], ds_grid, option='cavity')[0]
-            circumpolar_plot(mask, ds_grid, ax=ax2, make_cbar=False, ctype=colours[r], lat_max=-66, shade_land=(r==0), title='')
-        ax2.axis('on')
-        ax2.set_xticks([])
-        ax2.set_yticks([])'''
     finished_plot(fig, fig_name='figures/FW_timeseries.png', dpi=300)
 
 
@@ -2178,7 +2291,7 @@ def plot_untipped_salinity (smooth=30, base_dir='./'):
 def stage_timescales (base_dir='./', fig_dir=None, plot_traj=False):
 
     regions = ['ross', 'filchner_ronne']
-    smooth = 10*months_per_year
+    smooth = 10*months_per_year  # Not used for tipping/recovery date
     titles = ['Bottom salinity on continental shelf', 'Temperature in cavity', 'Basal mass loss']
     units = ['psu', deg_string+'C', 'Gt/y']
     stypes = [1, 0, -1]
@@ -2208,6 +2321,7 @@ def stage_timescales (base_dir='./', fig_dir=None, plot_traj=False):
     stab_to_tip_all = []
     tip_to_melt_max_all = []
     ramp_down_to_recovery_all = []
+    tip_to_recovery_all = []
     ramp_down_to_min_s_all = []
     # Loop over regions
     for region in regions:
@@ -2217,6 +2331,7 @@ def stage_timescales (base_dir='./', fig_dir=None, plot_traj=False):
         stab_to_tip = []
         tip_to_melt_max = []
         ramp_down_to_recovery = []
+        tip_to_recovery = []
         ramp_down_to_min_s = []
         # Loop over trajectories
         for suite_string, shelf_bwsalt, cavity_temp, massloss in zip(suite_strings, all_shelf_bwsalt, all_cavity_temp, all_massloss):
@@ -2244,6 +2359,9 @@ def stage_timescales (base_dir='./', fig_dir=None, plot_traj=False):
                 tip_to_melt_max.append(years_between(tip_time, melt_max_time))
                 # Check for trajectories which recover
                 recovers, recover_time = check_recover(cavity_temp=cavity_temp, smoothed=False, return_date=True, base_dir=base_dir)
+                if recovers:
+                    # Save years between tipping and recovery
+                    tip_to_recovery.append(years_between(tip_time, recover_time))
                 # Check for trajectories which have a ramp-down
                 ramp_down_time = stype_date(cavity_temp, -1)
                 if ramp_down_time is not None and recovers:
@@ -2295,6 +2413,7 @@ def stage_timescales (base_dir='./', fig_dir=None, plot_traj=False):
                 finished_plot(fig, fig_name=fig_name)
         stab_to_tip_all.append(np.unique(stab_to_tip))
         tip_to_melt_max_all.append(np.unique(tip_to_melt_max))
+        tip_to_recovery_all.append(np.unique(tip_to_recovery))
         ramp_down_to_recovery_all.append(np.unique(ramp_down_to_recovery))
         ramp_down_to_min_s_all.append(np.unique(ramp_down_to_min_s))
 
@@ -2310,7 +2429,8 @@ def stage_timescales (base_dir='./', fig_dir=None, plot_traj=False):
         gs.update(left=0.1, right=0.99, bottom=0.1, top=0.85, hspace=0.4)
         for r in range(len(regions)):
             ax = plt.subplot(gs[r,0])
-            ax.hist(all_times[r], bins=bins)
+            ax.hist(all_times[r], bins=bins, color='DodgerBlue')
+            ax.set_ylim([0,3.5])
             ax.set_title(region_names[regions[r]], fontsize=12)
             if r==0:
                 ax.set_ylabel('# simulations', fontsize=10)
@@ -2327,7 +2447,7 @@ def stage_timescales (base_dir='./', fig_dir=None, plot_traj=False):
             fig_name = None
         finished_plot(fig, fig_name=fig_name)
 
-    for all_times, title, abbrev in zip([stab_to_tip_all, tip_to_melt_max_all, ramp_down_to_recovery_all, ramp_down_to_min_s_all], ['climate stabilisation and tipping', 'tipping and maximum basal mass loss', 'ramp-down and recovery', 'ramp-down and minimum salinity'], ['stab_to_tip', 'tip_to_melt_max', 'ramp_down_to_recovery', 'ramp_down_to_min_s']):
+    for all_times, title, abbrev in zip([stab_to_tip_all, tip_to_melt_max_all, tip_to_recovery_all, ramp_down_to_recovery_all, ramp_down_to_min_s_all], ['climate stabilisation and tipping', 'tipping and maximum basal mass loss', 'tipping and recovery', 'ramp-down and recovery', 'ramp-down and minimum salinity'], ['stab_to_tip', 'tip_to_melt_max', 'tip_to_recovery', 'ramp_down_to_recovery', 'ramp_down_to_min_s']):
         plot_histogram(all_times, 'Time between '+title, abbrev)
 
         
@@ -2353,20 +2473,39 @@ def check_all_nans (base_dir='./'):
                 check_nans(base_dir+'/'+suite+'/'+timeseries_file, var_names=var_names)
 
 
-# Plot a series of maps showing snapshots of the given variable in each cavity for selected scenarios: initial state, tipping point, 100 years later, recovery point. Works for bwtemp, bwsalt, ismr. Later add icevel (BISICLES output).
+# Plot a series of maps showing snapshots of the given variable in each cavity for selected scenarios: initial state, tipping point, 100 years later, recovery point. Works for bwtemp, bwsalt, ismr. Also plot BISICLES ice speed in the grounded ice.
 def map_snapshots (var_name='bwtemp', base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
     subfig = ['a) ', 'b) ']
     num_regions = len(regions)
     num_snapshots = 4
-    suite_strings = ['cx209-cz376-dc123', 'cx209-cz377-dc130']
+    suite_strings = ['cx209-cz376-da892', 'cx209-cz378-de943']
     year_titles = [['Initial', 'Tipping', '100 years later', 'Recovery'] for n in range(num_regions)]
     mask_pad = 5e4
+    ice_dir = '/gws/nopw/j04/terrafirma/tm17544/TerraFIRMA_overshoots/raw_data/'
+    ice_file_head = '/icesheet/bisicles_'
+    ice_file_mid = 'c_'
+    ice_file_tail = '0101_plot-AIS.hdf5'
+    vmax_speed = 1e3
+    sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'  # Just to build region masks and shelf break contour
+    labels = ['LABT', 'FT']
+    lon0 = [-163, -37]
+    lat0 = [-78, -77]
+    lon1 = [-158, -26]
+    lat1 = [-75, -77]
+    lont = [-157, -22]
+    latt = [-74, -77]
+    depth0 = 1500
+
+    ds_grid = xr.open_dataset(sample_file).squeeze()
+    bathy0, draft0, ocean_mask0, ice_mask0 = calc_geometry(ds_grid)
+    # Mask cavities out of bathymetry for shelf break contour
+    bathy0 = bathy0.where(np.invert(ice_mask0))
 
     # Set variable title, NEMO name, units
     if var_name == 'bwtemp':
-        var_title = 'Bottom ocean temperature'
+        var_title = 'Temperature at seafloor'
         units = deg_string+'C'
         nemo_var = 'tob'
         vmin = -2
@@ -2374,7 +2513,7 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         ctype = 'RdBu_r'
         colour_GL = 'yellow'
     elif var_name == 'bwsalt':
-        var_title = 'Bottom ocean salinity'
+        var_title = 'Salinity at seafloor'
         units = 'psu'
         nemo_var = 'sob'
         vmin = 33
@@ -2389,8 +2528,6 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         vmax = 20
         ctype = 'ismr'
         colour_GL = 'blue'
-    elif var_name == 'icevel':
-        raise Exception('Not yet coded icevel case')
     else:
         raise Exception('Invalid variable '+var_name)
 
@@ -2426,11 +2563,11 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
     
     # Loop over regions and read all the things we need
     data_plot = []
-    omask_plot = []
     omask_GL = []
     imask_front = []
     x_bounds = []
     y_bounds = []
+    ice_speed_plot = []
     for n in range(num_regions):
         # Find initial, tipping, and recovery years and suites
         tips, date_tip = check_tip(suite=suite_strings[n], region=regions[n], return_date=True, base_dir=base_dir)
@@ -2453,6 +2590,8 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         # Now locate the years and suites we want to plot
         plot_years = [start_years[0], date_tip.dt.year.item(), date_tip.dt.year.item()+100, date_recover.dt.year.item()]
         plot_suites = [find_suite(year, suite_list, start_years) for year in plot_years]
+        for year, suite, title in zip(plot_years, plot_suites, year_titles[n]):
+            print(regions[n]+' '+title+': '+str(year-start_years[suite_list.index(suite)])+' years into '+suite)
         # Add the tipping and recovery years (since initial) to the titles
         for m in [1, 3]:
             year_titles[n][m] += ' (year '+str(plot_years[m]-plot_years[0])+')'
@@ -2460,64 +2599,81 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         data_region = []
         omask_region = []
         imask_region = []
+        ice_speed_region = []
         for year, suite in zip(plot_years, plot_suites):
-            if var_name == 'icevel':
-                raise Exception('Not yet coded icevel case')
-            else:
-                # Build a list of the NEMO file patterns to read for this year
-                files_to_read = []
-                for f in os.listdir(base_dir+'/'+suite):
-                    if f.startswith('nemo_'+suite+'o_1m_'+str(year)) and f.endswith('-T.nc'):
-                        date_codes = re.findall(r'\d{4}\d{2}\d{2}', f)
-                        file_pattern = base_dir+'/'+suite+'/nemo_'+suite+'o_1m_'+date_codes[0]+'-'+date_codes[1]+'*-T.nc'
-                        if file_pattern not in files_to_read:
-                            files_to_read.append(file_pattern)
-                files_to_read.sort()
-                # Check there are 12 files
-                if len(files_to_read) != months_per_year:
-                    raise Exception(str(len(files_to_read))+' files found for '+suite+', year '+str(year))
-                # Annually average, carefully with masks
-                data_accum = None
-                ocean_mask = None
-                ice_mask = None
-                for file_pattern in files_to_read:
-                    ds = xr.open_mfdataset(file_pattern)
-                    ds.load()
-                    ds = ds.swap_dims({'time_counter':'time_centered'}).drop_vars(['time_counter'])
-                    data_tmp = ds[nemo_var].where(ds[nemo_var]!=0)
-                    ocean_mask_tmp = region_mask(regions[n], ds)[0]
-                    ice_mask_tmp = region_mask(regions[n], ds, option='cavity')[0]
-                    if data_accum is None:
-                        data_accum = data_tmp
-                        ocean_mask = ocean_mask_tmp
-                        ice_mask = ice_mask_tmp
-                        if n==0:
-                            # Set up plotting coordinates
-                            x, y = polar_stereo(ds['nav_lon'], ds['nav_lat'])
-                            lon_edges = cfxr.bounds_to_vertices(ds['bounds_lon'], 'nvertex')
-                            lat_edges = cfxr.bounds_to_vertices(ds['bounds_lat'], 'nvertex')
-                            x_edges, y_edges = polar_stereo(lon_edges, lat_edges)
-                            x_bg, y_bg = np.meshgrid(np.linspace(x_edges.min(), x_edges.max()), np.linspace(y_edges.min(), y_edges.max()))
-                            mask_bg = np.ones(x_bg.shape)
-                    else:
-                        data_accum = xr.concat([data_accum, data_tmp], dim='time_centered')
-                        # Save most retreated GL
-                        ocean_mask = xr.where(ocean_mask_tmp+ocean_mask, True, False)
-                        ice_mask = xr.where(ice_mask_tmp+ice_mask, True, False)
-                    ds.close()
-                data_mean = data_accum.mean(dim='time_centered')
-                if var_name == 'ismr':
-                    data_mean = convert_ismr(data_mean)
-                data_region.append(data_mean)
-                omask_region.append(ocean_mask)
-                imask_region.append(ice_mask)
+            # Build a list of the NEMO file patterns to read for this year
+            files_to_read = []
+            for f in os.listdir(base_dir+'/'+suite):
+                if f.startswith('nemo_'+suite+'o_1m_'+str(year)) and f.endswith('-T.nc'):
+                    date_codes = re.findall(r'\d{4}\d{2}\d{2}', f)
+                    file_pattern = base_dir+'/'+suite+'/nemo_'+suite+'o_1m_'+date_codes[0]+'-'+date_codes[1]+'*-T.nc'
+                    if file_pattern not in files_to_read:
+                        files_to_read.append(file_pattern)
+            files_to_read.sort()
+            # Check there are 12 files
+            if len(files_to_read) != months_per_year:
+                raise Exception(str(len(files_to_read))+' files found for '+suite+', year '+str(year))
+            # Annually average, carefully with masks
+            data_accum = None
+            ocean_mask = None
+            ice_mask = None
+            for file_pattern in files_to_read:
+                ds = xr.open_mfdataset(file_pattern)
+                ds.load()
+                ds = ds.swap_dims({'time_counter':'time_centered'}).drop_vars(['time_counter'])
+                data_tmp = ds[nemo_var].where(ds[nemo_var]!=0)
+                ocean_mask_tmp = region_mask(regions[n], ds)[0]
+                ice_mask_tmp = region_mask(regions[n], ds, option='cavity')[0]
+                if data_accum is None:
+                    data_accum = data_tmp
+                    ocean_mask = ocean_mask_tmp
+                    ice_mask = ice_mask_tmp
+                    if n==0:
+                        # Set up plotting coordinates
+                        x, y = polar_stereo(ds['nav_lon'], ds['nav_lat'])
+                        lon_edges = cfxr.bounds_to_vertices(ds['bounds_lon'], 'nvertex')
+                        lat_edges = cfxr.bounds_to_vertices(ds['bounds_lat'], 'nvertex')
+                        x_edges, y_edges = polar_stereo(lon_edges, lat_edges)
+                        x_bg, y_bg = np.meshgrid(np.linspace(x_edges.min(), x_edges.max()), np.linspace(y_edges.min(), y_edges.max()))
+                        mask_bg = np.ones(x_bg.shape)
+                else:
+                    data_accum = xr.concat([data_accum, data_tmp], dim='time_centered')
+                    # Save most retreated GL
+                    ocean_mask = xr.where(ocean_mask_tmp+ocean_mask, True, False)
+                    ice_mask = xr.where(ice_mask_tmp+ice_mask, True, False)
+                ds.close()
+            data_mean = data_accum.mean(dim='time_centered')
+            if var_name == 'ismr':
+                data_mean = convert_ismr(data_mean)
+            data_region.append(data_mean)
+            omask_region.append(ocean_mask)
+            imask_region.append(ice_mask)
+            # Now read the BISICLES data - just one file (stamped with following year)
+            ice_file = ice_dir + suite + ice_file_head + suite + ice_file_mid + str(year+1) + ice_file_tail
+            ds_ice = read_bisicles(ice_file, ['xVel', 'yVel', 'activeBasalThicknessSource'], level=0, order=0)
+            # Calculate speed
+            speed = np.sqrt(ds_ice['xVel']**2 + ds_ice['yVel']**2)
+            # Only consider regions with nonzero speed and zero basal melt (grounded ice)
+            speed = speed.where(speed > 0)
+            speed = speed.where(ds_ice['activeBasalThicknessSource']==0)
+            ice_speed_region.append(speed)
         data_plot.append(data_region)
-        omask_plot.append(omask_region)
+        ice_speed_plot.append(ice_speed_region)
         # Set plotting bounds on x (based on cavity) and y (based on cavity and shelf)
         xmin = set_bound(imask_region, x, 'min')
         xmax = set_bound(imask_region, x, 'max')
         ymin = set_bound(omask_region, y, 'min')
         ymax = set_bound(omask_region, y, 'max')
+        # Add a bit extra to some sides of the mask to show more grounded ice
+        if regions[n] == 'ross':
+            xmin -= mask_pad*4
+            ymax += mask_pad*3
+            xmax += mask_pad*3
+            ymin += mask_pad*5
+        elif regions[n] == 'filchner_ronne':
+            xmin += mask_pad*3
+            ymin -= mask_pad*2
+            xmax += mask_pad*5
         x_bounds.append([xmin, xmax])
         y_bounds.append([ymin, ymax])            
         # Prepare initial GL and ice front for contouring
@@ -2533,41 +2689,78 @@ def map_snapshots (var_name='bwtemp', base_dir='./'):
         vmin_real = np.amin([data.where(plot_region).min() for data in data_region])
         vmax_real = np.amax([data.where(plot_region).max() for data in data_region])
         print(regions[n]+' bounds from '+str(vmin_real)+' to '+str(vmax_real))
+    # Get BISICLES coordinates relative to the centre of the domain
+    x_ice = ice_speed_plot[0][0].coords['x']
+    y_ice = ice_speed_plot[0][0].coords['y']
+    x_c = 0.5*(x_ice[0] + x_ice[-1])
+    y_c = 0.5*(y_ice[0] + y_ice[-1])
+    x_ice = x_ice - x_c
+    y_ice = y_ice - y_c
 
     # Plot
     cmap = set_colours(data_plot[0][0], ctype=ctype, vmin=vmin, vmax=vmax)[0]
-    fig = plt.figure(figsize=(7,5))
+    fig = plt.figure(figsize=(7,6))
     gs = plt.GridSpec(num_regions, num_snapshots)
-    gs.update(left=0.02, right=0.98, bottom=0.1, top=0.86, wspace=0.1, hspace=0.55)
+    gs.update(left=0.02, right=0.98, bottom=0.23, top=0.89, wspace=0.1, hspace=0.5)
     for n in range(num_regions):
         for m in range(num_snapshots):
             ax = plt.subplot(gs[n,m])
-            if var_name == 'icevel':
-                raise Exception('Not yet coded icevel case')
-            else:            
-                # Shade land in grey
-                omask = omask_plot[n][m].where(omask_plot[n][m])
-                ax.pcolormesh(x_bg, y_bg, mask_bg, cmap=cl.ListedColormap(['DarkGrey']))
-                # Clear open ocean back to white
-                # TODO: this is only continental shelf
-                ax.pcolormesh(x_edges, y_edges, omask, cmap=cl.ListedColormap(['white']))
-                # Plot the data
-                img = ax.pcolormesh(x_edges, y_edges, data_plot[n][m], cmap=cmap, vmin=vmin, vmax=vmax)
-                # Contour initial GL in given colour
-                ax.contour(x, y, omask_GL[n], levels=[0.5], colors=(colour_GL), linewidths=0.5)
-                # Contour ice front in black
-                ax.contour(x, y, imask_front[n], levels=[0.5], colors=('black'), linewidths=0.5)
-                ax.set_xlim(x_bounds[n])
-                ax.set_ylim(y_bounds[n])
-                ax.set_xticks([])
-                ax.set_yticks([])
-                ax.set_title(year_titles[n][m], fontsize=12)
-        plt.text(0.5, 0.99-0.46*n, subfig[n]+region_names[regions[n]]+' Ice Shelf', ha='center', va='top', fontsize=14, transform=fig.transFigure)
-        plt.text(0.5, 0.95-0.46*n, suite_titles[n], ha='center', va='top', fontsize=10, transform=fig.transFigure)
-    cax = fig.add_axes([0.51, 0.05, 0.4, 0.02])
-    cbar = plt.colorbar(img, cax=cax, orientation='horizontal', extend='both')
-    cbar.ax.tick_params(labelsize=8)
-    plt.text(0.49, 0.03, var_title+' ('+units+')', ha='right', va='bottom', fontsize=12, transform=fig.transFigure)
+            # Plot the data
+            img = ax.pcolormesh(x_edges, y_edges, data_plot[n][m], cmap=cmap, vmin=vmin, vmax=vmax)
+            # Plot the ice speed in white to black
+            img_ice = ax.pcolormesh(x_ice, y_ice, ice_speed_plot[n][m].squeeze(), cmap='Greys', norm=cl.PowerNorm(0.5, vmax=vmax_speed))
+            # Contour initial GL
+            ax.contour(x, y, omask_GL[n], levels=[0.5], colors=(colour_GL), linewidths=0.5)
+            # Contour ice front
+            ax.contour(x, y, imask_front[n], levels=[0.5], colors=('white'), linewidths=0.5)
+            # Contour shelf break
+            ax.contour(x, y, bathy0, levels=[depth0], colors=('DarkMagenta'), linewidths=0.5)
+            ax.set_xlim(x_bounds[n])
+            ax.set_ylim(y_bounds[n])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_title(year_titles[n][m], fontsize=12)
+            if m == 1:
+                # Label troughs during tipping point
+                x0, y0 = polar_stereo(lon0[n], lat0[n])
+                x1, y1 = polar_stereo(lon1[n], lat1[n])
+                xt, yt = polar_stereo(lont[n], latt[n])
+                ax.plot([x0, x1], [y0, y1], color='black', linewidth=0.5)
+                plt.text(xt, yt, labels[n], ha='center', va='center', fontsize=9)                    
+        plt.text(0.5, 0.99-0.395*n, subfig[n]+region_names[regions[n]]+' Ice Shelf', ha='center', va='top', fontsize=14, transform=fig.transFigure)
+        plt.text(0.5, 0.96-0.395*n, suite_titles[n], ha='center', va='top', fontsize=10, transform=fig.transFigure)
+    cax1 = fig.add_axes([0.41, 0.17, 0.45, 0.02])
+    cbar1 = plt.colorbar(img, cax=cax1, orientation='horizontal', extend='both')
+    cbar1.ax.tick_params(labelsize=8)
+    plt.text(0.635, 0.12, var_title+' ('+units+')', ha='center', va='center', fontsize=10, transform=fig.transFigure)
+    cax2 = fig.add_axes([0.41, 0.07, 0.45, 0.02])
+    cbar2 = plt.colorbar(img_ice, cax=cax2, orientation='horizontal', extend='max')
+    cbar2.ax.tick_params(labelsize=8)
+    plt.text(0.635, 0.02, 'Ice sheet speed (m/y)', ha='center', va='center', fontsize=10, transform=fig.transFigure)
+    # Inset map showing regions
+    ax2 = fig.add_axes([0.16, 0.01, 0.2, 0.2])
+    ax2.axis('equal')
+    # Shade open ocean in light blue, cavities in grey
+    circumpolar_plot(ocean_mask0.where(ocean_mask0), ds_grid, ax=ax2, make_cbar=False, ctype='LightSkyBlue', lat_max=-66, shade_land=False)
+    circumpolar_plot(ice_mask0.where(ice_mask0), ds_grid, ax=ax2, make_cbar=False, ctype='DarkGrey', lat_max=-66, shade_land=False)
+    ax2.set_title('')
+    ax2.axis('on')
+    ax2.set_xticks([])
+    ax2.set_yticks([])
+    for n in range(num_regions):
+        [xmin, xmax] = x_bounds[n]
+        [ymin, ymax] = y_bounds[n]
+        corners_x = [xmin, xmax, xmax, xmin, xmin]
+        corners_y = [ymax, ymax, ymin, ymin, ymax]
+        ax2.plot(corners_x, corners_y, color='black', linewidth=0.5)
+        xpos = (3*xmin+xmax)/4
+        if n == 0:
+            ypos = (3*ymin+ymax)/4
+            label = 'a'
+        elif n == 1:
+            ypos = (ymin+3*ymax)/4
+            label = 'b'
+        plt.text(xpos, ypos, label, ha='center', va='center', fontsize=10)
     finished_plot(fig, fig_name='figures/map_snapshots_'+var_name+'.png', dpi=300)
 
 
@@ -2607,7 +2800,7 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
         pi_slr = None
         # Loop over scenarios and check if file exists
         for scenario in suites_by_scenario:
-            if scenario in ['piControl', 'ramp_up_static_ice']:
+            if 'static_ice' in scenario:
                 continue
             for suite in suites_by_scenario[scenario]:
                 if draft:
@@ -2651,7 +2844,7 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
                         continue
                     # Subtract drift
                     slr_trim, pi_slr_trim = align_timeseries(slr, pi_slr, time_coord='time')
-                    if not (slr_trim==slr).all():
+                    if slr_trim.size != slr.size:
                         # Shouldn't have needed to trim the base timeseries
                         raise Exception('Problem with aligning timeseries')
                     data = slr_trim - pi_slr_trim
@@ -2729,8 +2922,9 @@ def find_corrupted_files (base_dir='./', log=False):
 
     # Logfile to save a list of all the affected files
     log_file = base_dir+'/corrupted_files'
+    log_file2 = base_dir+'/problem_events'
     # MASS command file
-    mass_file = base_dir+'/moo_replace_corrupted.sh'
+    #mass_file = base_dir+'/moo_replace_corrupted.sh'
     timeseries_file = 'timeseries.nc'
     threshold_ini = 50  # Allow larger jump when ice sheets are first switched on
     threshold_big = 10
@@ -2747,14 +2941,15 @@ def find_corrupted_files (base_dir='./', log=False):
     if log:
         # Open files
         f_log = open(log_file, 'w')
-        f_mass = open(mass_file, 'w')
+        f_log2 = open(log_file2, 'w')
+        #f_mass = open(mass_file, 'w')
     num_months = 0
     num_problems = 0
     num_blocks_ref = 0
     num_blocks_other = 0
 
     # Construct the filenames corresponding to the given suite and date, and add them to the logfile.
-    def add_files (suite, date, add=False):
+    def add_files (suite, date, add=True):
         year0 = date.dt.year.item()
         month0 = date.dt.month.item()
         year1, month1 = add_months(year0, month0, 1)
@@ -2769,8 +2964,8 @@ def find_corrupted_files (base_dir='./', log=False):
             if log and add:
                 print('Problem with '+file_path)
                 f_log.write(file_path+'\n')
-                f_mass.write('rm '+suite+'/'+file_path+'\n')
-                f_mass.write('moo filter '+file_type+'T.moo_ncks_opts :crum/u-'+suite+'/onm.nc.file/'+file_path+' '+suite+'/\n')
+                #f_mass.write('rm '+suite+'/'+file_path+'\n')
+                #f_mass.write('moo filter '+file_type+'T.moo_ncks_opts :crum/u-'+suite+'/onm.nc.file/'+file_path+' '+suite+'/\n')
         return file_path0
 
     timestamps = []
@@ -2819,6 +3014,7 @@ def find_corrupted_files (base_dir='./', log=False):
                             if is_ref:
                                 print('Draft matches reference geometry')
                                 num_blocks_ref += 1
+                                f_log2.write(nemo_file+'\n')
                             else:
                                 print('Draft is something different')
                                 num_blocks_other +=1
@@ -2874,9 +3070,20 @@ def find_corrupted_files (base_dir='./', log=False):
                 print('\n'+str(num_blocks)+' blocks in '+suite+'\n')
     if log:
         f_log.close()
-        f_mass.close()
+        f_log2.close()
+        #f_mass.close()
     print(str(num_problems)+' of '+str(num_months)+' months affected ('+str(num_problems/num_months*100)+'%)')
-    print(str(num_blocks_ref)+' blocks of reference geometry ,'+str(num_blocks_other)+' blocks of other geometry')
+    print(str(num_blocks_ref)+' blocks of reference geometry, '+str(num_blocks_other)+' blocks of other geometry')
+
+    # Plot distribution of timestamps
+    fig, ax = plt.subplots(figsize=(8,3))
+    for ts in timestamps:
+        ax.plot_date(ts, np.random.rand(), '*')
+    ax.set_yticks([])
+    ax.set_title('Problems in real time')
+    ax.grid(linestyle='dotted')
+    plt.tight_layout()
+    fig.savefig('figures/problem_timestamps.png')
 
 
 # For each corrupted file name listed in the given file (created above), re-calculate that time index of data for the given timeseries file.
@@ -2897,7 +3104,7 @@ def overwrite_corrupted_timeseries (in_file='corrupted_files', timeseries_file='
             suites.append(suite)
 
     # Loop over suites
-    for suite in suites:
+    for suite in suites2:
         # Build list of affected file patterns
         file_patterns = []
         for fname in file_paths:
@@ -2935,11 +3142,11 @@ def overwrite_corrupted_timeseries (in_file='corrupted_files', timeseries_file='
 
 
 # Check the NetCDF global attribute timeStamp for every NEMO file in every suite, compared to the nearly-empty header files pulled more recently from MASS (only containing time variable). Make a list of the ones where the header timeStamp is newer: these have been overwritten on MASS and should be re-pulled again. Also write a moose command script as in find_corrupted_files.
-def find_updated_files (base_dir='./'):
+def find_updated_files (suite, base_dir='./'):
 
     header_dir = base_dir+'/headers/'
-    log_file = base_dir+'/updated_files'
-    mass_file = base_dir+'/moo_replace_updated.sh'
+    log_file = base_dir+'/'+suite+'/updated_files'
+    mass_file = base_dir+'/'+suite+'/moo_replace_updated.sh'
 
     f_log = open(log_file, 'w')
     f_mass = open(mass_file, 'w')
@@ -2948,44 +3155,377 @@ def find_updated_files (base_dir='./'):
 
     # Inner function to open the given NetCDF file and return the timeStamp attribute as a datetime object
     def parse_timestamp (file_path):
-        ds = xr.open_dataset(file_path)
-        date = datetime.datetime.strptime(ds.attrs['timeStamp'], "%Y-%b-%d %H:%M:%S UTC")
-        ds.close()
+        id = nc.Dataset(file_path, 'r')
+        date = datetime.datetime.strptime(id.timeStamp, "%Y-%b-%d %H:%M:%S UTC")
+        id.close()
         return date
 
     # Add the given filename to the logfile and MASS file
-    def add_files (suite, fname):
+    def add_files (fname):
         print('Problem with '+fname)
         file_type = fname[fname.rfind('_')+1:fname.index('-T.nc')]
         f_log.write(fname+'\n')
         f_mass.write('rm '+suite+'/'+fname+'\n')
         f_mass.write('moo filter '+file_type+'T.moo_ncks_opts :crum/u-'+suite+'/onm.nc.file/'+fname+' '+suite+'/\n')
-    
-    for scenario in suites_by_scenario:
-        for suite in suites_by_scenario[scenario]:
-            print('Processing '+suite)
-            for f in os.listdir(base_dir+'/'+suite):
-                num_files += 1
-                if not f.startswith('nemo_'+suite):
-                    continue
-                if not os.path.isfile(header_dir+'/'+suite+'/'+f):
-                    print('Warning: missing header for '+f)
-                date_orig = parse_timestamp(base_dir+'/'+suite+'/'+f)
-                date_header = parse_timestamp(header_dir+'/'+suite+'/'+f)
-                if date_header < date_orig:
-                    print('Warning: MASS timestamp is older than local timestamp for '+f)
-                elif date_header > date_orig:
-                    # MASS timestamp is newer - will have to re-pull this one
-                    add_files(suite, f)
-                    num_updated += 1
+
+    for f in os.listdir(base_dir+'/'+suite):
+        if not f.startswith('nemo_'+suite):
+            continue
+        num_files += 1
+        if num_files % 100 == 0:
+            print('...done '+str(num_files)+' files')
+        if not os.path.isfile(header_dir+'/'+suite+'/'+f):
+            print('Warning: missing header for '+f)
+            continue
+        date_orig = parse_timestamp(base_dir+'/'+suite+'/'+f)
+        date_header = parse_timestamp(header_dir+'/'+suite+'/'+f)
+        if date_header < date_orig:
+            print('Warning: MASS timestamp is older than local timestamp for '+f)
+        elif date_header > date_orig:
+            # MASS timestamp is newer - will have to re-pull this one
+            add_files(f)
+            num_updated += 1
     f_log.close()
     f_mass.close()
     print(str(num_updated)+' of '+str(num_files)+' files affected ('+str(num_updated/num_files*100)+'%)')
-                
-                    
-                
-            
+
+
+# Helper function to read the list of problem events, and make a dictionary of suites and dates affected.
+def find_problem_suites (base_dir='./', in_file='problem_events'):
+
+    f = open(in_file, 'r')
+    file_paths = f.read().splitlines()
+    f.close()   
+    problems_by_suite = {}
+    for file_path in file_paths:
+        # Extract suite name
+        suite = file_path[len('nemo_'):file_path.index('o_1m_')]
+        # Get date object from relevant file
+        ds = xr.open_dataset(suite+'/'+file_path)
+        date = ds['time_centered'].squeeze().item()
+        ds.close()
+        if suite in problems_by_suite:
+            problems_by_suite[suite] = problems_by_suite[suite] + [date]
+        else:
+            problems_by_suite[suite] = [date]
+    return problems_by_suite
+
+
+# Helper function to find all the trajectories affected by the geometry bug.
+# Returns a dictionary of affected trajectories (suite-strings), each corresponding to a list of dates when the problems occur.
+def find_problem_trajectories (base_dir='./', in_file='problem_events'):
+
+    problems_by_suite = find_problem_suites(base_dir=base_dir, in_file=in_file)
+
+    # Loop through all trajectories
+    all_traj = all_suite_trajectories()
+    problems_by_traj = {}
+    for traj in all_traj:
+        suite_string = '-'.join(traj)
+        # Check if any suites are affected
+        if any([suite in problems_by_suite for suite in traj]):
+            # Check if any problems actually happen during the trajectory (instead of, eg, in a perpetual ramp-up after the stabilisation here has already branched off)
+            # Find start and end date of each suite segment in trajectory
+            start_dates, end_dates = find_stages_start_end(traj, base_dir=base_dir)
+            problems_in_traj = []
+            for suite, suite_start, suite_end in zip(traj, start_dates, end_dates):
+                if suite in problems_by_suite:
+                    for date in problems_by_suite[suite]:
+                        if date >= suite_start and date <= suite_end:
+                            # Add to dictionary
+                            if suite_string in problems_by_traj:
+                                problems_by_traj[suite_string] = problems_by_traj[suite_string] + [date]
+                            else:
+                                problems_by_traj[suite_string] = [date]
+    return problems_by_traj                
+
+
+# Find all the trajectories affected by the geometry bug, and plot the affected ones showing the dates of each problem relative to tipping/recovery and suite transitions.
+def plot_problem_trajectories (base_dir='./', in_file='problem_events'):
+
+    regions = ['ross', 'filchner_ronne']
+    colours = ['DarkRed', 'DarkSlateBlue', 'Crimson', 'DodgerBlue']  # Ross tips, Ross recovers, FRIS tips, FRIS recovers
+    stage_colours = ['Crimson', 'white', 'DodgerBlue']
     
+    problems_by_traj = find_problem_trajectories(base_dir=base_dir, in_file=in_file)
+    for suite_string in problems_by_traj:
+        suite_list = suite_string.split('-')
+        # Check Ross and FRIS tipping/recovery dates
+        plot_dates = []
+        for region in regions:
+            plot_dates.append(check_tip(suite=suite_string, region=region, return_date=True)[1])
+            plot_dates.append(check_recover(suite=suite_string, region=region, return_date=True)[1])
+        start_dates, end_dates = find_stages_start_end(suite_string.split('-'), base_dir=base_dir)
+        # Plot
+        fig, ax = plt.subplots(figsize=(8,2))
+        # Star for each problem
+        for date in problems_by_traj[suite_string]:
+            ax.plot_date(date, 1, '*', color='black')
+        # Dashed lines for tipping and recovery
+        for date, colour in zip(plot_dates, colours):
+            if date is not None:
+                ax.axvline(date.item(), color=colour, linestyle='dashed')
+        # Shade colours and labels for each suite
+        for t in range(len(start_dates)):
+            ax.axvspan(start_dates[t], end_dates[t], alpha=0.1, color=stage_colours[t])
+            plt.text(start_dates[t], 1.5, suite_list[t], ha='left', va='top')
+        ax.set_xlim([start_dates[0], end_dates[-1]])
+        ax.set_ylim([0.5, 1.5])
+        ax.set_yticks([])
+        ax.set_title(trajectory_title(suite_list))
+        plt.tight_layout()
+        fig.show()
+
+
+# Compare global warming at the time of tipping/recovery between trajectories affected by the geometry bug, and trajectories unaffected.
+def bug_impact_tipping_recovery (base_dir='./', in_file='problem_events'):
+
+    regions = ['ross', 'filchner_ronne']
+    var_names = ['global_warming'] #, 'shelf_bwsalt']
+    timeseries_file = 'timeseries.nc'
+    timeseries_file_um = 'timeseries_um.nc'
+    smooth = 5*months_per_year
+    pi_suite = 'cs495'
+    p0 = 0.05
+
+    all_traj = all_suite_trajectories()
+    problems_by_traj = find_problem_trajectories(base_dir=base_dir, in_file=in_file)
+    baseline_temp = pi_baseline_temp(pi_suite=pi_suite, base_dir=base_dir)
+
+    # Loop over regions
+    for region in regions:
+        # Loop over the variables we want to test
+        for var in var_names:
+            print('\nTesting impact on '+var+' for '+region)                
+            at_tip_problem = []
+            at_tip_noproblem = []
+            at_recovery_problem = []
+            at_recovery_noproblem = []
+            # Check every trajectory
+            for suite_list in all_traj:
+                # Check if it tips
+                suite_string = '-'.join(suite_list)
+                cavity_temp = build_timeseries_trajectory(suite_list, region+'_cavity_temp', base_dir=base_dir, timeseries_file=timeseries_file)
+                cavity_temp = moving_average(cavity_temp, smooth)
+                tips, date_tip, t_tip = check_tip(cavity_temp=cavity_temp, smoothed=True, return_date=True, return_t=True)
+                if tips:
+                    # Now build the data
+                    if var == 'global_warming':
+                        data = build_timeseries_trajectory(suite_list, 'global_mean_sat', base_dir=base_dir, timeseries_file=timeseries_file_um, offset=-baseline_temp)
+                    else:
+                        data = build_timeseries_trajectory(suite_list, region+'_'+var, base_dir=base_dir, timeseries_file=timeseries_file)
+                    data = moving_average(data, smooth)
+                    cavity_temp, data = align_timeseries(cavity_temp, data)
+                    tip_data = data.isel(time_centered=t_tip)
+                    # Check if there is a problem before the tipping point
+                    if suite_string in problems_by_traj:
+                        problem = any([date <= date_tip for date in problems_by_traj[suite_string]])
+                    else:
+                        problem = False
+                    if problem:
+                        at_tip_problem.append(tip_data)
+                    else:
+                        at_tip_noproblem.append(tip_data)
+                    # Check if it recovers
+                    recovers, date_recover, t_recover = check_recover(cavity_temp=cavity_temp, smoothed=True, return_date=True, return_t=True)
+                    if recovers:
+                        recover_data = data.isel(time_centered=t_recover)
+                        # Check if there is a problem before recovery
+                        if suite_string in problems_by_traj:
+                            problem = any([date <= date_recover for date in problems_by_traj[suite_string]])
+                        else:
+                            problem = False
+                        if problem:
+                            at_recovery_problem.append(recover_data)
+                        else:
+                            at_recovery_noproblem.append(recover_data)
+            # Now check statistics
+            for problem, noproblem, suptitle in zip([at_tip_problem, at_recovery_problem], [at_tip_noproblem, at_recovery_noproblem], ['tipping', 'recovery']):            
+                # Make sure we're not double-counting branched trajectories
+                problem = np.unique(problem)
+                noproblem = np.unique(noproblem)
+                if np.size(problem) == 0:
+                    print('No problems before '+suptitle)
+                elif np.size(noproblem) == 0:
+                    print('Entirely problems before '+suptitle)
+                else:
+                    full = np.concatenate((problem, noproblem), axis=0)
+                    for data, title in zip([full, noproblem, problem], ['all', 'no problems', 'problems']):
+                        print('Mean at '+suptitle+' ('+title+'): '+str(np.mean(data))+', n='+str(np.size(data)))
+                    # Check if problems within range of no-problems
+                    in_range = 0
+                    for x in problem:
+                        if x >= np.amin(noproblem) and x <= np.amax(noproblem):
+                            in_range += 1
+                    print(str(in_range)+' of '+str(np.size(problem))+' problems within range of no-problems')
+                    # Check if significant difference between all combinations of the 3 samples
+                    samples = [problem, noproblem, full]
+                    names = ['problems', 'no-problems', 'full']
+                    num_samples = len(samples)
+                    for i in range(num_samples):
+                        for j in range(i+1, num_samples):
+                            p_val = ttest_ind(samples[i], samples[j], equal_var=False)[1]
+                            if p_val < p0:
+                                print('Significant difference of '+str(np.mean(samples[i])-np.mean(samples[j]))+' between '+names[i]+' and '+names[j]+', p='+str(p_val))
+                            else:
+                                print('No significant difference between '+names[i]+' and '+names[j])
+
+
+# Plot the differences between a simulation with the geometry bug, and a re-run version without the bug, to see the recovery timescale.
+def bug_recovery_timescale (base_dir='./'):
+
+    suite_old = 'dc130'
+    suite_new = 'dn966'
+    rampup_suite = 'cx209'
+    timeseries_file = 'timeseries.nc'
+    var_names = ['massloss', 'cavity_temp', 'cavity_salt', 'bwtemp', 'bwsalt', 'shelf_bwsalt']
+    regions = ['all', 'ross', 'filchner_ronne']
+    smooth_detrend = 30*months_per_year
+    smooth = months_per_year  # Seasonality
+    std_cutoff = 1
+
+    def read_var (suite, var):
+        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+        data = ds[var]
+        ds.close()
+        return data
+
+    for var in var_names:
+        for region in regions:
+            if var == 'shelf_bwsalt' and region == 'all':
+                continue
+            var_full = region+'_'+var
+            # Get std of detrended ramp-up
+            data_rampup = read_var(rampup_suite, var_full)
+            # Take 30-year rolling mean to detrend
+            rampup_smooth = moving_average(data_rampup, smooth_detrend)
+            # Separately take 1-year mean to remove seasonal cycle
+            data_rampup = moving_average(data_rampup, smooth)
+            # Now get difference on correct time indices
+            data_rampup, rampup_smooth = align_timeseries(data_rampup, rampup_smooth)
+            rampup_detrend = data_rampup - rampup_smooth
+            # Now get std
+            std = rampup_detrend.std()
+            
+            # Read data from each simulation and take 1-year mean
+            data_old = read_var(suite_old, var_full)
+            data_new = read_var(suite_new, var_full)
+            # Save first non-problem year: year after new simulation starts
+            year0 = data_new['time_centered'][0].dt.year.item()+1
+            data_old, data_new = align_timeseries(data_old, data_new)
+            data_old = moving_average(data_old, smooth)
+            data_new = moving_average(data_new, smooth)
+            # Get difference
+            data_diff = data_old - data_new
+            # Get time axis: years since problem ended
+            years = np.array([(date.dt.year.item() - year0) + (date.dt.month.item() - 1)/months_per_year + 0.5 for date in data_diff['time_centered']])
+            # Plot
+            fig, ax = plt.subplots()
+            ax.plot(years, data_diff, '-', color='blue')
+            ax.set_xlabel('Years since problem ended')
+            ax.set_ylabel(data_old.units)
+            ax.grid(linestyle='dotted')
+            [y0, y1] = ax.get_ylim()
+            ax2 = ax.twinx()
+            ax2.plot(years, data_diff/std, '-', color='blue')
+            ax2.set_ylim([y0/std, y1/std])
+            ax2.set_ylabel('std')
+            ax2.axhline(std_cutoff, color='black', linestyle='dashed', linewidth=1)
+            ax2.axhline(-std_cutoff, color='black', linestyle='dashed', linewidth=1)
+            ax.set_title(var_full)
+            fig.show()
+
+
+# Given the recovery timescale determined above (9 years for everything to recover within 1 std), mask out every problem event and the following 9 years in the ocean timeseries. Keep the unmasked versions, but rename them.
+def mask_problems (base_dir='./', in_file='problem_events'):
+
+    timeseries_file = 'timeseries.nc'
+    timeseries_copy = 'timeseries_unmasked.nc'
+    mask_years = 9
+
+    problems_by_suite = find_problem_suites(base_dir=base_dir, in_file=in_file)
+    # Loop over affected suites
+    for suite in problems_by_suite:
+        print('Processing '+suite)
+        file_path = base_dir+'/'+suite+'/'+timeseries_file
+        # Make a copy of timeseries
+        shutil.copyfile(file_path, base_dir+'/'+suite+'/'+timeseries_copy)
+        # Read timeseries and get time axis
+        ds = xr.open_dataset(file_path)
+        time = ds['time_centered']
+        # Loop over problems in this suite
+        masked_months = 0
+        for date in problems_by_suite[suite]:
+            # Find the time index where the problem starts
+            t0 = np.argwhere(time.data==date)[0][0]
+            year0 = time[t0].dt.year
+            month0 = time[t0].dt.month
+            # Mask out that time index, and the rest of that year
+            mask = (time.dt.year == year0)*(time.dt.month >= month0)
+            masked_months += np.count_nonzero(mask)
+            ds = ds.where(~mask)
+            # Now mask out the following 9 full years
+            mask = (time.dt.year > year0)*(time.dt.year <= year0+mask_years)
+            masked_months += np.count_nonzero(mask)
+            ds = ds.where(~mask)
+        print('Masked '+str(masked_months)+' months ('+str(masked_months/ds.sizes['time_centered']*100)+'% of timeseries)')
+        # Overwrite timeseries
+        overwrite_file(ds, file_path)
+
+
+# Confirm that the Ross always tips first, and FRIS always recovers first
+def check_tipping_recovery_order (base_dir='./'):
+
+    smooth = 5*months_per_year
+
+    all_traj = all_suite_trajectories()
+    for suite_list in all_traj:
+        suite_string = '-'.join(suite_list)
+        fris_temp = moving_average(build_timeseries_trajectory(suite_list, 'filchner_ronne_cavity_temp', base_dir=base_dir), smooth)
+        ross_temp = moving_average(build_timeseries_trajectory(suite_list, 'ross_cavity_temp', base_dir=base_dir), smooth)
+        fris_tip, fris_t = check_tip(cavity_temp=fris_temp, smoothed=True, return_t=True)
+        if fris_tip:
+            ross_tip, ross_t = check_tip(cavity_temp=ross_temp, smoothed=True, return_t=True)
+            if not ross_tip:
+                print(suite_string+': FRIS tips but not Ross')
+            elif fris_t < ross_t:
+                print(suite_string+': FRIS tips before Ross')
+            fris_recover, fris_t = check_recover(cavity_temp=fris_temp, smoothed=True, return_t=True)
+            ross_recover, ross_t = check_recover(cavity_temp=ross_temp, smoothed=True, return_t=True)
+            if ross_recover and not fris_recover:
+                print(suite_string+': Ross recovers but not FRIS')
+            elif not ross_recover:
+                continue
+            elif ross_t < fris_t:
+                print(suite_string+': Ross recovers before FRIS')
+
+
+# Check if any ramp-downs tip.
+def check_rampdown_tip (base_dir='./'):
+
+    regions = ['ross', 'filchner_ronne']
+    trajectories = all_suite_trajectories()
+    smooth = 5*months_per_year
+
+    for region in regions:
+        for suite_list in trajectories:
+            suite_string = '-'.join(suite_list)
+            cavity_temp = moving_average(build_timeseries_trajectory(suite_list, region+'_cavity_temp', base_dir=base_dir), smooth)
+            tips, tip_t = check_tip(cavity_temp=cavity_temp, smoothed=True, return_t=True)
+            if tips:
+                stype = cavity_temp.scenario_type[tip_t]
+                if stype == -1:
+                    print(suite_string+': '+region+' tips during ramp-down')
+            
+        
+        
+        
+        
+
+    
+            
+            
+            
     
 
     

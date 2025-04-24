@@ -234,11 +234,17 @@ def UBOT_to_U10_wind(UBOT, VBOT, U10):
     U10x = U10*np.cos(theta)
     U10y = U10*np.sin(theta)
 
-    # check that the differences between U10 speed and recreated U10 speed are small:
-    U10_recreate = np.sqrt(U10x**2 + U10y**2)
-    if np.max(np.abs(U10 - U10_recreate)) > 0.1: 
-        raise Exception('The maximum difference between the provided U10 wind speed and the recreated speed' + \
-                        'is greater than 0.1 m/s. Double check that wind velocities were recreated correctly.')
+    return U10x, U10y
+
+# Get CESM2 wind velocities from the wind speed at 10 meters and the direction from the surface stress 
+# (because wind speed vectors are not available for the CESM2 single forcing experiments at daily frequency)
+def TAU_to_U10xy(TAUX, TAUY, U10):
+
+    # calculate the angle between the surface stress vectors (need to take opposite direction because of definition difference)
+    theta = np.arctan2(-1*TAUY, -1*TAUX)
+    # then use this angle to create the x and y wind vector components that sum to the magnitude of the U10 wind speed
+    U10x = U10*np.cos(theta)
+    U10y = U10*np.sin(theta)
 
     return U10x, U10y
 
@@ -247,7 +253,7 @@ def UBOT_to_U10_wind(UBOT, VBOT, U10):
 def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, year_ens_start=1750, shift_wind=False,
                        land_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/LE2/b.e21.BHISTsmbb.f09_g17.LE2-1011.001.cam.h0.LANDFRAC.185001-185912.nc'):
 
-    if expt not in ['LE2', 'piControl']:
+    if expt not in ['LE2', 'piControl', 'SF-AAER', 'SF-BMB', 'SF-GHG', 'SF-EE']:
         raise Exception('Invalid experiment {expt}')
 
     # load cesm2 land-ocean mask
@@ -266,17 +272,18 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, 
             data_large = ds_large['PRECSL'].isel(time=(ds_large.time.dt.year == year))
         elif var=='wind':
             if expt=='piControl': var_U = 'U'; var_V='V';
-            else: var_U='UBOT'; var_V='VBOT';
+            elif expt=='LE2': var_U='UBOT'; var_V='VBOT';
+            elif expt in ['SF-AAER', 'SF-BMB', 'SF-GHG', 'SF-EE']: var_U='TAUX'; var_V='TAUY'; # single forcing expts don't have UBOT, VBOT so need to calc from stress
+
+            file_path_U10  = find_cesm2_file(expt, 'U10', 'atm', freq, ens, year)
             file_path_UBOT = find_cesm2_file(expt, var_U, 'atm', freq, ens, year)
             file_path_VBOT = find_cesm2_file(expt, var_V, 'atm', freq, ens, year)
-            file_path_U10  = find_cesm2_file(expt, 'U10', 'atm', freq, ens, year)
-
-            ds_UBOT = xr.open_dataset(file_path_UBOT)
-            ds_VBOT = xr.open_dataset(file_path_VBOT)
-            ds_U10  = xr.open_dataset(file_path_U10)
-            data_UBOT = ds_UBOT[var_U].isel(time=(ds_UBOT.time.dt.year == year))
-            data_VBOT = ds_VBOT[var_V].isel(time=(ds_VBOT.time.dt.year == year))
-            data_U10  = ds_U10['U10'].isel(time=(ds_U10.time.dt.year == year))
+            ds_U10         = xr.open_dataset(file_path_U10)
+            ds_UBOT        = xr.open_dataset(file_path_UBOT)
+            ds_VBOT        = xr.open_dataset(file_path_VBOT)
+            data_U10       = ds_U10['U10'].isel(time=(ds_U10.time.dt.year == year))
+            data_UBOT      = ds_UBOT[var_U].isel(time=(ds_UBOT.time.dt.year == year))
+            data_VBOT      = ds_VBOT[var_V].isel(time=(ds_VBOT.time.dt.year == year))
         else: 
             file_path = find_cesm2_file(expt, var, 'atm', freq, ens, year)
             ds        = xr.open_dataset(file_path)
@@ -299,9 +306,15 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, 
             if expt=='piControl':
                 data_UBOT = data_UBOT.isel(lev=-1) # bottom wind is the last entry (992 hPa)
                 data_VBOT = data_VBOT.isel(lev=-1)
+            elif expt in ['SF-AAER', 'SF-BMB', 'SF-GHG', 'SF-EE']:
+                Ux, Uy    = TAU_to_U10xy(data_UBOT, data_VBOT, data_U10)
+                data_UBOT = Ux.rename('U10x')
+                data_VBOT = Uy.rename('U10y')
+                shift_wind=False # since wind speed vectors are already calculated from the U10 speed
+
             # Convert the wind to the corrected height
             if shift_wind:
-                Ux, Uy = UBOT_to_U10_wind(data_UBOT, data_VBOT, data_U10)
+                Ux, Uy    = UBOT_to_U10_wind(data_UBOT, data_VBOT, data_U10)
                 data_UBOT = Ux.rename('U10x')
                 data_VBOT = Uy.rename('U10y')
 
@@ -545,13 +558,13 @@ def process_era5_forcing(variable, year_start=1979, year_end=2023, era5_folder='
         # convert time dimension to unlimited so that NEMO reads in the calendar correctly
         for filename in glob.glob(f'{era5_folder}{variable}*y{year}.nc'):
             with xr.open_dataset(filename, mode='a') as data:
-                print(filename)
+                print('Processing', filename)
                 try:
                     data = data.rename({'valid_time':'time'})
                 except:
-                    continue
+                    pass
+                
                 variable = filename.split('files/')[1].split('_')[0]
-
                 if variable in ['msdwlwrf','msdwswrf','t2m','sph2m','d2m','msl']: 
                     print(f'Filling land for variable {variable} year {year}')
                     if variable=='sph2m':
@@ -562,10 +575,10 @@ def process_era5_forcing(variable, year_start=1979, year_end=2023, era5_folder='
                     var_filled_array = np.empty(src_to_fill.shape)
                     for tind, t in enumerate(src_to_fill.time):
                         var_filled_array[:,:,tind] = extend_into_mask(src_to_fill.isel(time=tind).values, missing_val=-9999, fill_val=np.nan, 
-                                                                     use_2d=True, use_3d=False, num_iters=200)
-                    
+                                                                      use_2d=True, use_3d=False, num_iters=200)
                     data[varname] = (('latitude','longitude','time'), var_filled_array)
-
+                    data = data.transpose('time','latitude','longitude')
+               
                 data.to_netcdf(f'{era5_folder}processed/{variable}_time_y{year}.nc', unlimited_dims={'time':True})
 
     return
