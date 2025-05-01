@@ -78,7 +78,7 @@ suites_overshoot_lengths = {'50 years': ['da697', 'dc052', 'di335', 'dc051', 'df
 suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'di335':'cy838', 'df453':'cz375', 'dc565':'cy838', 'dd210':'cz376', 'df028':'cz375', 'df025':'cy838', 'df027':'cy838', 'df021':'cz375', 'df023':'cz375', 'dh541':'cz376', 'dh859':'cz376', 'de943':'cz378', 'de962':'cz378', 'de963':'cz378', 'dg093':'cz377', 'dg094':'cz377', 'dg095':'cz377', 'dm357':'cz378', 'dm358':'cz378', 'dm359':'cz378'}
 
 tipping_threshold = -1.9  # If cavity mean temp is warmer than surface freezing point, it's tipped
-temp_correction = [1.0087846842764405, 0.8065649751736049]  # Precomputed by warming_implied_by_salinity_bias(). Ross, then FRIS.
+temp_correction = [1.3303529058239723, 0.6208547377290446]  # Precomputed by warming_implied_by_salinity_bias(). Ross, then FRIS.
 
 # End global vars
 
@@ -1410,7 +1410,7 @@ def calc_salinity_bias (base_dir='./', eos='eos80'):
             cax = cax = fig.add_axes([0.01+0.45*n, 0.1, 0.02, 0.6])
             plt.colorbar(img, cax=cax, extend='both')
     plt.suptitle('Bottom salinity (psu)', fontsize=18)
-    finished_plot(fig)
+    finished_plot(fig, fig_name='figures/bwsalt_bias.png')
 
     # Loop over regions and print means and biases
     bias = []
@@ -1432,6 +1432,7 @@ def calc_salinity_bias (base_dir='./', eos='eos80'):
 
 
 # Calculate the global warming implied by the salinity biases (from above), using a linear regression for the untipped sections of ramp-up simulations for each ice shelf.
+# Last calculation: ross_bias=-0.1309137, fris_bias=-0.09288089
 def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='./'):
 
     pi_suite = 'cs495'
