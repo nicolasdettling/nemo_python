@@ -1207,6 +1207,7 @@ def tipping_stats (base_dir='./'):
         # Step up to one simulation warmer than that: upper bound on threshold
         threshold_max = np.amin(max_warming[max_warming > last_notip]) + temp_correction[r]
         threshold_bounds.append([threshold_min, threshold_max])
+        print('Threshold lies between '+str(threshold_min)+' and '+str(threshold_max))
 
     # Plot
     fig = plt.figure(figsize=(6,5))
@@ -1271,7 +1272,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
     regions = ['ross', 'filchner_ronne']
     num_regions = len(regions)
     highlights = ['cx209-cz376-da892', 'cx209-cz378-de943']
-    arrow_loc = [[[1.5, 3.5, 4.6], [5], [4.75, 3.5]], [[1.5, 4.5, 6.5], [], [6.6, 4.9, 3.3]], [[3.5, 4.4], [5.2], [5.1, 4]], [[4, 5.9, 6.4], [6.98], [6.8, 4.7, 3.5]]]
+    arrow_loc = [[[1.8, 3.8, 4.9], [5.3], [5.1, 3.8]], [[1.3, 4.3, 6.3], [], [6.2, 4.6, 3.1]], [[3.8, 4.7], [5.5], [5.4, 4.3]], [[3.8, 5.7, 6.2], [6.8], [6.5, 4.5, 3.3]]]
     var_names = ['cavity_temp', 'massloss']
     var_titles = ['a) Ocean temperature in ice shelf cavities', 'b) Melting beneath ice shelves']
     var_units = [deg_string+'C', 'Gt/y']
@@ -1386,7 +1387,7 @@ def calc_salinity_bias (base_dir='./', eos='eos80'):
 
     # Now read observations of bottom salinity and regrid to NEMO grid
     print('Reading Zhou 2025 data')
-    obs = read_zhou_bottom_climatology(in_file=obs_file, eos='eos80')
+    obs = read_zhou_bottom_climatology(in_file=obs_file, eos=eos)
     obs_interp = interp_latlon_cf(obs, ds, method='bilinear')
     obs_bwsalt = obs_interp['salt']
 
@@ -1410,7 +1411,7 @@ def calc_salinity_bias (base_dir='./', eos='eos80'):
             cax = cax = fig.add_axes([0.01+0.45*n, 0.1, 0.02, 0.6])
             plt.colorbar(img, cax=cax, extend='both')
     plt.suptitle('Bottom salinity (psu)', fontsize=18)
-    finished_plot(fig, fig_name='figures/bwsalt_bias.png')
+    finished_plot(fig)
 
     # Loop over regions and print means and biases
     bias = []
@@ -1485,7 +1486,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
     title_prefix = ['a) ', 'b) ']
-    bwsalt_bias = [-0.13443893, -0.11137423]  # Precomputed above. For TEOS-10, this is [-0.13509758, -0.11196334]
+    obs_freshening = -0.17  # Ross, TEOS-10
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
     smooth = 5*months_per_year
@@ -1571,12 +1572,18 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
             p_val = ttest_ind(bwsalt_tip, bwsalt_recover, equal_var=False)[1]
             distinct = p_val < p0
             if distinct:
-                print('Significant difference (p='+str(p_val)+')')
+                print('Significant difference (p='+str(p_val)+') of '+str(np.mean(bwsalt_tip)-np.mean(bwsalt_recover)))
             else:
-                print('No significant difference (p='+str(p_val)+')')
+                print('No significant difference (p='+str(p_val)+') of '+str(np.mean(bwsalt_tip)-np.mean(bwsalt_recover)))
         else:
             threshold_recover.append(None)
         print('Freshening of absolute salinity between beginning of ramp-up and tipping point has mean '+str(np.mean(freshening_to_tip))+', std '+str(np.std(freshening_to_tip)))
+        if region == 'ross':
+            # Calculate Ross bwsalt bias in TEOS-10
+            ross_bias = calc_salinity_bias(base_dir=base_dir, eos='teos10')[0]
+            # Compare observed freshening to freshening required to tip (plus correction)
+            fresh_fraction = obs_freshening/(np.mean(freshening_to_tip)+ross_bias)*100
+            print('Observed freshening is '+str(fresh_fraction)+'% of what is needed to tip')
 
     # Set up colour map to vary with global warming level
     norm = plt.Normalize(np.amin(temp_correction), max_warming)
