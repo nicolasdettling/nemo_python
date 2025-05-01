@@ -159,7 +159,7 @@ def read_zhou_bottom_climatology (in_file='/gws/nopw/j04/terrafirma/kaight/input
         return xr.DataArray(np.transpose(ds[var_name].data), coords=[ds['lat'].data, ds['lon'].data], dims=['lat', 'lon'])
     temp = set_var('bottom_temperature')
     salt = set_var('bottom_salinity')
-    depth = set_var('bottom_depth')  # to confirm
+    depth = set_var('bathymetry')  # to confirm
     if eos == 'eos80':
         press = np.abs(depth)
         lon_2d, lat_2d = np.meshgrid(ds['lon'], ds['lat'])
