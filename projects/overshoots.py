@@ -1385,6 +1385,7 @@ def calc_salinity_bias (base_dir='./', eos='eos80'):
     ramp_up_bwsalt /= (num_years*months_per_year*len(suites_by_scenario['ramp_up']))
 
     # Now read observations of bottom salinity and regrid to NEMO grid
+    print('Reading Zhou 2025 data')
     obs = read_zhou_bottom_climatology(in_file=obs_file, eos='eos80')
     obs_interp = interp_latlon_cf(obs, ds, method='bilinear')
     obs_bwsalt = obs_interp['salt']
