@@ -25,7 +25,7 @@ from ..plot_utils import truncate_colourmap
 from ..utils import moving_average, add_months, rotate_vector, polar_stereo, convert_ismr, bwsalt_abs
 from ..grid import region_mask, calc_geometry, build_ice_mask
 from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year, rho_fw, rho_ice, sec_per_year, vaf_to_gmslr
-from ..file_io import read_schmidtko, read_woa
+from ..file_io import read_schmidtko, read_woa, read_zhou_bottom_climatology
 from ..interpolation import interp_latlon_cf, interp_grid
 from ..diagnostics import barotropic_streamfunction
 from ..plot_utils import set_colours, latlon_axes
@@ -1337,8 +1337,7 @@ def calc_salinity_bias (base_dir='./', eos='eos80'):
     hist_suite = 'cy691'  # Historical, static cavities: to get UKESM's idea of warming relative to preindustrial
     timeseries_file_um = 'timeseries_um.nc'
     num_years = 10
-    schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/schmidtko_TS.txt'
-    woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_decav_*00_04.nc'
+    obs_file = '/gws/nopw/j04/terrafirma/kaight/input_data/shenjie_climatology_bottom_TS.nc'  # Zhou 2025
 
     # Inner function to read global mean SAT from precomputed timeseries
     def global_mean_sat (suite):
@@ -1385,14 +1384,10 @@ def calc_salinity_bias (base_dir='./', eos='eos80'):
     # Convert from integral to average (over months and ensemble members)
     ramp_up_bwsalt /= (num_years*months_per_year*len(suites_by_scenario['ramp_up']))
 
-    # Now read observations of bottom salinity
-    schmidtko = read_schmidtko(schmidtko_file=schmidtko_file, eos=eos)
-    woa = read_woa(woa_files=woa_files, eos=eos)
-    # Regrid to the NEMO grid, giving precedence to Schmidtko where both datasets exist
-    schmidtko_interp = interp_latlon_cf(schmidtko, ds, method='bilinear')
-    woa_interp = interp_latlon_cf(woa, ds, method='bilinear')
-    obs = xr.where(schmidtko_interp.isnull(), woa_interp, schmidtko_interp)
-    obs_bwsalt = obs['salt']
+    # Now read observations of bottom salinity and regrid to NEMO grid
+    obs = read_zhou_bottom_climatology(in_file=obs_file, eos='eos80')
+    obs_interp = interp_latlon_cf(obs, ds, method='bilinear')
+    obs_bwsalt = obs_interp['salt']
 
     # Make a quick plot
     fig = plt.figure(figsize=(8,3))

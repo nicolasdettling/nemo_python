@@ -150,6 +150,25 @@ def read_zhou(fileT='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/observations/shenj
         
     return obs_ds
 
+
+def read_zhou_bottom_climatology (in_file='/gws/nopw/j04/terrafirma/kaight/input_data/shenjie_climatology_bottom_TS.nc', eos='teos10'):
+
+    import gsw
+    ds = xr.open_dataset(in_file)
+    def set_var (var_name):
+        return xr.DataArray(np.transpose(ds[var_name].data), coords=[ds['lat'].data, ds['lon'].data], dims=['lat', 'lon'])
+    temp = set_var('bottom_temperature')
+    salt = set_var('bottom_salinity')
+    depth = set_var('bottom_depth')  # to confirm
+    if eos == 'eos80':
+        press = np.abs(depth)
+        lon_2d, lat_2d = np.meshgrid(ds['lon'], ds['lat'])
+        obs_temp = gsw.pt_from_CT(salt, temp)
+        obs_salt = gsw.SP_from_SA(salt, press, lon_2d, lat_2d)
+    obs = xr.Dataset({'temp':temp, 'salt':salt})
+    return obs    
+    
+
 # Generate the file name and starting/ending index for a CESM variable for the given experiment, year and ensemble member.
 # for example, expt = 'LE2', ensemble_member='1011.001', domain ='atm', freq = 'daily'
 def find_cesm2_file(expt, var_name, domain, freq, ensemble_member, year,
