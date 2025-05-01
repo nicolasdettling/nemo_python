@@ -1435,11 +1435,10 @@ def calc_salinity_bias (base_dir='./', eos='eos08'):
     return bias
 
 
-# Calculate the global warming implied by the salinity biases (from above), using a linear regression below 2K for Ross, 4.5K for FRIS.
+# Calculate the global warming implied by the salinity biases (from above), using a linear regression for the untipped sections of ramp-up simulations for each ice shelf.
 def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='./'):
 
     pi_suite = 'cs495'
-    max_warming_regions = [2, 4.5]
     smooth = 5*months_per_year
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
@@ -1449,22 +1448,25 @@ def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='
         # Salinity biases are not precomputed
         [ross_bias, fris_bias] = calc_salinity_bias(base_dir=base_dir)
 
-    for region, bwsalt_bias, max_warming in zip(['ross', 'filchner_ronne'], [ross_bias, fris_bias], max_warming_regions):
-        # Assemble timeseries of bwsalt and global warming (below given max) in each ramp-up ensemble member
+    for region, bwsalt_bias in zip(['ross', 'filchner_ronne'], [ross_bias, fris_bias]):
+        # Assemble timeseries of bwsalt and global warming in each ramp-up ensemble member, trimmed to select only untipped section
         warming = None
         bwsalt = None
         for suite in suites_by_scenario['ramp_up']:
             warming_tmp = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
             ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
             bwsalt_tmp = ds[region+'_shelf_bwsalt']
+            cavity_temp = ds[region+'_cavity_temp']
             ds.close()
             # Trim and align
             warming_tmp, bwsalt_tmp = align_timeseries(warming_tmp, bwsalt_tmp)
+            cavity_temp = align_timeseries(cavity_temp, warming_tmp)[0]
             # Smooth
             warming_tmp = moving_average(warming_tmp, smooth)
             bwsalt_tmp = moving_average(bwsalt_tmp, smooth)
-            # Trim to just before the warming threshold is crossed
-            t_end = np.argwhere(warming_tmp.data > max_warming)[0][0]
+            cavity_temp = moving_average(cavity_temp, smooth)
+            # Trim to just before the cavity tips
+            t_end = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
             warming_tmp = warming_tmp.isel(time_centered=slice(0,t_end))
             bwsalt_tmp = bwsalt_tmp.isel(time_centered=slice(0,t_end))
             if warming is None:
@@ -2779,6 +2781,7 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
     labels = ['untipped', 'tipped', 'recovered']
     trend_years = 200  # Calculate drift in control over the last 200 years
     total_years = 1000  # Extend control to be 1000 years long (just needs to be longer than any other trajectory)
+    obs_slr_ais = 7.4*10/28 # Otosaka et al. 2023: AIS contributed 7.4 mm over 1992-2020; convert to cm/century
 
     # Inner function to add the given DataArray to the axes with the given colour
     def add_line (data, ax, colour, year0):
@@ -2884,7 +2887,7 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
         print(regions[n]+': '+str(num_tip)+' tipped, '+str(num_recover)+' recovered')
         # Calculate weighted average trend in cm/century
         avg_trend = np.average(tipped_trends, weights=trend_weights)*1e2
-        print('Average tipped trend is '+str(avg_trend)+' cm/century')
+        print('Average tipped trend is '+str(avg_trend)+' cm/century: '+str(avg_trend/obs_slr_ais*100)+'% of observed AIS contribution rate')
         ax.grid(linestyle='dotted')
         ax.axhline(0, color='black', linewidth=0.5)
         if n == 1:
