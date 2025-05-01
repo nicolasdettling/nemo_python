@@ -2874,16 +2874,16 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
                         tipped = data.where(time >= year_tip, drop=True)
                     add_line(tipped, ax, colours[labels.index('tipped')], year0)
                     # Calculate trend in tipped section
-                    tipped_trends.append(linregress(data.coords['time'], tipped)[0])
+                    tipped_trends.append(linregress(tipped.coords['time'], tipped)[0])
                     # Weight by number of years
-                    trend_weights.append(tipped.sizes('time'))
+                    trend_weights.append(tipped.sizes['time'])
                 else:
                     untipped = data
                     recovers = False
                 add_line(untipped, ax, colours[labels.index('untipped')], year0)
         print(regions[n]+': '+str(num_tip)+' tipped, '+str(num_recover)+' recovered')
         # Calculate weighted average trend in cm/century
-        avg_trend = np.average(tipped_trends, weights=trend_weights)*1e-2
+        avg_trend = np.average(tipped_trends, weights=trend_weights)*1e2
         print('Average tipped trend is '+str(avg_trend)+' cm/century')
         ax.grid(linestyle='dotted')
         ax.axhline(0, color='black', linewidth=0.5)
