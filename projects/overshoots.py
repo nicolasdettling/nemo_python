@@ -1330,7 +1330,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
 
 # Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS. To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
 # Before running this on Jasmin, do "source ~/pyenv/bin/activate" so we can use gsw
-def calc_salinity_bias (base_dir='./', eos='eos08'):
+def calc_salinity_bias (base_dir='./', eos='eos80'):
 
     regions = ['ross', 'filchner_ronne']
     pi_suite = 'cs495'  # Preindustrial, static cavities
