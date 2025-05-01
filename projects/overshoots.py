@@ -1223,7 +1223,7 @@ def tipping_stats (base_dir='./'):
         for pc, colour in zip(violins['bodies'], colours):
             pc.set_facecolor(colour)
         for bar in ['cmeans']:
-            violins[bar].set_colors(colours)
+            violins[bar].set_colors('black')
         # Plot individual data points
         ax.plot(np.array(all_temp_tip[r])+temp_correction[r], 3*np.ones(len(all_temp_tip[r])), 'o', markersize=3, color='Crimson')
         ax.plot(np.array(all_temp_recover[r])+temp_correction[r], 2*np.ones(len(all_temp_recover[r])), 'o', markersize=3, color='DodgerBlue')
@@ -2235,8 +2235,8 @@ def plot_FW_timeseries (base_dir='./'):
     ax.axhline(0, color='black')
     ax.set_ylabel(units)
     ax.set_xlim([stage_start[0], stage_end[-1]])
-    ax.set_title('Antarctic freshwater fluxes (anomalies from preindustrial)', fontsize=14)    
-    plt.text(616, -14.5, 'years', ha='left', va='top')
+    ax.set_title('Antarctic freshwater fluxes (anomalies from preindustrial)', fontsize=14)
+    plt.text(618, ax.get_ylim()[0]-6, 'years', ha='left', va='top')
     plt.text(0.5, 0.01, trajectory_title(suite_string), ha='center', va='bottom', transform=fig.transFigure, fontsize=12)
     ax.legend(loc='upper left')
     finished_plot(fig, fig_name='figures/FW_timeseries.png', dpi=300)
@@ -2773,6 +2773,7 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
     pi_suite = 'cs568'  # Evolving ice
     baseline_suite = 'cx209'  # First member ramp-up
     regions = ['ross', 'filchner_ronne']
+    prefixes = ['a) ', 'b) ']
     num_regions = len(regions)
     colours = ['DarkGrey', 'Crimson', 'DodgerBlue']
     labels = ['untipped', 'tipped', 'recovered']
@@ -2789,6 +2790,8 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
     gs.update(left=0.13, right=0.87, bottom=0.15, top=0.9, hspace=0.3)
     for n in range(num_regions):
         ax = plt.subplot(gs[n,0])
+        tipped_trends = []
+        trend_weights = []
         if not draft:
             # Get baseline initial VAF from first member ramp-up (should be consistent between members as evolving ice has just been switched on)
             ds = xr.open_dataset(vaf_dir+'/'+file_head+baseline_suite+file_tail)
@@ -2870,23 +2873,30 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
                     else:
                         tipped = data.where(time >= year_tip, drop=True)
                     add_line(tipped, ax, colours[labels.index('tipped')], year0)
+                    # Calculate trend in tipped section
+                    tipped_trends.append(linregress(data.coords['time'], tipped)[0])
+                    # Weight by number of years
+                    trend_weights.append(tipped.sizes('time'))
                 else:
                     untipped = data
                     recovers = False
                 add_line(untipped, ax, colours[labels.index('untipped')], year0)
         print(regions[n]+': '+str(num_tip)+' tipped, '+str(num_recover)+' recovered')
+        # Calculate weighted average trend in cm/century
+        avg_trend = np.average(tipped_trends, weights=trend_weights)*1e-2
+        print('Average tipped trend is '+str(avg_trend)+' cm/century')
         ax.grid(linestyle='dotted')
         ax.axhline(0, color='black', linewidth=0.5)
         if n == 1:
             ax.set_xlabel('Years')
         ax.set_xlim([0, None])
         if draft:
-            ax.set_title(region_names[regions[n]], fontsize=12)
+            ax.set_title(prefixes[n]+region_names[regions[n]], fontsize=12)
             plt.suptitle('Ice shelf draft', fontsize=14)
             ax.set_ylabel('m')
             fig_name = 'figures/draft_timeseries.png'
         else:
-            ax.set_title(region_names[regions[n]]+' catchment', fontsize=12)
+            ax.set_title(prefixes[n]+region_names[regions[n]]+' catchment', fontsize=12)
             plt.suptitle('Sea level contribution', fontsize=14)
             ax.set_ylabel('cm')
             fig_name = 'figures/SLR_timeseries.png'
