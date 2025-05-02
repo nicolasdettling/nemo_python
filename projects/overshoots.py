@@ -78,7 +78,7 @@ suites_overshoot_lengths = {'50 years': ['da697', 'dc052', 'di335', 'dc051', 'df
 suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'di335':'cy838', 'df453':'cz375', 'dc565':'cy838', 'dd210':'cz376', 'df028':'cz375', 'df025':'cy838', 'df027':'cy838', 'df021':'cz375', 'df023':'cz375', 'dh541':'cz376', 'dh859':'cz376', 'de943':'cz378', 'de962':'cz378', 'de963':'cz378', 'dg093':'cz377', 'dg094':'cz377', 'dg095':'cz377', 'dm357':'cz378', 'dm358':'cz378', 'dm359':'cz378'}
 
 tipping_threshold = -1.9  # If cavity mean temp is warmer than surface freezing point, it's tipped
-temp_correction = [1.537578833528701, 1.537578833528701] #0.606691612361639] # Precomputed by warming_implied_by_salinity_bias(). Ross, then FRIS - but use Ross for both because FRIS tipping is mainly triggered by Ross.
+temp_correction = 1.1403043611842025 # Precomputed by warming_implied_by_salinity_bias()
 
 # End global vars
 
@@ -1329,7 +1329,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
     finished_plot(fig, fig_name=fig_name, dpi=300)
 
 
-# Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS. To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
+# Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS (both regions together). To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
 # Before running this on Jasmin, do "source ~/pyenv/bin/activate" so we can use gsw
 def calc_salinity_bias (base_dir='./', eos='eos80'):
 
@@ -1411,86 +1411,106 @@ def calc_salinity_bias (base_dir='./', eos='eos80'):
             cax = cax = fig.add_axes([0.01+0.45*n, 0.1, 0.02, 0.6])
             plt.colorbar(img, cax=cax, extend='both')
     plt.suptitle('Bottom salinity (psu)', fontsize=18)
-    finished_plot(fig)
+    finished_plot(fig, fig_name='figures/bwsalt_bias.png')
 
-    # Loop over regions and print means and biases
-    bias = []
-    for region in regions:
-        print('\n'+region_names[region])
-        mask = region_mask(region, ds, option='shelf')[0]
-        dA = ds['area']*mask
-        ukesm_mean = (ramp_up_bwsalt*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
-        print('UKESM mean '+str(ukesm_mean.data)+' psu')
-        # Might have to area-average over a smaller region with missing observational points
-        mask_obs = mask.where(obs_bwsalt.notnull())
-        dA_obs = ds['area']*mask_obs
-        obs_mean = (obs_bwsalt*dA_obs).sum(dim=['x','y'])/dA_obs.sum(dim=['x','y'])
-        print('Observational mean '+str(obs_mean.data)+' psu')
-        bias.append((ukesm_mean-obs_mean).data)
-        print('UKESM bias '+str(bias[-1]))
+    # Construct a mask which is both regions together
+    masks = [region_mask(region, ds, option='shelf')[0] for region in regions]
+    mask = masks[0] + masks[1]
+    dA = ds['area']*mask
+    ukesm_mean = (ramp_up_bwsalt*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
+    print('UKESM mean '+str(ukesm_mean.data)+' psu')
+    # Might have to area-average over a smaller region with missing observational points
+    mask_obs = mask.where(obs_bwsalt.notnull())
+    dA_obs = ds['area']*mask_obs
+    obs_mean = (obs_bwsalt*dA_obs).sum(dim=['x','y'])/dA_obs.sum(dim=['x','y'])
+    print('Observational mean '+str(obs_mean.data)+' psu')
+    bias = (ukesm_mean-obs_mean).item()
+    print('UKESM bias '+str(bias))
 
     return bias
 
 
-# Calculate the global warming implied by the salinity biases (from above), using a linear regression for the untipped sections of ramp-up simulations for each ice shelf.
-# Last calculation: ross_bias=-0.1309137, fris_bias=-0.09288089
-def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='./'):
+# Calculate the global warming implied by the salinity bias (from above), using a linear regression for the untipped sections of ramp-up simulations.
+# Last calculation: salt_bias=-0.11203044309147714
+def warming_implied_by_salinity_bias (salt_bias=None, base_dir='./'):
 
     pi_suite = 'cs495'
     smooth = 5*months_per_year
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
     p0 = 0.05
+    regions = ['ross', 'filchner_ronne']
+    sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'
 
-    if ross_bias is None or fris_bias is None:
-        # Salinity biases are not precomputed
-        [ross_bias, fris_bias] = calc_salinity_bias(base_dir=base_dir)
+    if salt_bias is None:
+        # Salinity bias is not precomputed
+        salt_bias = calc_salinity_bias(base_dir=base_dir)
 
-    for region, bwsalt_bias in zip(['ross', 'filchner_ronne'], [ross_bias, fris_bias]):
-        slopes = []
-        r2 = []
-        fig, ax = plt.subplots()
-        # Assemble timeseries of bwsalt and global warming in each ramp-up ensemble member, trimmed to select only untipped section
-        for suite in suites_by_scenario['ramp_up']:                    
-            warming = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
-            ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
-            bwsalt = ds[region+'_shelf_bwsalt']
-            cavity_temp = ds[region+'_cavity_temp']
-            ds.close()
-            # Trim and align
-            warming, bwsalt = align_timeseries(warming, bwsalt)
-            cavity_temp = align_timeseries(cavity_temp, warming)[0]
-            # Smooth
-            warming = moving_average(warming, smooth)
-            bwsalt = moving_average(bwsalt, smooth)
-            cavity_temp = moving_average(cavity_temp, smooth)
-            if cavity_temp.max() > tipping_threshold:
-                # Trim to just before the cavity tips
-                t_end = np.argwhere(cavity_temp.data > tipping_threshold)[0][0]
-                if t_end == 0:
-                    # Tipped from the beginning - skip it
-                    continue
-                warming = warming.isel(time_centered=slice(0,t_end))
-                bwsalt = bwsalt.isel(time_centered=slice(0,t_end))
-                cavity_temp = cavity_temp.isel(time_centered=slice(0,t_end))
-            # Add to plot
-            ax.scatter(bwsalt, warming, s=10)
-            # Now find a linear regression of bwsalt in response to warming
-            slope, intercept, r_value, p_value, std_err = linregress(bwsalt, warming)
-            if p_value > p0:
-                print('Warning: no significant trend for '+suite)
-            # Add regression line to plot
-            x_vals = np.array([bwsalt.min(), bwsalt.max()])
-            y_vals = slope*x_vals + intercept
-            ax.plot(x_vals, y_vals, '-', color='black', linewidth=1)
-            # Save slope and r2
-            slopes.append(slope)
-            r2.append(r_value**2)
-        mean_slope = np.mean(slope)
-        implied_warming = mean_slope*bwsalt_bias
-        print(region_names[region]+': Salinity bias of '+str(bwsalt_bias)+' psu implies global warming of '+str(implied_warming)+'K; mean r^2='+str(np.mean(r2)))
-        ax.set_title(region+': '+str(implied_warming)+'K')
-        fig.show()
+    # Calculate area-weighting of each region
+    area = []
+    ds = xr.open_dataset(sample_file)
+    for region in regions:
+        mask = region_mask(region, ds, option='shelf')[0]
+        dA = ds['area']*mask
+        area.append(dA.sum(dim=['x','y']).item())
+    total_area = area[0] + area[1]
+    weights = [a/total_area for a in area]
+
+    # Set up a scatterplot
+    fig, ax = plt.subplots()
+    slopes = []
+    r2 = []
+    # Loop over ramp-up ensemble members
+    for suite in suites_by_scenario['ramp_up']:
+        # Get timeseries of global warming
+        warming = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
+        # Get timeseries of bottom salinity on shelf; area-averaged over Ross and FRIS regions together (i.e. weighted mean)
+        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+        bwsalt = None
+        for region, weight in zip(regions, weights):
+            bwsalt_tmp = ds[region+'_shelf_bwsalt']
+            if bwsalt is None:
+                bwsalt = weight*bwsalt_tmp
+            else:
+                bwsalt += weight*bwsalt_tmp
+        # Get timeseries of Ross cavity temp to determine tipping: only want untipped sections, and Ross alway tips first
+        ross_temp = ds['ross_cavity_temp']
+        ds.close()
+        # Trim and align
+        warming, bwsalt = align_timeseries(warming, bwsalt)
+        ross_temp = align_timeseries(ross_temp, warming)[0]
+        # Smooth
+        warming = moving_average(warming, smooth)
+        bwsalt = moving_average(bwsalt, smooth)
+        ross_temp = moving_average(ross_temp, smooth)
+        if ross_temp.max() > tipping_threshold:
+            # Trim to just before the Ross tips
+            t_end = np.argwhere(ross_temp.data > tipping_threshold)[0][0]
+            warming = warming.isel(time_centered=slice(0,t_end))
+            bwsalt = bwsalt.isel(time_centered=slice(0,t_end))
+        # Add to plot
+        ax.plot(warming, bwsalt, '-', linewidth=1.5)
+        # Now find a linear regression of bwsalt in response to warming
+        slope, intercept, r_value, p_value, std_err = linregress(warming, bwsalt)
+        if p_value > p0:
+            print('Warning: no significant trend for '+suite)
+        # Add regression line to plot
+        x_vals = np.array([warming.min(), warming.max()])
+        y_vals = slope*x_vals + intercept
+        ax.plot(x_vals, y_vals, '-', color='black', linewidth=1)
+        # Save slope and r2
+        slopes.append(slope)
+        r2.append(r_value**2)
+    mean_slope = np.mean(slopes)
+    implied_warming = salt_bias/mean_slope
+    ax.grid(linestyle='dotted')
+    plt.text(0.95, 0.95, str(np.round(mean_slope,4))+' +/- '+str(np.round(np.std(slopes),4))+ ' psu/'+deg_string+'C', ha='right', va='top', transform=ax.transAxes)
+    plt.text(0.95, 0.88, r'r$^2$='+str(np.round(np.mean(r2),3))+' +/- '+str(np.round(np.std(r2),3)), ha='right', va='top', transform=ax.transAxes)
+    plt.text(0.95, 0.81, 'Salinity bias of '+str(np.round(salt_bias,3))+' implies\ntemperature correction of '+str(np.round(implied_warming,2))+deg_string+'C', ha='right', va='top', transform=ax.transAxes)
+    ax.set_xlabel('Global warming ('+deg_string+'C)')
+    ax.set_ylabel('Bottom salinity on Ross and FRIS shelves (psu)')
+    ax.set_title('Calculation of temperature correction', fontsize=14)
+    finished_plot(fig, fig_name='figures/bwsalt_warming_regression.png')
 
 
 # Plot cavity-mean temperature beneath Ross and FRIS as a function of shelf-mean bottom water salinity, in all scenarios. Colour the lines based on the global warming level relative to preindustrial, and indicate the magnitude of the salinity bias.
