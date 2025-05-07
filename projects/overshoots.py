@@ -1171,15 +1171,15 @@ def tipping_stats (base_dir='./'):
         # Print some statistics about which ones tipped and recovered
         print('\n'+regions[r]+':')
         print(str(len(suites_tipped))+' trajectories tip, '+str(len(warming_at_tip))+' unique')
-        print('Global warming at time of tipping has mean '+str(np.mean(warming_at_tip)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_tip))+'K')
+        print('Global warming at time of tipping has mean '+str(np.mean(warming_at_tip)+temp_correction)+'K, standard deviation '+str(np.std(warming_at_tip))+'K')
         if len(suites_recovered) == 0:
             print('No tipped trajectories recover')
         else:
             print(str(len(suites_recovered))+' tipped trajectories recover ('+str(len(suites_recovered)/len(suites_tipped)*100)+'%), '+str(len(warming_at_recovery))+' unique')
-            print('Global warming at time of recovery has mean '+str(np.mean(warming_at_recovery)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery))+'K')
+            print('Global warming at time of recovery has mean '+str(np.mean(warming_at_recovery)+temp_correction)+'K, standard deviation '+str(np.std(warming_at_recovery))+'K')
             if regions[r] == 'ross':
-                print('If FRIS also tips, Ross recovery happens at mean '+str(np.mean(warming_at_recovery_fris_tip)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery_fris_tip))+'K, n='+str(len(warming_at_recovery_fris_tip)))
-                print('If FRIS does not tip, Ross recovery happens at mean '+str(np.mean(warming_at_recovery_fris_notip)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery_fris_notip))+'K, n='+str(len(warming_at_recovery_fris_notip)))
+                print('If FRIS also tips, Ross recovery happens at mean '+str(np.mean(warming_at_recovery_fris_tip)+temp_correction)+'K, standard deviation '+str(np.std(warming_at_recovery_fris_tip))+'K, n='+str(len(warming_at_recovery_fris_tip)))
+                print('If FRIS does not tip, Ross recovery happens at mean '+str(np.mean(warming_at_recovery_fris_notip)+temp_correction)+'K, standard deviation '+str(np.std(warming_at_recovery_fris_notip))+'K, n='+str(len(warming_at_recovery_fris_notip)))
                 if len(warming_at_recovery_fris_tip) == 1:
                     p_val = ttest_1samp(warming_at_recovery_fris_notip, warming_at_recovery_fris_tip)[1]
                 else:
@@ -1190,7 +1190,7 @@ def tipping_stats (base_dir='./'):
                 else:
                     print('No significant difference (p='+str(p_val)+')')
         if recovery_floor is not None:
-            print('Trajectories as cool as '+str(recovery_floor+temp_correction[r])+'K still have not recovered')
+            print('Trajectories as cool as '+str(recovery_floor+temp_correction)+'K still have not recovered')
         # Save results for plotting
         all_temp_tip.append(warming_at_tip)
         all_temp_recover.append(warming_at_recovery)
@@ -1201,11 +1201,11 @@ def tipping_stats (base_dir='./'):
         # Find coolest instance of tipping
         first_tip = np.amin(max_warming[tips])
         # Step down to one simulation cooler than that: lower bound on threshold
-        threshold_min = np.amax(max_warming[max_warming < first_tip]) + temp_correction[r]
+        threshold_min = np.amax(max_warming[max_warming < first_tip]) + temp_correction
         # Find warmest instance of non-tipping
         last_notip = np.amax(max_warming[~tips])
         # Step up to one simulation warmer than that: upper bound on threshold
-        threshold_max = np.amin(max_warming[max_warming > last_notip]) + temp_correction[r]
+        threshold_max = np.amin(max_warming[max_warming > last_notip]) + temp_correction
         threshold_bounds.append([threshold_min, threshold_max])
         print('Threshold lies between '+str(threshold_min)+' and '+str(threshold_max)+', or '+str(0.5*(threshold_min+threshold_max))+' +/- '+str(0.5*(threshold_max-threshold_min)))
 
@@ -1216,7 +1216,7 @@ def tipping_stats (base_dir='./'):
     for r in range(len(regions)):
         ax = plt.subplot(gs[r,0])
         # Violin plots: warming level at time of tipping (red), recovery (blue)
-        violin_data = [np.array(all_temp_tip[r])+temp_correction[r], np.array(all_temp_recover[r])+temp_correction[r]]
+        violin_data = [np.array(all_temp_tip[r])+temp_correction, np.array(all_temp_recover[r])+temp_correction]
         y_pos = [3, 2]
         colours = ['Crimson', 'DodgerBlue']
         violins = ax.violinplot(violin_data, y_pos, vert=False, showextrema=False, showmeans=True)
@@ -1226,18 +1226,18 @@ def tipping_stats (base_dir='./'):
         for bar in ['cmeans']:
             violins[bar].set_colors('black')
         # Plot individual data points
-        ax.plot(np.array(all_temp_tip[r])+temp_correction[r], 3*np.ones(len(all_temp_tip[r])), 'o', markersize=3, color='Crimson')
-        ax.plot(np.array(all_temp_recover[r])+temp_correction[r], 2*np.ones(len(all_temp_recover[r])), 'o', markersize=3, color='DodgerBlue')
+        ax.plot(np.array(all_temp_tip[r])+temp_correction, 3*np.ones(len(all_temp_tip[r])), 'o', markersize=3, color='Crimson')
+        ax.plot(np.array(all_temp_recover[r])+temp_correction, 2*np.ones(len(all_temp_recover[r])), 'o', markersize=3, color='DodgerBlue')
         if regions[r] == 'ross':
-            ax.plot(np.array(warming_at_recovery_fris_tip)+temp_correction[r], 2*np.ones(len(warming_at_recovery_fris_tip)), 'o', markersize=3, color='DarkOrchid')
+            ax.plot(np.array(warming_at_recovery_fris_tip)+temp_correction, 2*np.ones(len(warming_at_recovery_fris_tip)), 'o', markersize=3, color='DarkOrchid')
         '''if all_recovery_floor[r] is not None:
             # Plot dotted blue line and open marker showing that recovery violin plot will extend at least this far
-            ax.plot([all_recovery_floor[r]+temp_correction[r], np.amin(all_temp_recover[r])+temp_correction[r]], [2, 2], color='DodgerBlue', linestyle='dotted', linewidth=1)
-            ax.plot(all_recovery_floor[r]+temp_correction[r], 2, 'o', markersize=4, markeredgecolor='DodgerBlue', color='white')'''
+            ax.plot([all_recovery_floor[r]+temp_correction, np.amin(all_temp_recover[r])+temp_correction], [2, 2], color='DodgerBlue', linestyle='dotted', linewidth=1)
+            ax.plot(all_recovery_floor[r]+temp_correction, 2, 'o', markersize=4, markeredgecolor='DodgerBlue', color='white')'''
         # Bottom row: peak warming in each trajectory, plotted in red (tips) or grey (doesn't tip)
         # Start with the grey, to make sure the red is visible where they overlap
-        ax.plot(max_warming[~all_tips[r]]+temp_correction[r], np.ones(np.count_nonzero(~all_tips[r])), 'o', markersize=4, color='DarkGrey')
-        ax.plot(max_warming[all_tips[r]]+temp_correction[r], np.ones(np.count_nonzero(all_tips[r])), 'o', markersize=4, color='Crimson')
+        ax.plot(max_warming[~all_tips[r]]+temp_correction, np.ones(np.count_nonzero(~all_tips[r])), 'o', markersize=4, color='DarkGrey')
+        ax.plot(max_warming[all_tips[r]]+temp_correction, np.ones(np.count_nonzero(all_tips[r])), 'o', markersize=4, color='Crimson')
         # Plot bounds on threshold: vertical dashed lines with labels
         ax.plot(threshold_bounds[r][0]*np.ones(2), [0, 0.9], color='black', linestyle='dashed', linewidth=1)
         plt.text(threshold_bounds[r][0]-0.05, 0.5, 'never tips', ha='right', va='center', fontsize=9)
@@ -1272,7 +1272,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
     regions = ['ross', 'filchner_ronne']
     num_regions = len(regions)
     highlights = ['cx209-cz376-da892', 'cx209-cz378-de943']
-    arrow_loc = [[[1.8, 3.8, 4.9], [5.3], [5.1, 3.8]], [[1.3, 4.3, 6.3], [], [6.2, 4.6, 3.1]], [[3.8, 4.7], [5.5], [5.4, 4.3]], [[3.8, 5.7, 6.2], [6.8], [6.5, 4.5, 3.3]]]
+    arrow_loc = [[[1.64, 3.64, 4.74], [5.14], [4.89, 3.64]], [[1.84, 4.84, 6.84], [], [6.74, 5.04, 3.44]], [[3.64, 4.54], [5.34], [5.24, 4.14]], [[4.34, 6.24, 6.74], [7.32], [7.14, 5.04, 3.64]]]
     var_names = ['cavity_temp', 'massloss']
     var_titles = ['a) Ocean temperature in ice shelf cavities', 'b) Melting beneath ice shelves']
     var_units = [deg_string+'C', 'Gt/y']
@@ -1294,7 +1294,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
     for v in range(num_var):
         for n in range(num_regions):
             ax = plt.subplot(gs[v,n])
-            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth[v], labels=sim_names, colours=colours, linewidth=(1 if static_ice else 0.5), ax=ax, temp_correct=temp_correction[n], highlight=(highlights[n] if not static_ice else None), highlight_arrows=(not static_ice), arrow_loc=arrow_loc[v*num_regions+n])
+            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth[v], labels=sim_names, colours=colours, linewidth=(1 if static_ice else 0.5), ax=ax, temp_correct=temp_correction, highlight=(highlights[n] if not static_ice else None), highlight_arrows=(not static_ice), arrow_loc=arrow_loc[v*num_regions+n])
             ax.set_title(region_names[regions[n]], fontsize=14)
             if n == 0:
                 ax.set_ylabel(var_units[v], fontsize=12)
@@ -1304,7 +1304,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
                 ax.set_xlabel('Global warming ('+deg_string+'C), corrected', fontsize=12)
             else:
                 ax.set_xlabel('')
-            ax.set_xlim([temp_correction[n],temp_correction[n]+8])
+            ax.set_xlim([temp_correction,temp_correction+8])
             if v == 0:
                 ax.axhline(-1.9, color='black', linestyle='dashed', linewidth=0.75)
             '''if v==0:
@@ -1326,7 +1326,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
     if static_ice:
         fig_name += '_static_ice'
     fig_name += '.png'
-    finished_plot(fig, fig_name=fig_name, dpi=300)
+    finished_plot(fig) #, fig_name=fig_name, dpi=300)
 
 
 # Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS (both regions together). To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
@@ -1559,14 +1559,14 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                     continue
                 bwsalt = moving_average(bwsalt, smooth)
                 cavity_temp = moving_average(cavity_temp, smooth)
-                warming = moving_average(warming, smooth)+temp_correction[n]
+                warming = moving_average(warming, smooth)+temp_correction
                 bwsalt = align_timeseries(bwsalt, warming)[0]
                 cavity_temp, warming = align_timeseries(cavity_temp, warming)
                 max_warming = max(max_warming, warming.max())
                 # Throw away any ramp-down data where global temp has overshot preindustrial and gone into negative, and apply correction after that
                 data_bwsalt.append(bwsalt.where(warming>0))
                 data_cavity_temp.append(cavity_temp.where(warming>0))
-                data_warming.append(warming.where(warming>+temp_correction[n]))
+                data_warming.append(warming.where(warming>+temp_correction))
         all_bwsalt.append(data_bwsalt)
         all_cavity_temp.append(data_cavity_temp)
         all_warming.append(data_warming)
@@ -1618,7 +1618,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
             print('Observed freshening is '+str(fresh_fraction)+'% of what is needed to tip')
 
     # Set up colour map to vary with global warming level
-    norm = plt.Normalize(np.amin(temp_correction), max_warming)
+    norm = plt.Normalize(temp_correction, max_warming)
     num_suites = len(all_bwsalt[0])
 
     # Plot
