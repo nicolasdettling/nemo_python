@@ -25,7 +25,7 @@ from ..plot_utils import truncate_colourmap
 from ..utils import moving_average, add_months, rotate_vector, polar_stereo, convert_ismr, bwsalt_abs
 from ..grid import region_mask, calc_geometry, build_ice_mask
 from ..constants import line_colours, region_names, deg_string, gkg_string, months_per_year, rho_fw, rho_ice, sec_per_year, vaf_to_gmslr
-from ..file_io import read_schmidtko, read_woa
+from ..file_io import read_schmidtko, read_woa, read_zhou_bottom_climatology
 from ..interpolation import interp_latlon_cf, interp_grid
 from ..diagnostics import barotropic_streamfunction
 from ..plot_utils import set_colours, latlon_axes
@@ -78,7 +78,7 @@ suites_overshoot_lengths = {'50 years': ['da697', 'dc052', 'di335', 'dc051', 'df
 suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'di335':'cy838', 'df453':'cz375', 'dc565':'cy838', 'dd210':'cz376', 'df028':'cz375', 'df025':'cy838', 'df027':'cy838', 'df021':'cz375', 'df023':'cz375', 'dh541':'cz376', 'dh859':'cz376', 'de943':'cz378', 'de962':'cz378', 'de963':'cz378', 'dg093':'cz377', 'dg094':'cz377', 'dg095':'cz377', 'dm357':'cz378', 'dm358':'cz378', 'dm359':'cz378'}
 
 tipping_threshold = -1.9  # If cavity mean temp is warmer than surface freezing point, it's tipped
-temp_correction = [1.0087846842764405, 0.8065649751736049]  # Precomputed by warming_implied_by_salinity_bias(). Ross, then FRIS.
+temp_correction = 1.1403043611842025 # Precomputed by warming_implied_by_salinity_bias()
 
 # End global vars
 
@@ -1171,15 +1171,15 @@ def tipping_stats (base_dir='./'):
         # Print some statistics about which ones tipped and recovered
         print('\n'+regions[r]+':')
         print(str(len(suites_tipped))+' trajectories tip, '+str(len(warming_at_tip))+' unique')
-        print('Global warming at time of tipping has mean '+str(np.mean(warming_at_tip)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_tip))+'K')
+        print('Global warming at time of tipping has mean '+str(np.mean(warming_at_tip)+temp_correction)+'K, standard deviation '+str(np.std(warming_at_tip))+'K')
         if len(suites_recovered) == 0:
             print('No tipped trajectories recover')
         else:
             print(str(len(suites_recovered))+' tipped trajectories recover ('+str(len(suites_recovered)/len(suites_tipped)*100)+'%), '+str(len(warming_at_recovery))+' unique')
-            print('Global warming at time of recovery has mean '+str(np.mean(warming_at_recovery)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery))+'K')
+            print('Global warming at time of recovery has mean '+str(np.mean(warming_at_recovery)+temp_correction)+'K, standard deviation '+str(np.std(warming_at_recovery))+'K')
             if regions[r] == 'ross':
-                print('If FRIS also tips, Ross recovery happens at mean '+str(np.mean(warming_at_recovery_fris_tip)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery_fris_tip))+'K, n='+str(len(warming_at_recovery_fris_tip)))
-                print('If FRIS does not tip, Ross recovery happens at mean '+str(np.mean(warming_at_recovery_fris_notip)+temp_correction[r])+'K, standard deviation '+str(np.std(warming_at_recovery_fris_notip))+'K, n='+str(len(warming_at_recovery_fris_notip)))
+                print('If FRIS also tips, Ross recovery happens at mean '+str(np.mean(warming_at_recovery_fris_tip)+temp_correction)+'K, standard deviation '+str(np.std(warming_at_recovery_fris_tip))+'K, n='+str(len(warming_at_recovery_fris_tip)))
+                print('If FRIS does not tip, Ross recovery happens at mean '+str(np.mean(warming_at_recovery_fris_notip)+temp_correction)+'K, standard deviation '+str(np.std(warming_at_recovery_fris_notip))+'K, n='+str(len(warming_at_recovery_fris_notip)))
                 if len(warming_at_recovery_fris_tip) == 1:
                     p_val = ttest_1samp(warming_at_recovery_fris_notip, warming_at_recovery_fris_tip)[1]
                 else:
@@ -1190,7 +1190,7 @@ def tipping_stats (base_dir='./'):
                 else:
                     print('No significant difference (p='+str(p_val)+')')
         if recovery_floor is not None:
-            print('Trajectories as cool as '+str(recovery_floor+temp_correction[r])+'K still have not recovered')
+            print('Trajectories as cool as '+str(recovery_floor+temp_correction)+'K still have not recovered')
         # Save results for plotting
         all_temp_tip.append(warming_at_tip)
         all_temp_recover.append(warming_at_recovery)
@@ -1201,12 +1201,13 @@ def tipping_stats (base_dir='./'):
         # Find coolest instance of tipping
         first_tip = np.amin(max_warming[tips])
         # Step down to one simulation cooler than that: lower bound on threshold
-        threshold_min = np.amax(max_warming[max_warming < first_tip]) + temp_correction[r]
+        threshold_min = np.amax(max_warming[max_warming < first_tip]) + temp_correction
         # Find warmest instance of non-tipping
         last_notip = np.amax(max_warming[~tips])
         # Step up to one simulation warmer than that: upper bound on threshold
-        threshold_max = np.amin(max_warming[max_warming > last_notip]) + temp_correction[r]
+        threshold_max = np.amin(max_warming[max_warming > last_notip]) + temp_correction
         threshold_bounds.append([threshold_min, threshold_max])
+        print('Threshold lies between '+str(threshold_min)+' and '+str(threshold_max)+', or '+str(0.5*(threshold_min+threshold_max))+' +/- '+str(0.5*(threshold_max-threshold_min)))
 
     # Plot
     fig = plt.figure(figsize=(6,5))
@@ -1215,7 +1216,7 @@ def tipping_stats (base_dir='./'):
     for r in range(len(regions)):
         ax = plt.subplot(gs[r,0])
         # Violin plots: warming level at time of tipping (red), recovery (blue)
-        violin_data = [np.array(all_temp_tip[r])+temp_correction[r], np.array(all_temp_recover[r])+temp_correction[r]]
+        violin_data = [np.array(all_temp_tip[r])+temp_correction, np.array(all_temp_recover[r])+temp_correction]
         y_pos = [3, 2]
         colours = ['Crimson', 'DodgerBlue']
         violins = ax.violinplot(violin_data, y_pos, vert=False, showextrema=False, showmeans=True)
@@ -1223,20 +1224,20 @@ def tipping_stats (base_dir='./'):
         for pc, colour in zip(violins['bodies'], colours):
             pc.set_facecolor(colour)
         for bar in ['cmeans']:
-            violins[bar].set_colors(colours)
+            violins[bar].set_colors('black')
         # Plot individual data points
-        ax.plot(np.array(all_temp_tip[r])+temp_correction[r], 3*np.ones(len(all_temp_tip[r])), 'o', markersize=3, color='Crimson')
-        ax.plot(np.array(all_temp_recover[r])+temp_correction[r], 2*np.ones(len(all_temp_recover[r])), 'o', markersize=3, color='DodgerBlue')
+        ax.plot(np.array(all_temp_tip[r])+temp_correction, 3*np.ones(len(all_temp_tip[r])), 'o', markersize=3, color='Crimson')
+        ax.plot(np.array(all_temp_recover[r])+temp_correction, 2*np.ones(len(all_temp_recover[r])), 'o', markersize=3, color='DodgerBlue')
         if regions[r] == 'ross':
-            ax.plot(np.array(warming_at_recovery_fris_tip)+temp_correction[r], 2*np.ones(len(warming_at_recovery_fris_tip)), 'o', markersize=3, color='DarkOrchid')
+            ax.plot(np.array(warming_at_recovery_fris_tip)+temp_correction, 2*np.ones(len(warming_at_recovery_fris_tip)), 'o', markersize=3, color='DarkOrchid')
         '''if all_recovery_floor[r] is not None:
             # Plot dotted blue line and open marker showing that recovery violin plot will extend at least this far
-            ax.plot([all_recovery_floor[r]+temp_correction[r], np.amin(all_temp_recover[r])+temp_correction[r]], [2, 2], color='DodgerBlue', linestyle='dotted', linewidth=1)
-            ax.plot(all_recovery_floor[r]+temp_correction[r], 2, 'o', markersize=4, markeredgecolor='DodgerBlue', color='white')'''
+            ax.plot([all_recovery_floor[r]+temp_correction, np.amin(all_temp_recover[r])+temp_correction], [2, 2], color='DodgerBlue', linestyle='dotted', linewidth=1)
+            ax.plot(all_recovery_floor[r]+temp_correction, 2, 'o', markersize=4, markeredgecolor='DodgerBlue', color='white')'''
         # Bottom row: peak warming in each trajectory, plotted in red (tips) or grey (doesn't tip)
         # Start with the grey, to make sure the red is visible where they overlap
-        ax.plot(max_warming[~all_tips[r]]+temp_correction[r], np.ones(np.count_nonzero(~all_tips[r])), 'o', markersize=4, color='DarkGrey')
-        ax.plot(max_warming[all_tips[r]]+temp_correction[r], np.ones(np.count_nonzero(all_tips[r])), 'o', markersize=4, color='Crimson')
+        ax.plot(max_warming[~all_tips[r]]+temp_correction, np.ones(np.count_nonzero(~all_tips[r])), 'o', markersize=4, color='DarkGrey')
+        ax.plot(max_warming[all_tips[r]]+temp_correction, np.ones(np.count_nonzero(all_tips[r])), 'o', markersize=4, color='Crimson')
         # Plot bounds on threshold: vertical dashed lines with labels
         ax.plot(threshold_bounds[r][0]*np.ones(2), [0, 0.9], color='black', linestyle='dashed', linewidth=1)
         plt.text(threshold_bounds[r][0]-0.05, 0.5, 'never tips', ha='right', va='center', fontsize=9)
@@ -1271,7 +1272,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
     regions = ['ross', 'filchner_ronne']
     num_regions = len(regions)
     highlights = ['cx209-cz376-da892', 'cx209-cz378-de943']
-    arrow_loc = [[[1.5, 3.5, 4.6], [5], [4.75, 3.5]], [[1.5, 4.5, 6.5], [], [6.6, 4.9, 3.3]], [[3.5, 4.4], [5.2], [5.1, 4]], [[4, 5.9, 6.4], [6.98], [6.8, 4.7, 3.5]]]
+    arrow_loc = [[[1.64, 3.64, 4.74], [5.14], [4.89, 3.64]], [[1.84, 4.84, 6.84], [], [6.74, 5.04, 3.44]], [[3.64, 4.54], [5.34], [5.24, 4.14]], [[4.34, 6.24, 6.74], [7.32], [7.14, 5.04, 3.64]]]
     var_names = ['cavity_temp', 'massloss']
     var_titles = ['a) Ocean temperature in ice shelf cavities', 'b) Melting beneath ice shelves']
     var_units = [deg_string+'C', 'Gt/y']
@@ -1293,7 +1294,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
     for v in range(num_var):
         for n in range(num_regions):
             ax = plt.subplot(gs[v,n])
-            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth[v], labels=sim_names, colours=colours, linewidth=(1 if static_ice else 0.5), ax=ax, temp_correct=temp_correction[n], highlight=(highlights[n] if not static_ice else None), highlight_arrows=(not static_ice), arrow_loc=arrow_loc[v*num_regions+n])
+            plot_by_gw_level(sim_dirs, regions[n]+'_'+var_names[v], pi_suite=pi_suite, base_dir=base_dir, timeseries_file=timeseries_file, smooth=smooth[v], labels=sim_names, colours=colours, linewidth=(1 if static_ice else 0.5), ax=ax, temp_correct=temp_correction, highlight=(highlights[n] if not static_ice else None), highlight_arrows=(not static_ice), arrow_loc=arrow_loc[v*num_regions+n])
             ax.set_title(region_names[regions[n]], fontsize=14)
             if n == 0:
                 ax.set_ylabel(var_units[v], fontsize=12)
@@ -1303,7 +1304,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
                 ax.set_xlabel('Global warming ('+deg_string+'C), corrected', fontsize=12)
             else:
                 ax.set_xlabel('')
-            ax.set_xlim([temp_correction[n],temp_correction[n]+8])
+            ax.set_xlim([temp_correction,temp_correction+8])
             if v == 0:
                 ax.axhline(-1.9, color='black', linestyle='dashed', linewidth=0.75)
             '''if v==0:
@@ -1325,20 +1326,19 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
     if static_ice:
         fig_name += '_static_ice'
     fig_name += '.png'
-    finished_plot(fig, fig_name=fig_name, dpi=300)
+    finished_plot(fig) #, fig_name=fig_name, dpi=300)
 
 
-# Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS. To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
+# Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS (both regions together). To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
 # Before running this on Jasmin, do "source ~/pyenv/bin/activate" so we can use gsw
-def calc_salinity_bias (base_dir='./', eos='eos08'):
+def calc_salinity_bias (base_dir='./', eos='eos80'):
 
     regions = ['ross', 'filchner_ronne']
     pi_suite = 'cs495'  # Preindustrial, static cavities
     hist_suite = 'cy691'  # Historical, static cavities: to get UKESM's idea of warming relative to preindustrial
     timeseries_file_um = 'timeseries_um.nc'
     num_years = 10
-    schmidtko_file='/gws/nopw/j04/terrafirma/kaight/input_data/schmidtko_TS.txt'
-    woa_files='/gws/nopw/j04/terrafirma/kaight/input_data/WOA18/woa18_decav_*00_04.nc'
+    obs_file = '/gws/nopw/j04/terrafirma/kaight/input_data/shenjie_climatology_bottom_TS.nc'  # Zhou 2025
 
     # Inner function to read global mean SAT from precomputed timeseries
     def global_mean_sat (suite):
@@ -1385,14 +1385,11 @@ def calc_salinity_bias (base_dir='./', eos='eos08'):
     # Convert from integral to average (over months and ensemble members)
     ramp_up_bwsalt /= (num_years*months_per_year*len(suites_by_scenario['ramp_up']))
 
-    # Now read observations of bottom salinity
-    schmidtko = read_schmidtko(schmidtko_file=schmidtko_file, eos=eos)
-    woa = read_woa(woa_files=woa_files, eos=eos)
-    # Regrid to the NEMO grid, giving precedence to Schmidtko where both datasets exist
-    schmidtko_interp = interp_latlon_cf(schmidtko, ds, method='bilinear')
-    woa_interp = interp_latlon_cf(woa, ds, method='bilinear')
-    obs = xr.where(schmidtko_interp.isnull(), woa_interp, schmidtko_interp)
-    obs_bwsalt = obs['salt']
+    # Now read observations of bottom salinity and regrid to NEMO grid
+    print('Reading Zhou 2025 data')
+    obs = read_zhou_bottom_climatology(in_file=obs_file, eos=eos)
+    obs_interp = interp_latlon_cf(obs, ds, method='bilinear')
+    obs_bwsalt = obs_interp['salt']
 
     # Make a quick plot
     fig = plt.figure(figsize=(8,3))
@@ -1414,71 +1411,106 @@ def calc_salinity_bias (base_dir='./', eos='eos08'):
             cax = cax = fig.add_axes([0.01+0.45*n, 0.1, 0.02, 0.6])
             plt.colorbar(img, cax=cax, extend='both')
     plt.suptitle('Bottom salinity (psu)', fontsize=18)
-    finished_plot(fig)
+    finished_plot(fig, fig_name='figures/bwsalt_bias.png')
 
-    # Loop over regions and print means and biases
-    bias = []
-    for region in regions:
-        print('\n'+region_names[region])
-        mask = region_mask(region, ds, option='shelf')[0]
-        dA = ds['area']*mask
-        ukesm_mean = (ramp_up_bwsalt*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
-        print('UKESM mean '+str(ukesm_mean.data)+' psu')
-        # Might have to area-average over a smaller region with missing observational points
-        mask_obs = mask.where(obs_bwsalt.notnull())
-        dA_obs = ds['area']*mask_obs
-        obs_mean = (obs_bwsalt*dA_obs).sum(dim=['x','y'])/dA_obs.sum(dim=['x','y'])
-        print('Observational mean '+str(obs_mean.data)+' psu')
-        bias.append((ukesm_mean-obs_mean).data)
-        print('UKESM bias '+str(bias[-1]))
+    # Construct a mask which is both regions together
+    masks = [region_mask(region, ds, option='shelf')[0] for region in regions]
+    mask = masks[0] + masks[1]
+    dA = ds['area']*mask
+    ukesm_mean = (ramp_up_bwsalt*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
+    print('UKESM mean '+str(ukesm_mean.data)+' psu')
+    # Might have to area-average over a smaller region with missing observational points
+    mask_obs = mask.where(obs_bwsalt.notnull())
+    dA_obs = ds['area']*mask_obs
+    obs_mean = (obs_bwsalt*dA_obs).sum(dim=['x','y'])/dA_obs.sum(dim=['x','y'])
+    print('Observational mean '+str(obs_mean.data)+' psu')
+    bias = (ukesm_mean-obs_mean).item()
+    print('UKESM bias '+str(bias))
 
     return bias
 
 
-# Calculate the global warming implied by the salinity biases (from above), using a linear regression below 2K for Ross, 4.5K for FRIS.
-def warming_implied_by_salinity_bias (ross_bias=None, fris_bias=None, base_dir='./'):
+# Calculate the global warming implied by the salinity bias (from above), using a linear regression for the untipped sections of ramp-up simulations.
+# Last calculation: salt_bias=-0.11203044309147714
+def warming_implied_by_salinity_bias (salt_bias=None, base_dir='./'):
 
     pi_suite = 'cs495'
-    max_warming_regions = [2, 4.5]
     smooth = 5*months_per_year
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
     p0 = 0.05
+    regions = ['ross', 'filchner_ronne']
+    sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'
 
-    if ross_bias is None or fris_bias is None:
-        # Salinity biases are not precomputed
-        [ross_bias, fris_bias] = calc_salinity_bias(base_dir=base_dir)
+    if salt_bias is None:
+        # Salinity bias is not precomputed
+        salt_bias = calc_salinity_bias(base_dir=base_dir)
 
-    for region, bwsalt_bias, max_warming in zip(['ross', 'filchner_ronne'], [ross_bias, fris_bias], max_warming_regions):
-        # Assemble timeseries of bwsalt and global warming (below given max) in each ramp-up ensemble member
-        warming = None
+    # Calculate area-weighting of each region
+    area = []
+    ds = xr.open_dataset(sample_file)
+    for region in regions:
+        mask = region_mask(region, ds, option='shelf')[0]
+        dA = ds['area']*mask
+        area.append(dA.sum(dim=['x','y']).item())
+    total_area = area[0] + area[1]
+    weights = [a/total_area for a in area]
+
+    # Set up a scatterplot
+    fig, ax = plt.subplots()
+    slopes = []
+    r2 = []
+    # Loop over ramp-up ensemble members
+    for suite in suites_by_scenario['ramp_up']:
+        # Get timeseries of global warming
+        warming = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
+        # Get timeseries of bottom salinity on shelf; area-averaged over Ross and FRIS regions together (i.e. weighted mean)
+        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
         bwsalt = None
-        for suite in suites_by_scenario['ramp_up']:
-            warming_tmp = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
-            ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+        for region, weight in zip(regions, weights):
             bwsalt_tmp = ds[region+'_shelf_bwsalt']
-            ds.close()
-            # Trim and align
-            warming_tmp, bwsalt_tmp = align_timeseries(warming_tmp, bwsalt_tmp)
-            # Smooth
-            warming_tmp = moving_average(warming_tmp, smooth)
-            bwsalt_tmp = moving_average(bwsalt_tmp, smooth)
-            # Trim to just before the warming threshold is crossed
-            t_end = np.argwhere(warming_tmp.data > max_warming)[0][0]
-            warming_tmp = warming_tmp.isel(time_centered=slice(0,t_end))
-            bwsalt_tmp = bwsalt_tmp.isel(time_centered=slice(0,t_end))
-            if warming is None:
-                warming = warming_tmp
-                bwsalt = bwsalt_tmp
+            if bwsalt is None:
+                bwsalt = weight*bwsalt_tmp
             else:
-                warming = xr.concat([warming, warming_tmp], dim='time_centered')
-                bwsalt = xr.concat([bwsalt, bwsalt_tmp], dim='time_centered')
+                bwsalt += weight*bwsalt_tmp
+        # Get timeseries of Ross cavity temp to determine tipping: only want untipped sections, and Ross alway tips first
+        ross_temp = ds['ross_cavity_temp']
+        ds.close()
+        # Trim and align
+        warming, bwsalt = align_timeseries(warming, bwsalt)
+        ross_temp = align_timeseries(ross_temp, warming)[0]
+        # Smooth
+        warming = moving_average(warming, smooth)
+        bwsalt = moving_average(bwsalt, smooth)
+        ross_temp = moving_average(ross_temp, smooth)
+        if ross_temp.max() > tipping_threshold:
+            # Trim to just before the Ross tips
+            t_end = np.argwhere(ross_temp.data > tipping_threshold)[0][0]
+            warming = warming.isel(time_centered=slice(0,t_end))
+            bwsalt = bwsalt.isel(time_centered=slice(0,t_end))
+        # Add to plot
+        ax.plot(warming, bwsalt, '-', linewidth=1.5)
         # Now find a linear regression of bwsalt in response to warming
-        slope, intercept, r_value, p_value, std_err = linregress(bwsalt, warming)
+        slope, intercept, r_value, p_value, std_err = linregress(warming, bwsalt)
         if p_value > p0:
-            raise Exception('No significant trend')
-        implied_warming = slope*bwsalt_bias
-        print(region_names[region]+': Salinity bias of '+str(bwsalt_bias)+' psu implies global warming of '+str(implied_warming)+'K; regression has r^2='+str(r_value**2))
+            print('Warning: no significant trend for '+suite)
+        # Add regression line to plot
+        x_vals = np.array([warming.min(), warming.max()])
+        y_vals = slope*x_vals + intercept
+        ax.plot(x_vals, y_vals, '-', color='black', linewidth=1)
+        # Save slope and r2
+        slopes.append(slope)
+        r2.append(r_value**2)
+    mean_slope = np.mean(slopes)
+    implied_warming = salt_bias/mean_slope
+    ax.grid(linestyle='dotted')
+    plt.text(0.95, 0.95, str(np.round(mean_slope,4))+' +/- '+str(np.round(np.std(slopes),4))+ ' psu/'+deg_string+'C', ha='right', va='top', transform=ax.transAxes)
+    plt.text(0.95, 0.88, r'r$^2$='+str(np.round(np.mean(r2),3))+' +/- '+str(np.round(np.std(r2),3)), ha='right', va='top', transform=ax.transAxes)
+    plt.text(0.95, 0.81, 'Salinity bias of '+str(np.round(salt_bias,3))+' implies\ntemperature correction of '+str(np.round(implied_warming,2))+deg_string+'C', ha='right', va='top', transform=ax.transAxes)
+    ax.set_xlabel('Global warming ('+deg_string+'C)')
+    ax.set_ylabel('Bottom salinity on Ross and FRIS shelves (psu)')
+    ax.set_title('Calculation of temperature correction', fontsize=14)
+    finished_plot(fig, fig_name='figures/bwsalt_warming_regression.png')
 
 
 # Plot cavity-mean temperature beneath Ross and FRIS as a function of shelf-mean bottom water salinity, in all scenarios. Colour the lines based on the global warming level relative to preindustrial, and indicate the magnitude of the salinity bias.
@@ -1486,7 +1518,7 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
 
     regions = ['ross', 'filchner_ronne']
     title_prefix = ['a) ', 'b) ']
-    bwsalt_bias = [-0.13443893, -0.11137423]  # Precomputed above. For TEOS-10, this is [-0.13509758, -0.11196334]
+    obs_freshening = -0.17  # Ross, TEOS-10
     timeseries_file = 'timeseries.nc'
     timeseries_file_um = 'timeseries_um.nc'
     smooth = 5*months_per_year
@@ -1527,14 +1559,14 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
                     continue
                 bwsalt = moving_average(bwsalt, smooth)
                 cavity_temp = moving_average(cavity_temp, smooth)
-                warming = moving_average(warming, smooth)+temp_correction[n]
+                warming = moving_average(warming, smooth)+temp_correction
                 bwsalt = align_timeseries(bwsalt, warming)[0]
                 cavity_temp, warming = align_timeseries(cavity_temp, warming)
                 max_warming = max(max_warming, warming.max())
                 # Throw away any ramp-down data where global temp has overshot preindustrial and gone into negative, and apply correction after that
                 data_bwsalt.append(bwsalt.where(warming>0))
                 data_cavity_temp.append(cavity_temp.where(warming>0))
-                data_warming.append(warming.where(warming>+temp_correction[n]))
+                data_warming.append(warming.where(warming>+temp_correction))
         all_bwsalt.append(data_bwsalt)
         all_cavity_temp.append(data_cavity_temp)
         all_warming.append(data_warming)
@@ -1572,15 +1604,21 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
             p_val = ttest_ind(bwsalt_tip, bwsalt_recover, equal_var=False)[1]
             distinct = p_val < p0
             if distinct:
-                print('Significant difference (p='+str(p_val)+')')
+                print('Significant difference (p='+str(p_val)+') of '+str(np.mean(bwsalt_tip)-np.mean(bwsalt_recover)))
             else:
-                print('No significant difference (p='+str(p_val)+')')
+                print('No significant difference (p='+str(p_val)+') of '+str(np.mean(bwsalt_tip)-np.mean(bwsalt_recover)))
         else:
             threshold_recover.append(None)
         print('Freshening of absolute salinity between beginning of ramp-up and tipping point has mean '+str(np.mean(freshening_to_tip))+', std '+str(np.std(freshening_to_tip)))
+        if region == 'ross':
+            # Calculate Ross bwsalt bias in TEOS-10
+            ross_bias = calc_salinity_bias(base_dir=base_dir, eos='teos10')[0]
+            # Compare observed freshening to freshening required to tip (plus correction)
+            fresh_fraction = obs_freshening/(np.mean(freshening_to_tip)+ross_bias)*100
+            print('Observed freshening is '+str(fresh_fraction)+'% of what is needed to tip')
 
     # Set up colour map to vary with global warming level
-    norm = plt.Normalize(np.amin(temp_correction), max_warming)
+    norm = plt.Normalize(temp_correction, max_warming)
     num_suites = len(all_bwsalt[0])
 
     # Plot
@@ -2235,8 +2273,8 @@ def plot_FW_timeseries (base_dir='./'):
     ax.axhline(0, color='black')
     ax.set_ylabel(units)
     ax.set_xlim([stage_start[0], stage_end[-1]])
-    ax.set_title('Antarctic freshwater fluxes (anomalies from preindustrial)', fontsize=14)    
-    plt.text(616, -14.5, 'years', ha='left', va='top')
+    ax.set_title('Antarctic freshwater fluxes (anomalies from preindustrial)', fontsize=14)
+    plt.text(618, ax.get_ylim()[0]-6, 'years', ha='left', va='top')
     plt.text(0.5, 0.01, trajectory_title(suite_string), ha='center', va='bottom', transform=fig.transFigure, fontsize=12)
     ax.legend(loc='upper left')
     finished_plot(fig, fig_name='figures/FW_timeseries.png', dpi=300)
@@ -2773,11 +2811,13 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
     pi_suite = 'cs568'  # Evolving ice
     baseline_suite = 'cx209'  # First member ramp-up
     regions = ['ross', 'filchner_ronne']
+    prefixes = ['a) ', 'b) ']
     num_regions = len(regions)
     colours = ['DarkGrey', 'Crimson', 'DodgerBlue']
     labels = ['untipped', 'tipped', 'recovered']
     trend_years = 200  # Calculate drift in control over the last 200 years
     total_years = 1000  # Extend control to be 1000 years long (just needs to be longer than any other trajectory)
+    obs_slr_ais = 7.4*10/28 # Otosaka et al. 2023: AIS contributed 7.4 mm over 1992-2020; convert to cm/century
 
     # Inner function to add the given DataArray to the axes with the given colour
     def add_line (data, ax, colour, year0):
@@ -2789,6 +2829,8 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
     gs.update(left=0.13, right=0.87, bottom=0.15, top=0.9, hspace=0.3)
     for n in range(num_regions):
         ax = plt.subplot(gs[n,0])
+        tipped_trends = []
+        trend_weights = []
         if not draft:
             # Get baseline initial VAF from first member ramp-up (should be consistent between members as evolving ice has just been switched on)
             ds = xr.open_dataset(vaf_dir+'/'+file_head+baseline_suite+file_tail)
@@ -2870,23 +2912,30 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
                     else:
                         tipped = data.where(time >= year_tip, drop=True)
                     add_line(tipped, ax, colours[labels.index('tipped')], year0)
+                    # Calculate trend in tipped section
+                    tipped_trends.append(linregress(tipped.coords['time'], tipped)[0])
+                    # Weight by number of years
+                    trend_weights.append(tipped.sizes['time'])
                 else:
                     untipped = data
                     recovers = False
                 add_line(untipped, ax, colours[labels.index('untipped')], year0)
         print(regions[n]+': '+str(num_tip)+' tipped, '+str(num_recover)+' recovered')
+        # Calculate weighted average trend in cm/century
+        avg_trend = np.average(tipped_trends, weights=trend_weights)*1e2
+        print('Average tipped trend is '+str(avg_trend)+' cm/century: '+str(avg_trend/obs_slr_ais*100)+'% of observed AIS contribution rate')
         ax.grid(linestyle='dotted')
         ax.axhline(0, color='black', linewidth=0.5)
         if n == 1:
             ax.set_xlabel('Years')
         ax.set_xlim([0, None])
         if draft:
-            ax.set_title(region_names[regions[n]], fontsize=12)
+            ax.set_title(prefixes[n]+region_names[regions[n]], fontsize=12)
             plt.suptitle('Ice shelf draft', fontsize=14)
             ax.set_ylabel('m')
             fig_name = 'figures/draft_timeseries.png'
         else:
-            ax.set_title(region_names[regions[n]]+' catchment', fontsize=12)
+            ax.set_title(prefixes[n]+region_names[regions[n]]+' catchment', fontsize=12)
             plt.suptitle('Sea level contribution', fontsize=14)
             ax.set_ylabel('cm')
             fig_name = 'figures/SLR_timeseries.png'
