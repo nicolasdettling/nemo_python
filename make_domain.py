@@ -226,7 +226,7 @@ def add_bear_ridge_bergs (lon, lat, bathy, omask):
 
     # Northern part: select easternmost point in area where bathymetry is shallower than 300m
     [xmin, xmax, ymin, ymax] = region_bounds['bear_ridge_N']
-    z_deep = region_bathy_bounds['bear_ridge_N'][0]
+    z_deep = region_bathy_bounds['bear_ridge_N'][1]
     # Find area of Bear Ridge with points shallower than 300 m
     bear_ridge = (lat <= ymax)*(lat >= ymin)*(lon >= xmin)*(lon <= xmax)*(bathy < z_deep)
     # Identify maximum longitude grid point for each latitude that meets these conditions:

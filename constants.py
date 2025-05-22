@@ -45,10 +45,14 @@ region_bounds = {
     'dotson_bay': [-114, -110.5, -74.3, -73.5],
     'amundsen_west_shelf_break': [-115, -112, -72, -71],
     'weddell_gyre': [-60., 30., -90., -50.],
+    'filchner_trough': [-45, -30, -79, -75],
+    'ronne_depression': [-70, -55, -76, -73],
 }
-# Isobaths restricting some regions
+# Isobaths restricting some regions: shallow bound, then deep bound
 region_bathy_bounds = {
-    'bear_ridge_N': [350, None],
+    'bear_ridge_N': [None, 350],
+    'filchner_trough': [650, 1250],
+    'ronne_depression': [550, None],
 }
 # Latitude to bound continental shelf
 shelf_lat = -58

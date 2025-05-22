@@ -6,7 +6,7 @@
 import numpy as np
 import xarray as xr
 from .interpolation import neighbours
-from .constants import region_edges, region_edges_flag, region_names, region_points, shelf_lat, shelf_depth, shelf_point0
+from .constants import region_edges, region_edges_flag, region_names, region_points, shelf_lat, shelf_depth, shelf_point0, region_bounds, region_bathy_bounds
 from .utils import remove_disconnected, closest_point
 
 # Helper function to calculate a bunch of grid variables (bathymetry, draft, ocean mask, ice shelf mask) from a NEMO output file, only using thkcello and the mask on a 3D data variable (current options are to look for thetao and so).
@@ -160,7 +160,25 @@ def region_mask (region, ds, option='all', return_name=False):
     # Get mask for entire continental shelf and cavities
     mask, ds = build_shelf_mask(ds)
     mask = mask.copy()
-    if region != 'all':
+    if region == 'all':
+        # No further restrictions needed
+        pass
+    elif region in region_bounds:
+        # Restrict based on lat-lon box
+        [xmin, xmax, ymin, ymax] = region_bounds[region]
+        lon = ds['nav_lon']
+        lat = ds['nav_lat']
+        mask = xr.where((lon >= xmin)*(lon <= xmax)*(lat >= ymin)*(lat <= ymax), mask, 0)
+        if region in region_bathy_bounds:
+            # Also restrict based on isobaths
+            bathy = calc_geometry(ds)[0]
+            [z_shallow, z_deep] = region_bathy_bounds[region]
+            if z_shallow is None:
+                z_shallow = bathy.min()
+            if z_deep is None:
+                z_deep = bathy.max()
+            mask = xr.where((bathy >= z_shallow)*(bathy <= z_deep), mask, 0)
+    elif region in region_edges:
         # Restrict to a specific region of the coast
         # Select one point each on western and eastern boundaries
         [coord_W, coord_E] = region_edges[region]
@@ -226,6 +244,8 @@ def region_mask (region, ds, option='all', return_name=False):
             mask_region2 = remove_disconnected(mask, cell_to_west(point0_E, flag_E))
             mask_region += mask_region2
         mask.data = mask_region
+    else:
+        raise Exception('Undefined region '+region)
 
     # Special cases (where common boundaries didn't agree for eORCA1 and eORCA025)
     if region == 'amundsen_sea':
