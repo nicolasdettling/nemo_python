@@ -178,6 +178,8 @@ def region_mask (region, ds, option='all', return_name=False):
             if z_deep is None:
                 z_deep = bathy.max()
             mask = xr.where((bathy >= z_shallow)*(bathy <= z_deep), mask, 0)
+        # In all cases, these are shelf-only regions
+        option = 'shelf'
     elif region in region_edges:
         # Restrict to a specific region of the coast
         # Select one point each on western and eastern boundaries

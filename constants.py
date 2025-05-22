@@ -47,12 +47,16 @@ region_bounds = {
     'weddell_gyre': [-60., 30., -90., -50.],
     'filchner_trough': [-45, -30, -79, -75],
     'ronne_depression': [-70, -55, -76, -73],
+    'LAB_trough': [-166, -157, -80, -75],
+    'drygalski_trough': [163, 168.5, -80, -71],
 }
 # Isobaths restricting some regions: shallow bound, then deep bound
 region_bathy_bounds = {
     'bear_ridge_N': [None, 350],
-    'filchner_trough': [650, 1250],
-    'ronne_depression': [550, None],
+    'filchner_trough': [600, 1200],
+    'ronne_depression': [525, None],
+    'LAB_trough': [525, 800],
+    'drygalski_trough': [500, 1200],
 }
 # Latitude to bound continental shelf
 shelf_lat = -58
