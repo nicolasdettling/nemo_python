@@ -1414,6 +1414,7 @@ def calc_salinity_bias (base_dir='./', eos='eos80'):
     plt.suptitle('Bottom salinity (psu)', fontsize=18)
     finished_plot(fig, fig_name='figures/bwsalt_bias.png')
 
+    biases = []
     # Calculate bias in each region
     for region in ['all'] + subregions:
         if region == 'all':
@@ -1434,10 +1435,9 @@ def calc_salinity_bias (base_dir='./', eos='eos80'):
         print('Observational mean '+str(obs_mean.data)+' psu')
         bias = (ukesm_mean-obs_mean).item()
         print('UKESM bias '+str(bias))
-        if region == 'all':
-            bias_all = bias
+        biases.append(bias)
 
-    return bias_all
+    return biases
 
 
 # Calculate the global warming implied by the salinity bias (from above), using a linear regression for the untipped sections of ramp-up simulations.
@@ -1454,7 +1454,7 @@ def warming_implied_by_salinity_bias (salt_bias=None, base_dir='./'):
 
     if salt_bias is None:
         # Salinity bias is not precomputed
-        salt_bias = calc_salinity_bias(base_dir=base_dir)
+        salt_bias = calc_salinity_bias(base_dir=base_dir)[0]
 
     # Calculate area-weighting of each region
     area = []
@@ -2182,6 +2182,12 @@ def sfc_FW_timeseries (suite='cx209', base_dir='./'):
 
     update_simulation_timeseries(suite, ['all_iceberg_melt', 'all_pminuse', 'all_runoff', 'all_seaice_meltfreeze'], timeseries_file='timeseries_sfc.nc', sim_dir=base_dir+'/'+suite+'/', freq='m', halo=True, gtype='T')
 
+
+def bwsalt_timeseries (suite, base_dir='./'):
+
+    regions = ['filchner_trough', 'ronne_depression', 'LAB_trough', 'drygalski_trough']
+    update_simulation_timeseries(suite, [region+'_shelf_bwsalt' for region in regions], timeseries_file='timeseries_bwsalt.nc', sim_dir=base_dir+'/'+suite+'/', freq='m', halo=True, gtype='T')
+    
 
 # Helper function to get the start and end dates of each suite-segment in a trajectory
 def find_stages_start_end (suite_list, base_dir='./', timeseries_file='timeseries.nc'):
