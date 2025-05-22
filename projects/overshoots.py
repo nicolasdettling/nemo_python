@@ -1333,7 +1333,8 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
 # Before running this on Jasmin, do "source ~/pyenv/bin/activate" so we can use gsw
 def calc_salinity_bias (base_dir='./', eos='eos80'):
 
-    regions = ['ross', 'filchner_ronne']
+    regions = ['ross', 'filchner_ronne']  # Both together
+    subregions = ['ross', 'filchner_ronne', 'LAB_trough', 'drygalski_trough', 'filchner_trough', 'ronne_depression']
     pi_suite = 'cs495'  # Preindustrial, static cavities
     hist_suite = 'cy691'  # Historical, static cavities: to get UKESM's idea of warming relative to preindustrial
     timeseries_file_um = 'timeseries_um.nc'
@@ -1413,21 +1414,30 @@ def calc_salinity_bias (base_dir='./', eos='eos80'):
     plt.suptitle('Bottom salinity (psu)', fontsize=18)
     finished_plot(fig, fig_name='figures/bwsalt_bias.png')
 
-    # Construct a mask which is both regions together
-    masks = [region_mask(region, ds, option='shelf')[0] for region in regions]
-    mask = masks[0] + masks[1]
-    dA = ds['area']*mask
-    ukesm_mean = (ramp_up_bwsalt*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
-    print('UKESM mean '+str(ukesm_mean.data)+' psu')
-    # Might have to area-average over a smaller region with missing observational points
-    mask_obs = mask.where(obs_bwsalt.notnull())
-    dA_obs = ds['area']*mask_obs
-    obs_mean = (obs_bwsalt*dA_obs).sum(dim=['x','y'])/dA_obs.sum(dim=['x','y'])
-    print('Observational mean '+str(obs_mean.data)+' psu')
-    bias = (ukesm_mean-obs_mean).item()
-    print('UKESM bias '+str(bias))
+    # Calculate bias in each region
+    for region in ['all'] + subregions:
+        if region == 'all':
+            print('Both shelves together:')
+            # Construct a mask which is both regions together
+            masks = [region_mask(region_tmp, ds, option='shelf')[0] for region_tmp in regions]
+            mask = masks[0] + masks[1]
+        else:
+            print('\n'+region_names[region]+' only:')
+            mask = region_mask(region, ds, option='shelf')[0]
+        dA = ds['area']*mask
+        ukesm_mean = (ramp_up_bwsalt*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
+        print('UKESM mean '+str(ukesm_mean.data)+' psu')
+        # Might have to area-average over a smaller region with missing observational points
+        mask_obs = mask.where(obs_bwsalt.notnull())
+        dA_obs = ds['area']*mask_obs
+        obs_mean = (obs_bwsalt*dA_obs).sum(dim=['x','y'])/dA_obs.sum(dim=['x','y'])
+        print('Observational mean '+str(obs_mean.data)+' psu')
+        bias = (ukesm_mean-obs_mean).item()
+        print('UKESM bias '+str(bias))
+        if region == 'all':
+            bias_all = bias
 
-    return bias
+    return bias_all
 
 
 # Calculate the global warming implied by the salinity bias (from above), using a linear regression for the untipped sections of ramp-up simulations.
