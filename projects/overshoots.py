@@ -1427,8 +1427,10 @@ def calc_salinity_bias (base_dir='./', eos='eos80', plot=False, out_file='bwsalt
         finished_plot(fig, fig_name='figures/bwsalt_bias.png')
 
     # Save bias to NetCDF file
-    data_diff = ramp_up_bwsalt - obs_bwsalt
+    data_diff = (ramp_up_bwsalt - obs_bwsalt).squeeze()
+    data_diff = data_diff.where((ramp_up_bwsalt!=0)*ramp_up_bwsalt.notnull()*obs_bwsalt.notnull())
     ds_save = xr.Dataset({'bwsalt_bias':data_diff})
+    print('Writing '+out_file)        
     ds_save.to_netcdf(out_file)
 
     # Calculate area-averaged bias
@@ -3601,6 +3603,29 @@ def check_rampdown_tip (base_dir='./'):
                 stype = cavity_temp.scenario_type[tip_t]
                 if stype == -1:
                     print(suite_string+': '+region+' tips during ramp-down')
+
+
+# Calculate linear regression of bottom salinity against global temperature for every point in the Ross and FRIS shelf regions, and every ramp-up ensemble member.
+def spatial_regression_bwsalt_gw (base_dir='./'):
+
+    # Find number of ensemble members
+    # Set up masks
+    # Set up xarrays for slope
+    # Loop over ensemble members
+    #   Read global temperature and Ross temperature, smooth and align
+    #   Find date at which Ross tips
+    #   Loop over files
+    #     Exit loop if Ross has tipped (account for extra 5 years for smoothing)
+    #     Drop everything outside the mask
+    #     Concatenate 
+    #   Loop over points in mask
+    #     Extract timeseries
+    #     Smooth
+    #     Calculate slope
+    #     Save to arrays
+    # Save arrays to file
+    # Plot ensemble mean slope, masked where not significant
+    pass
             
         
         
