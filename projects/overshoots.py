@@ -1334,7 +1334,6 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
 def calc_salinity_bias (base_dir='./', eos='eos80', plot=False):
 
     regions = ['ross', 'filchner_ronne']  # Both together
-    subregions = ['ross', 'filchner_ronne', 'LAB_trough', 'drygalski_trough', 'filchner_trough', 'ronne_depression']
     labels_lon = [-166, -45, -158, 162, -30, -70]
     labels_lat = [-72, -71, -79, -75, -78, -76.5]
     pi_suite = 'cs495'  # Preindustrial, static cavities
@@ -1395,9 +1394,9 @@ def calc_salinity_bias (base_dir='./', eos='eos80', plot=False):
     obs_bwsalt = obs_interp['salt']
 
     # Prepare masks of each region
-    masks = [region_mask(region, ds, option='shelf')[0] for region in subregions]
-    # Make combined mask for the first 2 subregions
-    masks = [masks[0] + masks[1]] + masks
+    masks = [region_mask(region, ds, option='shelf')[0] for region in regions]
+    # Make combined mask
+    mask = masks[0] + masks[1]
     # Prepare coordinates for plotting masks
     x, y = polar_stereo(ds['nav_lon'], ds['nav_lat'])
 
@@ -1420,41 +1419,31 @@ def calc_salinity_bias (base_dir='./', eos='eos80', plot=False):
             ax.axis('equal')
             img = circumpolar_plot(data_plot[n], ds, ax=ax, masked=True, make_cbar=False, title=titles[n], titlesize=13, vmin=vmin[n], vmax=vmax[n], ctype=ctype[n], lat_max=-63)
             if n == 2:
-                for m in range(len(region_colours)):
-                    ax.contour(x, y, masks[m+1], levels=[0.5], colors=(region_colours[m]), linewidths=0.5)
-                    x0, y0 = polar_stereo(labels_lon[m], labels_lat[m])
-                    plt.text(x0, y0, str(m+1), fontsize=9, color=region_colours[m])
+                ax.contour(x, y, masks[0], levels=[0.5], colors=('magenta'), linewidths=0.5)
             if n != 1:
                 cax = cax = fig.add_axes([0.01+0.45*n, 0.1, 0.02, 0.6])
                 plt.colorbar(img, cax=cax, extend='both')
         plt.suptitle('Bottom salinity (psu)', fontsize=18)
         finished_plot(fig, fig_name='figures/bwsalt_bias.png')
 
-    biases = []
-    # Calculate bias in each region
-    for region, mask in zip(['all']+subregions, masks):
-        if region == 'all':
-            print('Both shelves together:')
-        else:
-            print('\n'+region_names[region]+' only:')
-        dA = ds['area']*mask
-        ukesm_mean = (ramp_up_bwsalt*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
-        print('UKESM mean '+str(ukesm_mean.data)+' psu')
-        # Might have to area-average over a smaller region with missing observational points
-        mask_obs = mask.where(obs_bwsalt.notnull())
-        dA_obs = ds['area']*mask_obs
-        obs_mean = (obs_bwsalt*dA_obs).sum(dim=['x','y'])/dA_obs.sum(dim=['x','y'])
-        print('Observational mean '+str(obs_mean.data)+' psu')
-        bias = (ukesm_mean-obs_mean).item()
-        print('UKESM bias '+str(bias))
-        biases.append(bias)
+    # Calculate bias
+    dA = ds['area']*mask
+    ukesm_mean = (ramp_up_bwsalt*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
+    print('UKESM mean '+str(ukesm_mean.data)+' psu')
+    # Might have to area-average over a smaller region with missing observational points
+    mask_obs = mask.where(obs_bwsalt.notnull())
+    dA_obs = ds['area']*mask_obs
+    obs_mean = (obs_bwsalt*dA_obs).sum(dim=['x','y'])/dA_obs.sum(dim=['x','y'])
+    print('Observational mean '+str(obs_mean.data)+' psu')
+    bias = (ukesm_mean-obs_mean).item()
+    print('UKESM bias '+str(bias))
 
-    return biases
+    return bias
 
 
 # Calculate the global warming implied by the salinity bias (from above), using a linear regression for the untipped sections of ramp-up simulations.
 # Last calculation: salt_bias=-0.11203044309147714
-def warming_implied_by_salinity_bias (base_dir='./'):
+def warming_implied_by_salinity_bias (salt_bias=None, base_dir='./'):
 
     pi_suite = 'cs495'
     smooth = 5*months_per_year
@@ -1465,7 +1454,8 @@ def warming_implied_by_salinity_bias (base_dir='./'):
     subregions = ['ross', 'filchner_ronne', 'LAB_trough', 'drygalski_trough', 'filchner_trough', 'ronne_depression']  # Rest of list of biases: each region individually
     sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'
 
-    salt_biases = calc_salinity_bias(base_dir=base_dir)
+    if salt_bias is None:
+        salt_bias = calc_salinity_bias(base_dir=base_dir)
 
     # Calculate area-weighting of each region
     area = []
@@ -1483,8 +1473,9 @@ def warming_implied_by_salinity_bias (base_dir='./'):
     slopes = np.zeros([num_ens, num_regions])
     intercepts = np.zeros(slopes.shape)
     r2 = np.zeros(slopes.shape)
-    all_bwsalt = np.zeros(slopes.shape)
-    all_warming = np.zeros([num_ens])
+    implied_warming = np.zeros(slopes.shape)
+    all_bwsalt = []
+    all_warming = []
     for n in range(num_ens):
         suite = suites_by_scenario['ramp_up'][n]
         # Get timeseries of global warming
@@ -1500,7 +1491,8 @@ def warming_implied_by_salinity_bias (base_dir='./'):
             # Trim to just before the Ross tips
             t_end = np.argwhere(ross_temp.data > tipping_threshold)[0][0]
             warming = warming.isel(time_centered=slice(0,t_end))
-        all_warming[n] = warming
+        all_warming.append(warming)
+        bwsalt_regions = []
         for r in range(num_regions):
             # Get timeseries of bottom salinity on the shelf
             if r == 0:
@@ -1528,34 +1520,78 @@ def warming_implied_by_salinity_bias (base_dir='./'):
             slopes[n,r] = slope
             intercepts[n,r] = intercept
             r2[n,r] = r_value**2
-            all_bwsalt[n,r] = bwsalt            
+            implied_warming[n,r] = salt_biases[r]/slope
+            bwsalt_regions.append(bwsalt)
+        all_bwsalt.append(bwsalt_regions)
         ds.close()
 
-    # To do:
-    # Calculate implied warming for each region, taking into account uncertainty in slopes
-    # Plot distribution of implied warming; choose either full range or some fraction (5-95%)
-    # Decide which plot(s) to show in supplementary
-    # Choose central temperature correction and uncertainty; apply to statements in text about thresholds
-            
+    mean_correction = np.mean(implied_warming[:,0])
+    print('Central value for correction is '+str(mean_correction)+' degC')
+    correction_min = np.amin(np.mean(implied_warming, axis=0))
+    correction_max = np.amax(np.mean(implied_warming, axis=0))
+    print('Range is '+str(correction_min)+' to '+str(correction_max)+' degC')
+    uncertainty_low = correction_min - mean_correction
+    uncertainty_high = correction_max - mean_correction
+    print('Uncertainty is '+str(uncertainty_low)+' to '+str(uncertainty_high))
 
-    '''# Set up a scatterplot
+    # Scatterplot for full region
+    r = 0
     fig, ax = plt.subplots()
-        # Add to plot
-        ax.plot(warming, bwsalt, '-', linewidth=1.5)
-        # Add regression line to plot
+    for n in range(num_ens):
+        warming = all_warming[n]
+        ax.plot(warming, all_bwsalt[n][r], '-', linewidth=1.5)
+        # Add regression line
         x_vals = np.array([warming.min(), warming.max()])
-        y_vals = slope*x_vals + intercept
+        y_vals = slopes[n,r]*x_vals + intercepts[n,r]
         ax.plot(x_vals, y_vals, '-', color='black', linewidth=1)
-    mean_slope = np.mean(slopes)
-    implied_warming = salt_bias/mean_slope
     ax.grid(linestyle='dotted')
-    plt.text(0.95, 0.95, str(np.round(mean_slope,4))+' +/- '+str(np.round(np.std(slopes),4))+ ' psu/'+deg_string+'C', ha='right', va='top', transform=ax.transAxes)
-    plt.text(0.95, 0.88, r'r$^2$='+str(np.round(np.mean(r2),3))+' +/- '+str(np.round(np.std(r2),3)), ha='right', va='top', transform=ax.transAxes)
-    plt.text(0.95, 0.81, 'Salinity bias of '+str(np.round(salt_bias,3))+' implies\ntemperature correction of '+str(np.round(implied_warming,2))+deg_string+'C', ha='right', va='top', transform=ax.transAxes)
+    plt.text(0.95, 0.95, 'Salinity bias '+str(np.round(salt_biases[r],3))+' psu', ha='right', va='top', transform=ax.transAxes)
+    plt.text(0.95, 0.88, 'Temperature correction '+str(np.round(mean_correction,3))+deg_string+'C', ha='right', va='top', transform=ax.transAxes)
+    plt.text(0.95, 0.81, r'r$^2$ = '+str(np.round(np.amin(r2[:,r]),3))+' - '+str(np.round(np.amax(r2[:,r]),3)), ha='right', va='top', transform=ax.transAxes)
     ax.set_xlabel('Global warming ('+deg_string+'C)')
     ax.set_ylabel('Bottom salinity on Ross and FRIS shelves (psu)')
     ax.set_title('Calculation of temperature correction', fontsize=14)
-    finished_plot(fig, fig_name='figures/bwsalt_warming_regression.png')'''
+    finished_plot(fig, fig_name='figures/bwsalt_warming_regression.png')
+
+    # 3-panel plot showing dependence of salinity bias, slope, and temperature correction on region and ensemble member
+    data_plot = [salt_biases, slopes, implied_warming]
+    titles = ['a) Salinity bias', 'b) Slope of regression', 'c) Temperature correction']
+    units = ['psu', 'psu/'+deg_string+'C', deg_string+'C']
+    ens_colours = ['blue', 'orange', 'green', 'red']
+    region_titles = ['Ross and FRIS shelves', 'Ross shelf', 'FRIS shelf']+[region_names[region] for region in subregions[-4:]]
+    fig = plt.figure(figsize=(10,4))
+    gs = plt.GridSpec(1,3)
+    gs.update(left=0.2, right=0.99, bottom=0.15, top=0.9, wspace=0.05)
+    for v in range(3):
+        ax = plt.subplot(gs[0,v])
+        for r in range(num_regions):
+            if v == 0:
+                # No ensemble member dependence
+                ax.plot(data_plot[v][r], num_regions-r, '.', color='black', markersize=12)
+            else:
+                for n in range(num_ens):
+                    ax.plot(data_plot[v][n,r], num_regions-r, '.', color=ens_colours[n], markersize=12)
+        ax.grid(linestyle='dotted')
+        if np.amin(data_plot[v]) < 0 and np.amax(data_plot[v]) > 0:
+            # Crosses zero; add vertical line
+            ax.axvline(0, color='black', linewidth=0.5)
+        if v == 2:
+            # Mark central value chosen in text and 5-95% uncertainty range
+            xerr = np.empty([2,1])
+            xerr[:,0] = np.abs([uncertainty_low, uncertainty_high])
+            ax.errorbar(mean_correction, num_regions+0.5, xerr=xerr, fmt='k.', markersize=12, capsize=4, ecolor='black')
+        ax.set_title(titles[v], fontsize=13)
+        ax.set_xlabel(units[v])
+        ax.set_ylim([0, num_regions+1])
+        if v == 0:
+            # Set region labels as y-ticks
+            ax.set_yticks(np.arange(num_regions)+1)
+            ax.set_yticklabels(region_titles[::-1])
+        else:
+            ax.tick_params(axis='y', direction='in')
+            ax.set_yticklabels([])
+    finished_plot(fig)
+    
 
 
 # Plot cavity-mean temperature beneath Ross and FRIS as a function of shelf-mean bottom water salinity, in all scenarios. Colour the lines based on the global warming level relative to preindustrial, and indicate the magnitude of the salinity bias.
