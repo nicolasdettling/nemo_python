@@ -1331,7 +1331,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
 
 # Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS (both regions together). To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
 # Before running this on Jasmin, do "source ~/pyenv/bin/activate" so we can use gsw
-def calc_salinity_bias (base_dir='./', eos='eos80', plot=False):
+def calc_salinity_bias (base_dir='./', eos='eos80', plot=False, out_file='bwsalt_bias.nc'):
 
     regions = ['ross', 'filchner_ronne']  # Both together
     labels_lon = [-166, -45, -158, 162, -30, -70]
@@ -1426,7 +1426,12 @@ def calc_salinity_bias (base_dir='./', eos='eos80', plot=False):
         plt.suptitle('Bottom salinity (psu)', fontsize=18)
         finished_plot(fig, fig_name='figures/bwsalt_bias.png')
 
-    # Calculate bias
+    # Save bias to NetCDF file
+    data_diff = ramp_up_bwsalt - obs_bwsalt
+    ds_save = xr.Dataset('bwsalt_bias':data_diff)
+    ds_save.to_netcdf(out_file)
+
+    # Calculate area-averaged bias
     dA = ds['area']*mask
     ukesm_mean = (ramp_up_bwsalt*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
     print('UKESM mean '+str(ukesm_mean.data)+' psu')
