@@ -1428,7 +1428,7 @@ def calc_salinity_bias (base_dir='./', eos='eos80', plot=False, out_file='bwsalt
 
     # Save bias to NetCDF file
     data_diff = ramp_up_bwsalt - obs_bwsalt
-    ds_save = xr.Dataset('bwsalt_bias':data_diff)
+    ds_save = xr.Dataset({'bwsalt_bias':data_diff})
     ds_save.to_netcdf(out_file)
 
     # Calculate area-averaged bias
