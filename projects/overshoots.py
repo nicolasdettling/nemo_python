@@ -1331,10 +1331,12 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
 
 # Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS (both regions together). To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
 # Before running this on Jasmin, do "source ~/pyenv/bin/activate" so we can use gsw
-def calc_salinity_bias (base_dir='./', eos='eos80'):
+def calc_salinity_bias (base_dir='./', eos='eos80', plot=False):
 
     regions = ['ross', 'filchner_ronne']  # Both together
     subregions = ['ross', 'filchner_ronne', 'LAB_trough', 'drygalski_trough', 'filchner_trough', 'ronne_depression']
+    labels_lon = [-166, -45, -158, 162, -30, -70]
+    labels_lat = [-72, -71, -79, -75, -78, -76.5]
     pi_suite = 'cs495'  # Preindustrial, static cavities
     hist_suite = 'cy691'  # Historical, static cavities: to get UKESM's idea of warming relative to preindustrial
     timeseries_file_um = 'timeseries_um.nc'
@@ -1392,39 +1394,49 @@ def calc_salinity_bias (base_dir='./', eos='eos80'):
     obs_interp = interp_latlon_cf(obs, ds, method='bilinear')
     obs_bwsalt = obs_interp['salt']
 
-    # Make a quick plot
-    fig = plt.figure(figsize=(8,3))
-    gs = plt.GridSpec(1,3)
-    gs.update(left=0.1, right=0.9, bottom=0.05, top=0.8, wspace=0.1)
-    ukesm_plot = ramp_up_bwsalt.where(ramp_up_bwsalt!=0).squeeze()
-    obs_plot = obs_bwsalt.where(ukesm_plot.notnull()*obs_bwsalt.notnull())
-    obs_plot = obs_plot.where(ramp_up_bwsalt!=0).squeeze()
-    data_plot = [ukesm_plot, obs_plot, ukesm_plot-obs_plot]
-    titles = ['UKESM', 'Observations', 'Model bias']
-    vmin = [34, 34, -0.5]
-    vmax = [34.85, 34.85, 0.5]
-    ctype = ['RdBu_r', 'RdBu_r', 'plusminus']
-    for n in range(3):
-        ax = plt.subplot(gs[0,n])
-        ax.axis('equal')
-        img = circumpolar_plot(data_plot[n], ds, ax=ax, masked=True, make_cbar=False, title=titles[n], titlesize=14, vmin=vmin[n], vmax=vmax[n], ctype=ctype[n], lat_max=-63)
-        if n != 1:
-            cax = cax = fig.add_axes([0.01+0.45*n, 0.1, 0.02, 0.6])
-            plt.colorbar(img, cax=cax, extend='both')
-    plt.suptitle('Bottom salinity (psu)', fontsize=18)
-    finished_plot(fig, fig_name='figures/bwsalt_bias.png')
+    # Prepare masks of each region
+    masks = [region_mask(region, ds, option='shelf')[0] for region in subregions]
+    # Make combined mask for the first 2 subregions
+    masks = [masks[0] + masks[1]] + masks
+    # Prepare coordinates for plotting masks
+    x, y = polar_stereo(ds['nav_lon'], ds['nav_lat'])
+
+    if plot:
+        # Make a quick plot
+        fig = plt.figure(figsize=(8,3))
+        gs = plt.GridSpec(1,3)
+        gs.update(left=0.1, right=0.9, bottom=0.05, top=0.8, wspace=0.1)
+        ukesm_plot = ramp_up_bwsalt.where(ramp_up_bwsalt!=0).squeeze()
+        obs_plot = obs_bwsalt.where(ukesm_plot.notnull()*obs_bwsalt.notnull())
+        obs_plot = obs_plot.where(ramp_up_bwsalt!=0).squeeze()
+        data_plot = [ukesm_plot, obs_plot, ukesm_plot-obs_plot]
+        titles = ['a) UKESM', 'b) Observations', 'c) Model bias']
+        vmin = [34, 34, -0.5]
+        vmax = [34.85, 34.85, 0.5]
+        ctype = ['RdBu_r', 'RdBu_r', 'plusminus']
+        region_colours = ['magenta']*2 + ['black']*4
+        for n in range(3):
+            ax = plt.subplot(gs[0,n])
+            ax.axis('equal')
+            img = circumpolar_plot(data_plot[n], ds, ax=ax, masked=True, make_cbar=False, title=titles[n], titlesize=13, vmin=vmin[n], vmax=vmax[n], ctype=ctype[n], lat_max=-63)
+            if n == 2:
+                for m in range(len(region_colours)):
+                    ax.contour(x, y, masks[m+1], levels=[0.5], colors=(region_colours[m]), linewidths=0.5)
+                    x0, y0 = polar_stereo(labels_lon[m], labels_lat[m])
+                    plt.text(x0, y0, str(m+1), fontsize=9, color=region_colours[m])
+            if n != 1:
+                cax = cax = fig.add_axes([0.01+0.45*n, 0.1, 0.02, 0.6])
+                plt.colorbar(img, cax=cax, extend='both')
+        plt.suptitle('Bottom salinity (psu)', fontsize=18)
+        finished_plot(fig, fig_name='figures/bwsalt_bias.png')
 
     biases = []
     # Calculate bias in each region
-    for region in ['all'] + subregions:
+    for region, mask in zip(['all']+subregions, masks):
         if region == 'all':
             print('Both shelves together:')
-            # Construct a mask which is both regions together
-            masks = [region_mask(region_tmp, ds, option='shelf')[0] for region_tmp in regions]
-            mask = masks[0] + masks[1]
         else:
             print('\n'+region_names[region]+' only:')
-            mask = region_mask(region, ds, option='shelf')[0]
         dA = ds['area']*mask
         ukesm_mean = (ramp_up_bwsalt*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
         print('UKESM mean '+str(ukesm_mean.data)+' psu')
