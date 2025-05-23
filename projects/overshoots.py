@@ -1511,7 +1511,7 @@ def warming_implied_by_salinity_bias (salt_bias=None, base_dir='./'):
         slopes.append(slope)
         intercepts.append(intercept)
         r2.append(r_value**2)
-        implied_warming.append(salt_biases[r]/slope)
+        implied_warming.append(salt_bias/slope)
         all_bwsalt.append(bwsalt)
         ds.close()
 
@@ -1528,52 +1528,13 @@ def warming_implied_by_salinity_bias (salt_bias=None, base_dir='./'):
         y_vals = slopes[n]*x_vals + intercepts[n]
         ax.plot(x_vals, y_vals, '-', color='black', linewidth=1)
     ax.grid(linestyle='dotted')
-    plt.text(0.95, 0.95, 'Salinity bias '+str(np.round(salt_biases[r],3))+' psu', ha='right', va='top', transform=ax.transAxes)
+    plt.text(0.95, 0.95, 'Salinity bias '+str(np.round(salt_bias,3))+' psu', ha='right', va='top', transform=ax.transAxes)
     plt.text(0.95, 0.88, 'Temperature correction '+str(np.round(mean_correction,3))+deg_string+'C', ha='right', va='top', transform=ax.transAxes)
-    plt.text(0.95, 0.81, r'r$^2$ = '+str(np.round(np.amin(r2[:,r]),3))+' - '+str(np.round(np.amax(r2[:,r]),3)), ha='right', va='top', transform=ax.transAxes)
+    plt.text(0.95, 0.81, r'r$^2$ = '+str(np.round(np.amin(r2),3))+' - '+str(np.round(np.amax(r2),3)), ha='right', va='top', transform=ax.transAxes)
     ax.set_xlabel('Global warming ('+deg_string+'C)')
     ax.set_ylabel('Bottom salinity on Ross and FRIS shelves (psu)')
     ax.set_title('Calculation of temperature correction', fontsize=14)
     finished_plot(fig, fig_name='figures/bwsalt_warming_regression.png')
-
-    # 3-panel plot showing dependence of salinity bias, slope, and temperature correction on region and ensemble member
-    data_plot = [salt_biases, slopes, implied_warming]
-    titles = ['a) Salinity bias', 'b) Slope of regression', 'c) Temperature correction']
-    units = ['psu', 'psu/'+deg_string+'C', deg_string+'C']
-    ens_colours = ['blue', 'orange', 'green', 'red']
-    region_titles = ['Ross and FRIS shelves', 'Ross shelf', 'FRIS shelf']+[region_names[region] for region in subregions[-4:]]
-    fig = plt.figure(figsize=(10,4))
-    gs = plt.GridSpec(1,3)
-    gs.update(left=0.2, right=0.99, bottom=0.15, top=0.9, wspace=0.05)
-    for v in range(3):
-        ax = plt.subplot(gs[0,v])
-        for r in range(num_regions):
-            if v == 0:
-                # No ensemble member dependence
-                ax.plot(data_plot[v][r], num_regions-r, '.', color='black', markersize=12)
-            else:
-                for n in range(num_ens):
-                    ax.plot(data_plot[v][n,r], num_regions-r, '.', color=ens_colours[n], markersize=12)
-        ax.grid(linestyle='dotted')
-        if np.amin(data_plot[v]) < 0 and np.amax(data_plot[v]) > 0:
-            # Crosses zero; add vertical line
-            ax.axvline(0, color='black', linewidth=0.5)
-        if v == 2:
-            # Mark central value chosen in text and 5-95% uncertainty range
-            xerr = np.empty([2,1])
-            xerr[:,0] = np.abs([uncertainty_low, uncertainty_high])
-            ax.errorbar(mean_correction, num_regions+0.5, xerr=xerr, fmt='k.', markersize=12, capsize=4, ecolor='black')
-        ax.set_title(titles[v], fontsize=13)
-        ax.set_xlabel(units[v])
-        ax.set_ylim([0, num_regions+1])
-        if v == 0:
-            # Set region labels as y-ticks
-            ax.set_yticks(np.arange(num_regions)+1)
-            ax.set_yticklabels(region_titles[::-1])
-        else:
-            ax.tick_params(axis='y', direction='in')
-            ax.set_yticklabels([])
-    finished_plot(fig)
     
 
 
