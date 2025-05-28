@@ -3626,15 +3626,41 @@ def spatial_regression_bwsalt_gw (base_dir='./'):
     # Save arrays to file
     # Plot ensemble mean slope, masked where not significant
     pass
-            
-        
-        
-        
-        
 
-    
-            
-            
+
+# List for Jing of if/when all the stabilisation runs tip.
+def stabilisation_tipping_list (base_dir='./', out_file='stabilisation_tipping_times'):
+
+    regions = ['ross', 'filchner_ronne']
+    f = open(out_file, 'w')
+    timeseries_file = 'timeseries.nc'
+
+    for scenario in suites_by_scenario:
+        if 'stabilise' not in scenario:
+            continue
+        for suite in suites_by_scenario[scenario]:
+            f.write(suite+' ('+scenario+')\n')
+            # Get starting date
+            ds = xr.open_dataset(suite+'/'+timeseries_file)
+            date0 = ds['time_centered'][0]
+            ds.close()
+            f.write('Starts in '+str(date0.dt.year.item())+'\n')
+            for region in regions:
+                region_name = region_names[region]
+                # Check if parent ramp-up tips before starting date
+                parent_suite = suites_branched[suite]
+                parent_tips, parent_tip_date = check_tip(suite=parent_suite, region=region, return_date=True)
+                if parent_tips and parent_tip_date < date0:
+                    f.write(region_name+' tips before stabilisation\n')
+                else:
+                    # Check if stabilisation run tips
+                    tips, tip_date = check_tip(suite=suite, region=region, return_date=True)
+                    if tips:
+                        f.write(region_name+' tips in '+str(tip_date.dt.year.item())+'\n')
+                    else:
+                        f.write(region_name+' does not tip\n')
+            f.write('\n')
+    f.close()            
             
     
 
