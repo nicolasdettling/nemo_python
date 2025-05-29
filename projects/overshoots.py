@@ -3606,26 +3606,88 @@ def check_rampdown_tip (base_dir='./'):
 
 
 # Calculate linear regression of bottom salinity against global temperature for every point in the Ross and FRIS shelf regions, and every ramp-up ensemble member.
-def spatial_regression_bwsalt_gw (base_dir='./'):
+def spatial_regression_bwsalt_gw (base_dir='./', out_file='bwsalt_warming_regression.nc'):
 
-    # Find number of ensemble members
-    # Set up masks
-    # Set up xarrays for slope
+    num_ens = len(suites_by_scenario['ramp_up'])
+    regions = ['ross', 'filchner_ronne']
+    sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'
+    timeseries_file = 'timeseries.nc'
+    timeseries_file_um = 'timeseries_um.nc'
+    smooth_years = 5
+    smooth = smooth_years*months_per_year
+
+    # Make combined mask
+    ds = xr.open_dataset(sample_file)
+    masks = [region_mask(region, ds, option='shelf')[0] for region in regions]
+    mask = (masks[0] + masks[1]).squeeze()
+    ds.close()
+
+    # Set up array to save slopes
+    slopes = (0*mask).expand_dims(dim={'ens':np.arange(num_ens)})
+
     # Loop over ensemble members
-    #   Read global temperature and Ross temperature, smooth and align
-    #   Find date at which Ross tips
-    #   Loop over files
-    #     Exit loop if Ross has tipped (account for extra 5 years for smoothing)
-    #     Drop everything outside the mask
-    #     Concatenate 
-    #   Loop over points in mask
-    #     Extract timeseries
-    #     Smooth
-    #     Calculate slope
-    #     Save to arrays
-    # Save arrays to file
-    # Plot ensemble mean slope, masked where not significant
-    pass
+    for n, suite in zip(range(num_ens), suites_by_scenario['ramp_up']):
+        
+        print('Processing '+suite)
+        # Read global temperature
+        warming = global_warming(suite, base_dir=base_dir)
+        # Find date at which Ross tips
+        tips, tip_date = check_tip(suite=suite, region='ross', return_date=True)
+        tip_year = tip_date.dt.year
+        print('Ross tips in '+str(tip_year.item()))
+        
+        # Make list of files to read; stop 5 years after tipping
+        sim_dir = base_dir+'/'+suite+'/'
+        file_head = 'nemo_'+suite+'o_1m_'
+        file_tail = '_grid-T.nc'
+        nemo_files = []
+        for f in os.listdir(sim_dir):
+            if f.startswith(file_head) and f.endswith(file_tail):
+                year = int(f[len(file_head):len(file_head)+4])
+                if year < tip_year + smooth_years:
+                    nemo_files.append(sim_dir+f)
+        # Make sure in chronological order
+        nemo_files.sort()
+        
+        print('Reading data')
+        # Read bottom salinity from every file
+        for file_path in nemo_files:
+            ds = xr.open_dataset(file_path)
+            # Only keep the indices inside the mask to save memory
+            bwsalt = ds['sob'].where(mask).swap_dims({'time_counter':'time_centered'})
+            bwsalt = bwsalt.where(bwsalt.notnull(), drop=True)
+            if file_path == nemo_files[0]:
+                bwsalt_all = bwsalt
+            else:
+                # Concatenate to previous data
+                bwsalt_all = xr.concat([bwsalt_all, bwsalt], dim='time_centered')
+            ds.close()
+            
+        # Align with warming timeseries - should work even though bwsalt_all has extra dimensions
+        warming, bwsalt_all = align_timeseries(warming, bwsalt_all)
+        warming_smooth = moving_average(warming, smooth)
+
+        print('Calculating regressions')
+        # Loop over x and y dimensions (restricted by dropping points outside mask)
+        for y0 in bwsalt_all.coords['y']:
+            for x0 in bwsalt_all.coords['x']:
+                # Extract timeseries at this point
+                bwsalt_ts = bwsalt_all.isel(x=x0, y=y0)
+                if all(bwsalt_ts.isnull()):
+                    # Not inside mask
+                    continue                
+                # Smooth
+                bwsalt_smooth = moving_average(bwsalt_ts, smooth)
+                # Calculate regression of bwsalt in response to warming
+                slope0 = linregress(warming_smooth, bwsalt_smooth)[0]
+                # Save to master slope array
+                slopes = xr.where((slopes.x==x0)*(slopes.y==y0)*(slopes.ens==n), slope0, slopes)
+
+    # Save to file
+    ds = xr.Dataset({'slope':slopes})
+    print('Writing '+out_file)
+    ds.to_netcdf(out_file)
+    ds.close()
 
 
 # List for Jing of if/when all the stabilisation runs tip.
