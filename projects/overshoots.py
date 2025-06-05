@@ -3672,7 +3672,7 @@ def spatial_regression_bwsalt_gw (base_dir='./', out_file='bwsalt_warming_regres
         for y0 in bwsalt_all.coords['y']:
             for x0 in bwsalt_all.coords['x']:
                 # Extract timeseries at this point
-                bwsalt_ts = bwsalt_all.isel(x=x0, y=y0)
+                bwsalt_ts = bwsalt_all.isel(y=y0, x=x0)
                 if all(bwsalt_ts.isnull()):
                     # Not inside mask
                     continue                
@@ -3681,7 +3681,7 @@ def spatial_regression_bwsalt_gw (base_dir='./', out_file='bwsalt_warming_regres
                 # Calculate regression of bwsalt in response to warming
                 slope0 = linregress(warming_smooth, bwsalt_smooth)[0]
                 # Save to master slope array
-                slopes = xr.where((slopes.x==x0)*(slopes.y==y0)*(slopes.ens==n), slope0, slopes)
+                slopes = xr.where((slopes.ens==n)*(slopes['nav_lat']==bwsalt_all['nav_lat'].isel(x=x0, y=y0))*(slopes['nav_lon']==bwsalt_all['nav_lon'].isel(x=x0, y=y0)), slope0, slopes)
 
     # Save to file
     ds = xr.Dataset({'slope':slopes})
