@@ -3722,7 +3722,56 @@ def stabilisation_tipping_list (base_dir='./', out_file='stabilisation_tipping_t
                     else:
                         f.write(region_name+' does not tip\n')
             f.write('\n')
-    f.close()            
+    f.close()
+
+
+def temp_correction_uncertainty (base_dir='./', bias_file='bwsalt_bias.nc', slope_file='bwsalt_warming_regression.nc'):
+
+    sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'
+
+    # Make combined mask
+    ds_grid = xr.open_dataset(sample_file)
+    masks = [region_mask(region, ds_grid, option='shelf')[0] for region in regions]
+    mask = (masks[0] + masks[1]).squeeze()
+
+    # Read bias and ensemble mean slopes
+    ds = xr.open_dataset(bias_file)
+    bias = ds['bwsalt_bias'].squeeze()
+    ds.close()
+    ds = xr.open_dataset(slope_file)
+    slope = ds['slope'].mean(dim='ens')
+    ds.close()
+    # Calculate temperature correction at every point
+    temp_correction = bias/slope
+    # Apply masks
+    temp_correction = temp_correction.where(mask)
+
+    # Plot map of temperature corrections
+    circumpolar_plot(temp_correction, ds_grid, title='Temperature correction ('+deg_string+'C) calculated at every point', ctype='plusminus', lat_max=-66)
+
+    # Calculate area-mean and 5-95% range
+    dA = ds_grid['area']*mask
+    mean_correction = (temp_correction*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
+    print('Mean temperature correction '+str(mean_correction)+' degC')
+    pc5 = np.percentile(temp_correction, 5)
+    pc95 = np.percentile(temp_correction, 95)
+    print('5-95% range '+str(pc5)+' - '+str(pc95)+' degC')
+
+    # Plot distribution of points
+    fig, ax = plt.subplots()
+    ax.hist(temp_correction, bins=50)
+    ax.axvline(mean_correction, linestyle='dashed', color='black')
+    ax.axvline(pc5, color='black')
+    ax.axvline(pc95, color='black')
+    ax.grid(linestyle='dotted')
+    ax.set_title('Temperature correction distribution')
+    ax.set_xlabel(deg_string+'C')
+    ax.set_ylabel('# points')
+    finished_plot(fig)
+
+    
+
+    
             
     
 
