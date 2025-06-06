@@ -3782,7 +3782,7 @@ def temp_correction_uncertainty (base_dir='./', bias_file='bwsalt_bias.nc', slop
     # Histogram showing distribution of points
     ax = plt.subplot(gs[1,:])    
     temp_correction_2D = temp_correction_2D.where((temp_correction_2D >= -cutoff)*(temp_correction_2D < cutoff))
-    ax.hist(temp_correction_2D.data.ravel(), bins=50)
+    [n, bins, patches] = ax.hist(temp_correction_2D.data.ravel(), bins=50)
     ax.axvline(temp_correction, linestyle='dashed', color='black')
     ax.axvline(pc10, color='black')
     ax.axvline(pc90, color='black')
@@ -3791,6 +3791,14 @@ def temp_correction_uncertainty (base_dir='./', bias_file='bwsalt_bias.nc', slop
     ax.set_xlabel(deg_string+'C', fontsize=12)
     ax.set_ylabel('# grid cells', fontsize=12)
     finished_plot(fig, fig_name='figures/temp_correction_uncertainty.png', dpi=300)
+
+    # Print central value of top 10 bins sorted by frequency; from this can determine two peaks of distribution
+    print('Top 10 bins:')
+    bin_centres = 0.5*(bins[:-1] + bins[1:])
+    for i in range(10):
+        print(bin_centres[n.argmax()])
+        n[n.argmax()] = 0
+    
 
     
 
