@@ -78,9 +78,9 @@ suites_overshoot_lengths = {'50 years': ['da697', 'dc052', 'di335', 'dc051', 'df
 suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz826':None, 'cy837':'cx209', 'cy838':'cx209', 'cz374':'cx209', 'cz375':'cx209', 'cz376':'cx209', 'cz377':'cx209', 'cz378':'cx209', 'cz834':'cw988', 'cz855':'cw988', 'cz859':'cw988', 'db587':'cw988', 'db723':'cw988', 'db731':'cw988', 'da087':'cw989', 'da266':'cw989', 'db597':'cw989', 'db733':'cw989', 'dc324':'cw989', 'da800':'cy838', 'da697':'cy837', 'da892':'cz376', 'dc051':'cy838', 'dc052':'cy837', 'dc248':'cy837', 'dc249':'cz375', 'dc251':'cz377', 'dc032':'cz375', 'dc123':'cz376', 'dc130':'cz377', 'di335':'cy838', 'df453':'cz375', 'dc565':'cy838', 'dd210':'cz376', 'df028':'cz375', 'df025':'cy838', 'df027':'cy838', 'df021':'cz375', 'df023':'cz375', 'dh541':'cz376', 'dh859':'cz376', 'de943':'cz378', 'de962':'cz378', 'de963':'cz378', 'dg093':'cz377', 'dg094':'cz377', 'dg095':'cz377', 'dm357':'cz378', 'dm358':'cz378', 'dm359':'cz378'}
 
 tipping_threshold = -1.9  # If cavity mean temp is warmer than surface freezing point, it's tipped
-temp_correction = 1.1603857322590416 # Precomputed by warming_implied_by_salinity_bias()
-temp_correction_lower = 0.11747971196479366
-temp_correction_upper = 2.017218516559842  # 10-90% bounds precomputed by temp_correction_uncertainty
+temp_correction = 1.1403043611842025 # Precomputed by warming_implied_by_salinity_bias()
+temp_correction_lower = 0.15386275907205732
+temp_correction_upper = 2.004807510160955  # 10-90% bounds precomputed by temp_correction_uncertainty
 
 # End global vars
 
@@ -1485,7 +1485,6 @@ def warming_implied_by_salinity_bias (salt_bias=None, base_dir='./'):
     slopes = []
     intercepts = []
     r2 = []
-    implied_warming = []
     all_warming = []
     all_bwsalt = []
     for n in range(num_ens):
@@ -1525,12 +1524,12 @@ def warming_implied_by_salinity_bias (salt_bias=None, base_dir='./'):
         slopes.append(slope)
         intercepts.append(intercept)
         r2.append(r_value**2)
-        implied_warming.append(salt_bias/slope)
         all_bwsalt.append(bwsalt)
         ds.close()
-
-    mean_correction = np.mean(implied_warming)
-    print('Central value for correction is '+str(mean_correction)+' degC')
+    mean_slope = np.mean(slopes)
+    implied_warming = salt_bias/mean_slope
+    
+    print('Temperature correction is '+str(implied_warming)+' degC')
 
     # Scatterplot
     fig, ax = plt.subplots()
@@ -1543,8 +1542,9 @@ def warming_implied_by_salinity_bias (salt_bias=None, base_dir='./'):
         ax.plot(x_vals, y_vals, '-', color='black', linewidth=1)
     ax.grid(linestyle='dotted')
     plt.text(0.95, 0.95, 'Salinity bias '+str(np.round(salt_bias,3))+' psu', ha='right', va='top', transform=ax.transAxes)
-    plt.text(0.95, 0.88, 'Temperature correction '+str(np.round(mean_correction,3))+deg_string+'C', ha='right', va='top', transform=ax.transAxes)
+    plt.text(0.95, 0.88, 'Ensemble mean slope '+str(np.round(mean_slope,3))+' psu/'+deg_string+'C', ha='right', va='top', transform=ax.transAxes)
     plt.text(0.95, 0.81, r'r$^2$ = '+str(np.round(np.amin(r2),3))+' - '+str(np.round(np.amax(r2),3)), ha='right', va='top', transform=ax.transAxes)
+    plt.text(0.95, 0.74, 'Temperature correction '+str(np.round(implied_warming,3))+deg_string+'C', ha='right', va='top', transform=ax.transAxes)
     ax.set_xlabel('Global warming ('+deg_string+'C)')
     ax.set_ylabel('Bottom salinity on Ross and FRIS shelves (psu)')
     ax.set_title('Calculation of temperature correction', fontsize=14)
@@ -3736,43 +3736,56 @@ def temp_correction_uncertainty (base_dir='./', bias_file='bwsalt_bias.nc', slop
 
     sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'
     regions = ['ross', 'filchner_ronne']
-    cutoff = 2.5
+    cutoff = 3
+    p0 = 0.05
 
     # Make combined mask
     ds_grid = xr.open_dataset(sample_file)
     masks = [region_mask(region, ds_grid, option='shelf')[0] for region in regions]
     mask = (masks[0] + masks[1]).squeeze()
 
-    # Read bias and ensemble mean slopes
+    # Read bias and slopes
     ds = xr.open_dataset(bias_file)
     bias = ds['bwsalt_bias'].squeeze().where(mask)
     ds.close()
     ds = xr.open_dataset(slope_file)
-    slope = ds['slope'].mean(dim='ens').where(mask)
+    slopes = ds['slope'].where(mask)
     ds.close()
+    # Get ensemble mean slope and mask out regions where not significant
+    slope = slopes.mean(dim='ens')
+    t_val, p_val = ttest_1samp(slopes.data, 0, axis=0)
+    p_val = xr.DataArray(p_val, coords=slope.coords)
+    slope = slope.where(p_val < p0)
     # Mask out regions where it doesn't freshen - CDW on continental slope, different water mass.
     bias = bias.where(slope<0)
     slope = slope.where(slope<0)
     # Calculate temperature correction at every point
     temp_correction_2D = bias/slope
 
-    # Plot map of temperature corrections
-    circumpolar_plot(temp_correction_2D, ds_grid, title='Temperature correction ('+deg_string+'C) calculated at every point', titlesize=14, ctype='plusminus', lat_max=-66, vmin=-cutoff, vmax=cutoff)
-
     # Calculate 10-90% range
     pc10 = temp_correction_2D.quantile(0.1)
     pc90 = temp_correction_2D.quantile(0.9)
     print('10-90% range '+str(pc10.item())+' - '+str(pc90.item())+' degC')
-    
-    # Plot distribution of points
+
+    # 3-panel plot for supplementary
+    fig = plt.figure(figsize=(8,10))
+    gs = plt.GridSpec(5,2)
+    gs.update(left=0.05, right=0.95, bottom=0.05, top=0.9, hspace=0.5, wspace=0.1)
+    # Map of slope
+    ax = plt.subplot(gs[:3,0])
+    circumpolar_plot(slope, ds_grid, ax=ax, title='Ensemble mean slope (psu/'+deg_string+'C)', titlesize=14, lat_max=-66, ctype='plusminus')
+    # Map of temperature correction
+    ax = plt.subplot(gs[:3,1])
+    circumpolar_plot(temp_correction_2D, ds_grid, ax=ax, title='Temperature correction ('+deg_string+'C)', titlesize=14, lat_max=-66, ctype='plusminus', vmin=-cutoff, vmax=cutoff, cbar_kwags={'extend':'both'})
+    # Histogram showing distribution of points
+    ax = plt.subplot(gs[3:,:])    
     temp_correction_2D = temp_correction_2D.where((temp_correction_2D >= -cutoff)*(temp_correction_2D < cutoff))
-    fig, ax = plt.subplots()
     ax.hist(temp_correction_2D.data.ravel(), bins=50)
     ax.axvline(temp_correction, linestyle='dashed', color='black')
     ax.axvline(pc10, color='black')
     ax.axvline(pc90, color='black')
     ax.grid(linestyle='dotted')
-    ax.set_title('Temperature correction distribution', fontsize=14)
+    ax.set_title('Distribution of temperature correction', fontsize=14)
     ax.set_xlabel(deg_string+'C', fontsize=12)
     ax.set_ylabel('# points', fontsize=12)
     finished_plot(fig)
