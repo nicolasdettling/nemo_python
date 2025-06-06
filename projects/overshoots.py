@@ -79,6 +79,8 @@ suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz82
 
 tipping_threshold = -1.9  # If cavity mean temp is warmer than surface freezing point, it's tipped
 temp_correction = 1.1403043611842025 # Precomputed by warming_implied_by_salinity_bias()
+temp_correction_lower = 0.11747971196479366
+temp_correction_upper = 2.017218516559842  # 10-90% bounds precomputed by temp_correction_uncertainty
 
 # End global vars
 
@@ -1208,6 +1210,9 @@ def tipping_stats (base_dir='./'):
         threshold_max = np.amin(max_warming[max_warming > last_notip]) + temp_correction
         threshold_bounds.append([threshold_min, threshold_max])
         print('Threshold lies between '+str(threshold_min)+' and '+str(threshold_max)+', or '+str(0.5*(threshold_min+threshold_max))+' +/- '+str(0.5*(threshold_max-threshold_min)))
+        threshold_min_uncertainty = threshold_min - temp_correction + temp_correction_lower
+        threshold_max_uncertainty = threshold_max - temp_correction + temp_correction_upper
+        print('Accounting for uncertainty in temperature correction, threshold lies between '+str(threshold_min_uncertainty)+' and '+str(threshold_max_uncertainty)+', or '+str(0.5*(threshold_min_uncertainty+threshold_max_uncertainty))+' +/- '+str(0.5*(threshold_max_uncertainty-threshold_min_uncertainty)))
 
     # Plot
     fig = plt.figure(figsize=(6,5))
@@ -3728,6 +3733,8 @@ def stabilisation_tipping_list (base_dir='./', out_file='stabilisation_tipping_t
 def temp_correction_uncertainty (base_dir='./', bias_file='bwsalt_bias.nc', slope_file='bwsalt_warming_regression.nc'):
 
     sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'
+    regions = ['ross', 'filchner_ronne']
+    cutoff = 2.5
 
     # Make combined mask
     ds_grid = xr.open_dataset(sample_file)
@@ -3736,37 +3743,36 @@ def temp_correction_uncertainty (base_dir='./', bias_file='bwsalt_bias.nc', slop
 
     # Read bias and ensemble mean slopes
     ds = xr.open_dataset(bias_file)
-    bias = ds['bwsalt_bias'].squeeze()
+    bias = ds['bwsalt_bias'].squeeze().where(mask)
     ds.close()
     ds = xr.open_dataset(slope_file)
-    slope = ds['slope'].mean(dim='ens')
+    slope = ds['slope'].mean(dim='ens').where(mask)
     ds.close()
+    # Mask out regions where it doesn't freshen - CDW on continental slope, different water mass.
+    bias = bias.where(slope<0)
+    slope = slope.where(slope<0)
     # Calculate temperature correction at every point
-    temp_correction = bias/slope
-    # Apply masks
-    temp_correction = temp_correction.where(mask)
+    temp_correction_2D = bias/slope
 
     # Plot map of temperature corrections
-    circumpolar_plot(temp_correction, ds_grid, title='Temperature correction ('+deg_string+'C) calculated at every point', ctype='plusminus', lat_max=-66)
+    circumpolar_plot(temp_correction_2D, ds_grid, title='Temperature correction ('+deg_string+'C) calculated at every point', titlesize=14, ctype='plusminus', lat_max=-66, vmin=-cutoff, vmax=cutoff)
 
-    # Calculate area-mean and 5-95% range
-    dA = ds_grid['area']*mask
-    mean_correction = (temp_correction*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
-    print('Mean temperature correction '+str(mean_correction)+' degC')
-    pc5 = np.percentile(temp_correction, 5)
-    pc95 = np.percentile(temp_correction, 95)
-    print('5-95% range '+str(pc5)+' - '+str(pc95)+' degC')
-
+    # Calculate 10-90% range
+    pc10 = temp_correction_2D.quantile(0.1)
+    pc90 = temp_correction_2D.quantile(0.9)
+    print('10-90% range '+str(pc10.item())+' - '+str(pc90.item())+' degC')
+    
     # Plot distribution of points
+    temp_correction_2D = temp_correction_2D.where((temp_correction_2D >= -cutoff)*(temp_correction_2D < cutoff))
     fig, ax = plt.subplots()
-    ax.hist(temp_correction, bins=50)
-    ax.axvline(mean_correction, linestyle='dashed', color='black')
-    ax.axvline(pc5, color='black')
-    ax.axvline(pc95, color='black')
+    ax.hist(temp_correction_2D.data.ravel(), bins=50)
+    ax.axvline(temp_correction, linestyle='dashed', color='black')
+    ax.axvline(pc10, color='black')
+    ax.axvline(pc90, color='black')
     ax.grid(linestyle='dotted')
-    ax.set_title('Temperature correction distribution')
-    ax.set_xlabel(deg_string+'C')
-    ax.set_ylabel('# points')
+    ax.set_title('Temperature correction distribution', fontsize=14)
+    ax.set_xlabel(deg_string+'C', fontsize=12)
+    ax.set_ylabel('# points', fontsize=12)
     finished_plot(fig)
 
     
