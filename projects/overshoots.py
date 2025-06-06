@@ -3768,17 +3768,19 @@ def temp_correction_uncertainty (base_dir='./', bias_file='bwsalt_bias.nc', slop
     print('10-90% range '+str(pc10.item())+' - '+str(pc90.item())+' degC')
 
     # 3-panel plot for supplementary
-    fig = plt.figure(figsize=(8,10))
-    gs = plt.GridSpec(5,2)
-    gs.update(left=0.05, right=0.95, bottom=0.05, top=0.9, hspace=0.5, wspace=0.1)
+    fig = plt.figure(figsize=(8,6))
+    gs = plt.GridSpec(2,2)
+    gs.update(left=0.08, right=0.95, bottom=0.08, top=0.9, hspace=0.2, wspace=0.1)
     # Map of slope
-    ax = plt.subplot(gs[:3,0])
+    ax = plt.subplot(gs[0,0])
+    ax.axis('equal')
     circumpolar_plot(slope, ds_grid, ax=ax, title='Ensemble mean slope (psu/'+deg_string+'C)', titlesize=14, lat_max=-66, ctype='plusminus')
     # Map of temperature correction
-    ax = plt.subplot(gs[:3,1])
+    ax = plt.subplot(gs[0,1])
+    ax.axis('equal')
     circumpolar_plot(temp_correction_2D, ds_grid, ax=ax, title='Temperature correction ('+deg_string+'C)', titlesize=14, lat_max=-66, ctype='plusminus', vmin=-cutoff, vmax=cutoff, cbar_kwags={'extend':'both'})
     # Histogram showing distribution of points
-    ax = plt.subplot(gs[3:,:])    
+    ax = plt.subplot(gs[1,:])    
     temp_correction_2D = temp_correction_2D.where((temp_correction_2D >= -cutoff)*(temp_correction_2D < cutoff))
     ax.hist(temp_correction_2D.data.ravel(), bins=50)
     ax.axvline(temp_correction, linestyle='dashed', color='black')
@@ -3787,8 +3789,8 @@ def temp_correction_uncertainty (base_dir='./', bias_file='bwsalt_bias.nc', slop
     ax.grid(linestyle='dotted')
     ax.set_title('Distribution of temperature correction', fontsize=14)
     ax.set_xlabel(deg_string+'C', fontsize=12)
-    ax.set_ylabel('# points', fontsize=12)
-    finished_plot(fig)
+    ax.set_ylabel('# grid cells', fontsize=12)
+    finished_plot(fig, fig_name='figures/temp_correction_uncertainty.png', dpi=300)
 
     
 
