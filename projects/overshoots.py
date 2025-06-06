@@ -962,6 +962,8 @@ def build_timeseries_trajectory (suite_list, var_name, base_dir='./', timeseries
         ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
         data = ds[var_name] + offset
         data = data.assign_coords(scenario_type=('time_centered', np.ones(data.size)*stype))
+        if 'time_counter' in data.coords:
+            data = data.drop_vars(['time_counter'])
         if suite != suite_list[0]:
             # Find the starting date of the current suite
             start_date = data.time_centered[0]
