@@ -3540,6 +3540,8 @@ def mask_problems (base_dir='./', in_file='problem_events'):
     problems_by_suite = find_problem_suites(base_dir=base_dir, in_file=in_file)
     # Loop over affected suites
     for suite in problems_by_suite:
+        if suite not in ['cz374', 'dc130']:
+            continue
         print('Processing '+suite)
         file_path = base_dir+'/'+suite+'/'+timeseries_file
         # Make a copy of timeseries
