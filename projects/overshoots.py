@@ -44,9 +44,9 @@ suites_by_scenario = {'piControl_static_ice' : ['cs495'],
                       '2K_ramp_down': ['di335','dc051', 'da800', 'dc565', 'df025', 'df027'],
                       '2.5K_stabilise' : ['cz374','cz859'],
                       '3K_stabilise' : ['cz375','db587','db597'],
-                      '3K_ramp_down' : ['dc032', 'dc249', 'df453', 'df028', 'df023', 'df021'],
+                      '3K_ramp_down' : ['dc032', 'dc249', 'df453', 'df028', 'do136', 'df021'],
                       '4K_stabilise' : ['cz376','db723','db733'],
-                      '4K_ramp_down' : ['da892', 'dc123', 'dh859', 'dd210', 'dh541'],
+                      '4K_ramp_down' : ['da892', 'do135', 'dh859', 'dd210', 'dh541'],
                       '5K_stabilise' : ['cz377','db731','dc324'],
                       '5K_ramp_down' : ['dc251', 'dc130', 'dg095', 'dg093', 'dg094'],
                       '6K_stabilise' : ['cz378'],
@@ -3540,8 +3540,6 @@ def mask_problems (base_dir='./', in_file='problem_events'):
     problems_by_suite = find_problem_suites(base_dir=base_dir, in_file=in_file)
     # Loop over affected suites
     for suite in problems_by_suite:
-        if suite not in ['cz374', 'dc130', 'dg093']:
-            continue
         print('Processing '+suite)
         file_path = base_dir+'/'+suite+'/'+timeseries_file
         # Make a copy of timeseries
@@ -3800,6 +3798,47 @@ def temp_correction_uncertainty (base_dir='./', bias_file='bwsalt_bias.nc', slop
     for i in range(10):
         print(bin_centres[n.argmax()])
         n[n.argmax()] = 0
+
+
+# A couple of the re-run problem simulations ran for long enough to replace the old ones. Merge into the old simulations where they branched just before the first problem.
+def merge_rerun_suite (suite_old, suite_new, base_dir='./'):
+
+    timeseries_files = ['timeseries.nc', 'timeseries_um.nc']
+
+    for ts_file in timeseries_files:
+        file_old = base_dir+'/'+suite_old+'/'+ts_file
+        file_new = base_dir+'/'+suite_new+'/'+ts_file
+        ds_old = xr.open_dataset(file_old)
+        ds_new = xr.open_dataset(file_new)
+        date_branch = ds_new['time_centered'][0]
+        print('Merging at '+str(date_branch.dt.year.item())+'-'+str(date_branch.dt.month.item()))
+        t_merge = np.argwhere(ds_old['time_centered'].data == date_branch.data)[0][0]
+        ds_merge = xr.concat([ds_old.isel(time_centered=slice(0,t_merge)), ds_new], dim='time_centered')
+        ds_old.close()
+        ds_new.close()
+        print('Overwriting '+file_new)
+        overwrite_file(ds_merge, file_new)
+
+
+# Compare the global mean SAT at the time of Ross recovery between a particularly badly affected problem suite, and a re-run suite.
+def problem_effect_recovery (base_dir='./'):
+
+    suite_old = 'dc123'
+    suite_new = 'do135'
+    region = 'ross'
+    smooth = 5*months_per_year
+    timeseries_file = 'timeseries.nc'
+    
+    for suite in [suite_old, suite_new]:
+        print(suite)
+        warming = moving_average(global_warming(suite, base_dir=base_dir), smooth)
+        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+        cavity_temp = moving_average(ds[region+'_cavity_temp'], smooth)
+        cavity_temp, warming = align_timeseries(cavity_temp, warming)
+        recovers, date_recovers, t_recovers = check_recover(cavity_temp=cavity_temp, smoothed=True, return_date=True, return_t=True, base_dir=base_dir)
+        recover_warming = warming.isel(time_centered=t_recovers)
+        print('Recovers in '+str(date_recovers.dt.year.item())+'-'+str(date_recovers.dt.month.item())+'; global warming '+str(recover_warming.item())+' C')
+        ds.close()
     
 
     
