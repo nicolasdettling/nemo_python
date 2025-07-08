@@ -1193,8 +1193,8 @@ def tipping_stats (base_dir='./'):
                     print('Significant difference (p='+str(p_val)+')')
                 else:
                     print('No significant difference (p='+str(p_val)+')')
-        if recovery_floor is not None:
-            print('Trajectories as cool as '+str(recovery_floor+temp_correction)+'K still have not recovered')
+        '''if recovery_floor is not None:
+            print('Trajectories as cool as '+str(recovery_floor+temp_correction)+'K still have not recovered')'''
         # Save results for plotting
         all_temp_tip.append(warming_at_tip)
         all_temp_recover.append(warming_at_recovery)
@@ -1265,8 +1265,8 @@ def tipping_stats (base_dir='./'):
     handles = []
     for m in range(len(colours)):
         handles.append(Line2D([0], [0], marker='o', markersize=4, color=colours[m], label=labels[m], linestyle=''))
-    if any([x is not None for x in all_recovery_floor]):
-        handles.append(Line2D([0], [0], marker='o', markersize=4, color='white', markeredgecolor='DodgerBlue', label='not yet recovered', linestyle=''))
+    '''if any([x is not None for x in all_recovery_floor]):
+        handles.append(Line2D([0], [0], marker='o', markersize=4, color='white', markeredgecolor='DodgerBlue', label='not yet recovered', linestyle=''))'''
     plt.legend(handles=handles, loc='center left', bbox_to_anchor=(-0.35, 1.2), fontsize=9)
     finished_plot(fig, fig_name='figures/tipping_stats.png', dpi=300)
     
@@ -1333,7 +1333,7 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
     if static_ice:
         fig_name += '_static_ice'
     fig_name += '.png'
-    finished_plot(fig) #, fig_name=fig_name, dpi=300)
+    finished_plot(fig, fig_name=fig_name, dpi=300)
 
 
 # Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS (both regions together). To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
@@ -1426,12 +1426,12 @@ def calc_salinity_bias (base_dir='./', eos='eos80', plot=False, out_file='bwsalt
             ax.axis('equal')
             img = circumpolar_plot(data_plot[n], ds, ax=ax, masked=True, make_cbar=False, title=titles[n], titlesize=13, vmin=vmin[n], vmax=vmax[n], ctype=ctype[n], lat_max=-63)
             if n == 2:
-                ax.contour(x, y, masks[0], levels=[0.5], colors=('magenta'), linewidths=0.5)
+                ax.contour(x, y, mask, levels=[0.5], colors=('magenta'), linewidths=0.5)
             if n != 1:
                 cax = cax = fig.add_axes([0.01+0.45*n, 0.1, 0.02, 0.6])
                 plt.colorbar(img, cax=cax, extend='both')
         plt.suptitle('Bottom salinity (psu)', fontsize=18)
-        finished_plot(fig, fig_name='figures/bwsalt_bias.png')
+        finished_plot(fig, fig_name='figures/bwsalt_bias.png', dpi=300)
 
     # Save bias to NetCDF file
     data_diff = (ramp_up_bwsalt - obs_bwsalt).squeeze()
@@ -1548,7 +1548,7 @@ def warming_implied_by_salinity_bias (salt_bias=None, base_dir='./'):
     ax.set_xlabel('Global warming ('+deg_string+'C)')
     ax.set_ylabel('Bottom salinity on Ross and FRIS shelves (psu)')
     ax.set_title('Calculation of temperature correction', fontsize=14)
-    finished_plot(fig, fig_name='figures/bwsalt_warming_regression.png')
+    finished_plot(fig, fig_name='figures/bwsalt_warming_regression.png', dpi=300)
     
 
 
@@ -1650,8 +1650,9 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
             threshold_recover.append(None)
         print('Freshening of absolute salinity between beginning of ramp-up and tipping point has mean '+str(np.mean(freshening_to_tip))+', std '+str(np.std(freshening_to_tip)))
         if region == 'ross':
-            # Calculate Ross bwsalt bias in TEOS-10
-            ross_bias = calc_salinity_bias(base_dir=base_dir, eos='teos10')[0]
+            # Calculate bwsalt bias in TEOS-10
+            # Note this is both regions together!
+            ross_bias = calc_salinity_bias(base_dir=base_dir, eos='teos10')
             # Compare observed freshening to freshening required to tip (plus correction)
             fresh_fraction = obs_freshening/(np.mean(freshening_to_tip)+ross_bias)*100
             print('Observed freshening is '+str(fresh_fraction)+'% of what is needed to tip')
@@ -2937,13 +2938,20 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
                     data = slr_trim - pi_slr_trim
                 tips, date_tip = check_tip(suite=suite, region=regions[n], return_date=True, base_dir=base_dir)
                 if tips:
+                    # Check if parent suite also tipped before branching point; if so, tipping pre-dates this suite
+                    parent_suite = suites_branched[suite]
                     year_tip = date_tip.dt.year
+                    if parent_suite is not None:
+                        parent_tips, parent_date_tip = check_tip(suite=parent_suite, region=regions[n], return_date=True, base_dir=base_dir)
+                        if parent_tips and parent_date_tip.dt.year < time[0]:
+                            year_tip = time[0]
                     if year_tip <= time[-1]:
                         num_tip += 1
                     else:
                         print('Warning: '+suite+' does not extend to tipping date')
+                        continue
                     # Select untipped section
-                    untipped = data.where(time < year_tip, drop=True)  # 1-year offset as before
+                    untipped = data.where(time < year_tip, drop=True)
                     recovers, date_recover = check_recover(suite=suite, region=regions[n], return_date=True, base_dir=base_dir)
                     if recovers:
                         year_recover = date_recover.dt.year
@@ -3108,7 +3116,8 @@ def find_corrupted_files (base_dir='./', log=False):
                             if is_ref:
                                 print('Draft matches reference geometry')
                                 num_blocks_ref += 1
-                                f_log2.write(nemo_file+'\n')
+                                if log:
+                                    f_log2.write(nemo_file+'\n')
                             else:
                                 print('Draft is something different')
                                 num_blocks_other +=1
@@ -3839,6 +3848,38 @@ def problem_effect_recovery (base_dir='./'):
         recover_warming = warming.isel(time_centered=t_recovers)
         print('Recovers in '+str(date_recovers.dt.year.item())+'-'+str(date_recovers.dt.month.item())+'; global warming '+str(recover_warming.item())+' C')
         ds.close()
+
+
+# Check for drift in piControl mass loss for the two caviites.
+def check_pi_drift (base_dir='./'):
+
+    regions = ['ross', 'filchner_ronne']
+    timeseries_file = 'timeseries.nc'
+    smooth = 5*months_per_year
+    p0 = 0.05
+
+    # Identify the piControl suites
+    for scenario in suites_by_scenario:
+        if 'piControl' in scenario:
+            for suite in suites_by_scenario[scenario]:
+                print(suite+' ('+scenario+')')
+                ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+                for region in regions:
+                    print(region+', '+suite)
+                    massloss = moving_average(ds[region+'_massloss'], smooth)
+                    time_years = [(t.dt.year.item() - massloss.coords['time_centered'][0].dt.year.item()) + (t.dt.month.item() - 1)/months_per_year + 0.5 for t in massloss.coords['time_centered']]
+                    slope, intercept, r_value, p_value, std_err = linregress(time_years, massloss)
+                    if p_value < p0:
+                        # Convert to % of baseline / century
+                        baseline = massloss.mean(dim='time_centered').item()
+                        trend_percent = slope/baseline*1e4
+                        print('Significant trend of '+str(slope)+' Gt/y/y, or '+str(trend_percent)+' %/century')
+                    else:
+                        print('No significant trend')
+                ds.close()
+                    
+                
+    
     
 
     
