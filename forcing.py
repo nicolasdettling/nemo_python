@@ -7,7 +7,7 @@ import glob
 from .utils import distance_btw_points, closest_point, convert_to_teos10, fix_lon_range, dewpoint_to_specific_humidity
 from .grid import get_coast_mask, get_icefront_mask
 from .ics_obcs import fill_ocean
-from .interpolation import regrid_era5_to_cesm2, extend_into_mask
+from .interpolation import regrid_era5_to_cesm2, extend_into_mask, regrid_to_NEMO, neighbours
 from .file_io import find_cesm2_file, find_processed_cesm2_file
 from .constants import temp_C2K, rho_fw, cesm2_ensemble_members, sec_per_day, sec_per_hour
 
@@ -75,38 +75,70 @@ def calving_at_coastline(calving, nemo_mask):
 # icefront_mask_ocn: mask of ocean points nearest to iceshelf, produced by get_icefront_mask
 # max_distance: float of maximum distance (in meters) that an ocean calving point will get moved
 # calving_var: string of the calving variable name
-def shift_calving(calving, mask, nemo_mask, icefront_mask_ocn, max_distance=11000, calving_var='soicbclv'):
+def shift_calving(calving, mask, nemo_mask, icefront_mask_ocn, max_distance=2e6, calving_var='soicbclv', ocn=False):
     # NEMO domain grid points
     x, y        = np.meshgrid(nemo_mask.nav_lon.x, nemo_mask.nav_lon.y)
     calving_x   = x[(~np.isnan(mask))]
     calving_y   = y[(~np.isnan(mask))]
     calving_new = np.copy(calving[calving_var].values);
 
+    ice_shelf  = (nemo_mask.tmaskutil.isel(time_counter=0) - nemo_mask.tmask.isel(time_counter=0, nav_lev=0)).astype(bool)
+    open_ocean = (nemo_mask.tmask.isel(time_counter=0, nav_lev=0) == 1)
+    land       = ~open_ocean
+    # Return ocean points with at least 3 ice shelf neighbour
+    num_ice_shelf_neighbours = neighbours(ice_shelf, missing_val=0)[-1]
+    num_land_neighbours      = neighbours(land, missing_val=0)[-1] # also includes the iceshelf points
+    confined_points          = (open_ocean*(num_land_neighbours > 2)).astype(bool)
+
     # Coordinates of ocean points closest to iceshelf front 
-    icefront_x     = x[icefront_mask_ocn]
-    icefront_y     = y[icefront_mask_ocn]
-    icefront_coord = (nemo_mask.nav_lon.values[icefront_mask_ocn], nemo_mask.nav_lat.values[icefront_mask_ocn])
+    # increase number of possible points by shifting the icefront mask:
+    ocean_neighbours       = neighbours(icefront_mask_ocn, missing_val=0)[-1]
+    icefront_mask_extended = (((icefront_mask_ocn)+(ocean_neighbours))*open_ocean).astype(bool)
+    icefront_x             = x[icefront_mask_extended]
+    icefront_y             = y[icefront_mask_extended]
+    icefront_coord         = (nemo_mask.nav_lon.values[icefront_mask_extended], nemo_mask.nav_lat.values[icefront_mask_extended])
 
     # For each land iceberg calving point, check distance to nearest iceshelf front and move closer if possible:
     for index in list(zip(calving_y, calving_x)):
-    
+     
         calving_coord = (nemo_mask.nav_lon.values[index], nemo_mask.nav_lat.values[index])
         distances     = distance_btw_points(calving_coord, icefront_coord)
-
+        distances[distances < 2e4] = np.nan
         # only move cell if it is within a certain distance
-        if np.min(np.abs(distances)) < max_distance:     
-            new_x         = icefront_x[np.argmin(np.abs(distances))]
-            new_y         = icefront_y[np.argmin(np.abs(distances))]
+        if np.nanmin(np.abs(distances)) < max_distance:     
+            new_x         = icefront_x[np.nanargmin(np.abs(distances))]
+            new_y         = icefront_y[np.nanargmin(np.abs(distances))]
             # Move calving to the nearest icefront point and add to any pre-existing calving at that point
-            calving_new[new_y, new_x] = calving_new[new_y, new_x] + calving[calving_var].values[index]    
-            calving_new[index]        = 0 # remove calving from originating point
+            calving_new[(new_y, new_x)] = calving_new[(new_y, new_x)] + calving_new[index]    
+            calving_new[index]          = 0 # remove calving from originating point
+
+    # For each ocean iceberg calving point, check that it isn't surrounded on three sides by iceshelf points or land points
+    # to prevent accumulation of icebergs in small coastal regions
+    if ocn:
+        # Points that are ocean that have at least three iceshelf neighbour points, these are the ones that I'll need to move
+        confined_x = x[confined_points*icefront_mask_ocn]
+        confined_y = y[confined_points*icefront_mask_ocn]
+        unconfined_x = x[~confined_points*open_ocean]
+        unconfined_y = y[~confined_points*open_ocean]
+        unconfined_coord = (nemo_mask.nav_lon.values[~confined_points*open_ocean], nemo_mask.nav_lat.values[~confined_points*open_ocean])
+        
+        for ind in list(zip(confined_y, confined_x)):
+            confined_coord = (nemo_mask.nav_lon.values[ind], nemo_mask.nav_lat.values[ind])
+            distances      = distance_btw_points(confined_coord, unconfined_coord)#icefront_coord)
+            distances[distances < 2e4] = np.nan
+
+            new_x = unconfined_x[np.nanargmin(np.abs(distances))]
+            new_y = unconfined_y[np.nanargmin(np.abs(distances))]
+            # Move calving to the nearest icefront point and add to any pre-existing calving at that point
+            calving_new[new_y, new_x] = calving_new[new_y, new_x] + calving_new[ind]    
+            calving_new[ind]        = 0 # remove calving from originating point
 
     # Write new locations to xarray dataset
     calving_ds = calving.copy()
     calving_ds[calving_var] = calving[calving_var].dims, calving_new
 
     return calving_ds
-    
+
 # Main function to move pre-existing calving dataset to a new coastline (on the same underlying grid, but subset)
 # Inputs:
 # nemo_mask: xarray dataset of nemo meshmask file (must contain nav_lon, nav_lat, tmask, tmaskutil)
@@ -121,11 +153,17 @@ def create_calving(calving, nemo_mask, calving_var='soicbclv', new_file_path='./
 
     # Mask of ocean grid points nearest to icefront, to move calving to
     icefront_mask_ocn = get_icefront_mask(nemo_mask, side='ocean')
+    icefront_mask_ice = get_icefront_mask(nemo_mask, side='ice')
 
-    # shift calving points to the iceshelf edge
-    calv_ocn_new  = shift_calving(calving      , calving_ocn , nemo_mask, icefront_mask_ocn) # from ocean
-    calv_land_new = shift_calving(calv_ocn_new , calving_land, nemo_mask, icefront_mask_ocn) # from land
-    calv_ice_new  = shift_calving(calv_land_new, calving_ice , nemo_mask, icefront_mask_ocn) # from ice
+    # Shift calving points to the iceshelf edge
+    calv_ocn_new  = shift_calving(calving       , calving_ocn , nemo_mask, icefront_mask_ocn, ocn=True) # from ocean
+    calv_land_new = shift_calving(calv_ocn_new  , calving_land, nemo_mask, icefront_mask_ocn, ocn=False) # from land
+    calv_ice_new  = shift_calving(calv_land_new , calving_ice , nemo_mask, icefront_mask_ocn, ocn=False) # from ice
+
+    # Check if the icebergs calve in regions shallower than the minimum initial iceberg thickness (40 m)
+    calving_depth    = nemo_mask.bathy_metry.squeeze().values*(calv_ice_new[calving_var].squeeze().values.astype(bool))
+    if np.sum((calving_depth < 40)*(calving_depth > 0)) != 0:
+        print('Warning: number of cells with calving shallower than minimum iceberg thickness is, ', np.sum((calving_depth < 40)*(calving_depth > 0)))
 
     # Write the calving dataset to a netcdf file:
     calv_ice_new[calving_var] = ('time_counter',) + calving[calving_var].dims, calv_ice_new[calving_var].values[np.newaxis, ...] 
@@ -134,8 +172,9 @@ def create_calving(calving, nemo_mask, calving_var='soicbclv', new_file_path='./
     # Check that the amount of calving that occurs in the new file is approximately equal to the original file:
     # allow for a tolerance of 0.1% (although it should be essentially equal within machine precision)
     tolerance = 0.001*(np.sum(calv_ice_new[calving_var].values)) 
-    if np.abs(np.sum(calv_ice_new[calving_var].values) - np.sum(calving[calving_var]).values) >= tolerance:
-        raise Exception('The total amount of calving in the new file is not equal to the ')
+    if np.abs(np.sum(calv_ice_new[calving_var].values) - np.sum(calving[calving_var].values)) >= tolerance:
+        raise Exception('The total amount of calving in the new file is not equal to the original total', \
+                np.sum(calv_ice_new[calving_var].values), np.sum(calving[calving_var].values))
     
     return calv_ice_new
 
@@ -250,18 +289,18 @@ def TAU_to_U10xy(TAUX, TAUY, U10):
 
 # Process atmospheric forcing from CESM2 scenarios (LE2, etc.) for a single variable and single ensemble member.
 # expt='LE2', var='PRECT', ens='1011.001' etc.
-def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, year_ens_start=1750, shift_wind=False,
-                       land_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/LE2/b.e21.BHISTsmbb.f09_g17.LE2-1011.001.cam.h0.LANDFRAC.185001-185912.nc'):
+def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, year_ens_start=1750, shift_wind=False):
 
-    if expt not in ['LE2', 'piControl', 'SF-AAER', 'SF-BMB', 'SF-GHG', 'SF-EE']:
+    if expt not in ['LE2', 'piControl', 'SF-xAER', 'SF-AAER', 'SF-BMB', 'SF-GHG', 'SF-EE']:
         raise Exception('Invalid experiment {expt}')
-
-    # load cesm2 land-ocean mask
-    cesm2_mask = xr.open_dataset(land_mask).LANDFRAC
 
     freq     = 'daily'
     for year in range(start_year, end_year+1):
         # read in the data and subset to the specified year
+
+        # load cesm2 land-ocean mask
+        land_mask  = find_cesm2_file(expt, 'LANDFRAC', 'atm', 'monthly', ens, year)
+        cesm2_mask = xr.open_dataset(land_mask).LANDFRAC.isel(time=0)
         if var=='PRECS': # snowfall
             if expt=='piControl': freq='monthly' # only monthly files available
             file_pathc = find_cesm2_file(expt, 'PRECSC', 'atm', freq, ens, year)
@@ -273,7 +312,7 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, 
         elif var=='wind':
             if expt=='piControl': var_U = 'U'; var_V='V';
             elif expt=='LE2': var_U='UBOT'; var_V='VBOT';
-            elif expt in ['SF-AAER', 'SF-BMB', 'SF-GHG', 'SF-EE']: var_U='TAUX'; var_V='TAUY'; # single forcing expts don't have UBOT, VBOT so need to calc from stress
+            elif expt in ['SF-xAER', 'SF-AAER', 'SF-BMB', 'SF-GHG', 'SF-EE']: var_U='TAUX'; var_V='TAUY'; # single forcing expts don't have UBOT, VBOT so need to calc from stress
 
             file_path_U10  = find_cesm2_file(expt, 'U10', 'atm', freq, ens, year)
             file_path_UBOT = find_cesm2_file(expt, var_U, 'atm', freq, ens, year)
@@ -306,7 +345,7 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, 
             if expt=='piControl':
                 data_UBOT = data_UBOT.isel(lev=-1) # bottom wind is the last entry (992 hPa)
                 data_VBOT = data_VBOT.isel(lev=-1)
-            elif expt in ['SF-AAER', 'SF-BMB', 'SF-GHG', 'SF-EE']:
+            elif expt in ['SF-xAER', 'SF-AAER', 'SF-BMB', 'SF-GHG', 'SF-EE']:
                 Ux, Uy    = TAU_to_U10xy(data_UBOT, data_VBOT, data_U10)
                 data_UBOT = Ux.rename('U10x')
                 data_VBOT = Uy.rename('U10y')
@@ -324,9 +363,9 @@ def cesm2_atm_forcing (expt, var, ens, out_dir, start_year=1850, end_year=2100, 
             data_arrays = [data]       
 
         for arr in data_arrays:
-            if var in ['QREFHT','TREFHT','FSDS','FLDS','PSL']: 
+            if var in ['QREFHT','TREFHT','FSDS','FLDS','PSL','PRECT','PRECS']: 
                 # Mask atmospheric forcing over land based on cesm2 land mask (since land values might not be representative for the ocean areas)
-                arr = xr.where(cesm2_mask.isel(time=0).values != 0, -9999, arr)
+                arr = xr.where(cesm2_mask.values != 0, -9999, arr)
                 # And then fill masked areas with nearest non-NaN latitude neighbour
                 print(f'Filling land for variable {var} in year {year}')
                 var_filled_array = np.empty(arr.shape)
@@ -371,7 +410,7 @@ def cesm2_expt_all_atm_forcing (expt, ens_strs=None, out_dir=None, start_year=18
     if out_dir is None:
         raise Exception('Please specify an output directory via optional argument out_dir')
 
-    var_names = ['wind','FSDS','FLDS','TREFHT','QREFHT','PRECT','PSL','PRECS']
+    var_names = ['wind','FSDS','FLDS','TREFHT','QREFHT','PRECT','PSL','PRECS'] 
     for ens in ens_strs:
         print(f'Processing ensemble member {ens}')
         for var in var_names:
@@ -406,13 +445,16 @@ def cesm2_expt_all_ocn_forcing(expt, ens_strs=None, out_dir=None, start_year=185
 # - (optional) year_start : start year for time averaging
 # - (optional) end_year   : end year for time averaging
 # - (optional) out_file   : path to file to write time mean to NetCDF in case you want to store it
-def era5_time_mean_forcing(variable, year_start=1979, year_end=2015, out_file=None,
+def era5_time_mean_forcing(variable, year_start=1979, year_end=2015, out_file=None, monthly=False,
                            era5_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/ERA5-forcing/daily/files/processed/',
                            land_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/ERA5-forcing/daily/files/land_sea_mask.nc'):
 
     ERA5_ds   = xr.open_mfdataset(f'{era5_folder}{variable}_*.nc')
     ERA5_ds   = ERA5_ds.isel(time=((ERA5_ds.time.dt.year <= year_end)*(ERA5_ds.time.dt.year >= year_start)))
-    time_mean = ERA5_ds.mean(dim='time')
+    if monthly:
+        time_mean = ERA5_ds.groupby('time.month').mean(dim='time')
+    else:
+        time_mean = ERA5_ds.mean(dim='time')
 
     # mask areas that are land:
     #era5_mask = xr.open_dataset(land_mask).lsm.isel(valid_time=0)
@@ -433,12 +475,14 @@ def era5_time_mean_forcing(variable, year_start=1979, year_end=2015, out_file=No
 # - (optional) end_year   : end year for time averaging
 # - (optional) out_file   : path to file to write time mean to NetCDF in case you want to store it
 # - (optional) ensemble_members : list of strings of ensemble members to average (defaults to all the ones that have been downloaded)
-def cesm2_ensemble_time_mean_forcing(expt, variable, year_start=1979, year_end=2015, out_file=None, ensemble_members=cesm2_ensemble_members,
+def cesm2_ensemble_time_mean_forcing(expt, variable, year_start=1979, year_end=2015, out_file=None, ensemble_members=cesm2_ensemble_members, monthly=False,
                              land_mask='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/LE2/b.e21.BHISTsmbb.f09_g17.LE2-1011.001.cam.h0.LANDFRAC.185001-185912.nc'):
 
     # calculate ensemble mean for each year
     year_mean = xr.Dataset()
+    print('Ensemble members:', ensemble_members)
     for year in range(year_start, year_end+1):
+        print(year)
         files_to_open = []
         for ens in ensemble_members:
             file_path     = find_processed_cesm2_file(expt, variable, ens, year)
@@ -446,12 +490,16 @@ def cesm2_ensemble_time_mean_forcing(expt, variable, year_start=1979, year_end=2
         # calculate ensemble mean    
         ens_files = xr.open_mfdataset(files_to_open, concat_dim='ens', combine='nested')
         ens_year  = ens_files.isel(time=(ens_files.time.dt.year==year))
-        ens_mean  = ens_year.mean(dim=['time','ens']) # dimensions should be x,y
+        if monthly:
+            ens_mean = ens_year.groupby('time.month').mean(dim=['time','ens']) # dimensions should be x,y
+        else:
+            ens_mean = ens_year.mean(dim=['time','ens'])
         # save ensemble mean to xarray dataset
         if year == year_start:
             year_mean = ens_mean
         else:
             year_mean = xr.concat([year_mean, ens_mean], dim='year')
+
             
     # and then calculate time-mean of all ensemble means:
     time_mean = year_mean.copy().mean(dim='year')
@@ -479,8 +527,8 @@ def cesm2_ensemble_time_mean_forcing(expt, variable, year_start=1979, year_end=2
 # - (optional) nemo_grid, nemo_mask : string of path to NEMO domain_cfg and mesh_mask files
 # - (optional) out_folder : string to location to save the bias correction file
 def atm_bias_correction(source, variable, expt='LE2', year_start=1979, year_end=2015, 
-                        ensemble_mean_file=None, era5_mean_file=None, fill_land=False,
-                        era5_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/ERA5-forcing/daily/files/',
+                        ensemble_mean_file=None, era5_mean_file=None, fill_land=False, monthly=False, method='conservative',
+                        era5_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/ERA5-forcing/daily/files/processed/',
                         out_folder='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/climate-forcing/CESM2/LE2/processed/'):
 
     # process_forcing_for_correction(source, variable)
@@ -489,30 +537,71 @@ def atm_bias_correction(source, variable, expt='LE2', year_start=1979, year_end=
         if ensemble_mean_file:
             CESM2_time_mean = xr.open_dataset(ensemble_mean_file)
         else:
-            ensemble_mean_file = f'{out_folder}{variable}_mean_{year_start}-{year_end}.nc'
-            CESM2_time_mean = cesm2_ensemble_time_mean_forcing(expt, variable, out_file=ensemble_mean_file, year_start=year_start, year_end=year_end)
+            if monthly:
+                ensemble_mean_file = f'{out_folder}{variable}_mean_{year_start}-{year_end}_monthly.nc'
+            else:
+                ensemble_mean_file = f'{out_folder}{variable}_mean_{year_start}-{year_end}.nc'
+            print('Calculating CESM2 ensemble mean')
+            CESM2_time_mean = cesm2_ensemble_time_mean_forcing(expt, variable, out_file=ensemble_mean_file, year_start=year_start, year_end=year_end, monthly=monthly)
+        # Regrid CESM2 to NEMO:
+        print('Regridding CESM2 to NEMO')
+        if monthly:
+            for m in CESM2_time_mean.month:
+                CESM2_month_regridded = regrid_to_NEMO(CESM2_time_mean.sel(month=m), variable, calc_regrid_operator=False, method=method,
+                                                       ro_filename=f'/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/cf-regridding/CESM2-to-NEMO-{method}.pickle')
+                if m > 1:
+                    CESM2_regridded = xr.concat([CESM2_regridded, CESM2_month_regridded], dim='month')
+                else:
+                    CESM2_regridded = CESM2_month_regridded
+        else:
+            CESM2_regridded = regrid_to_NEMO(CESM2_time_mean, variable, calc_regrid_operator=True, method=method,
+                                             ro_filename=f'/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/cf-regridding/CESM2-to-NEMO-{method}.pickle')
+
 
         # Read in time mean of ERA5 files (or calculate it)
+        CESM2_to_ERA5_varnames = {'TREFHT':'t2m','FSDS':'msdwswrf','FLDS':'msdwlwrf','QREFHT':'sph2m', 'PRECS':'msr', 'PRECT':'mtpr', 'PSL':'msl'} # I calculated specific humidity
+        varname = CESM2_to_ERA5_varnames[variable]
         if era5_mean_file:
             ERA5_time_mean = xr.open_dataset(era5_mean_file)
         else:
-            CESM2_to_ERA5_varnames = {'TREFHT':'t2m','FSDS':'msdwswrf','FLDS':'msdwlwrf','QREFHT':'sph2m', 'PRECS':'msr', 'PRECT':'mtpr', 'PSL':'msl'} # I calculated specific humidity
-            varname = CESM2_to_ERA5_varnames[variable]
-            era5_mean_file = f'{era5_folder}{variable}_mean_{year_start}-{year_end}.nc'
-            ERA5_time_mean = era5_time_mean_forcing(varname, year_start=year_start, year_end=year_end, out_file=era5_mean_file, era5_folder=era5_folder)
-            if variable=='QREFHT':
-                # convert dewpoint temperature to specific humidity
-                varname='specific_humidity'
-            ERA5_time_mean = ERA5_time_mean.rename({varname:variable, 'longitude':'lon', 'latitude':'lat'})
+            if monthly:
+                era5_mean_file = f'{era5_folder}{variable}_mean_{year_start}-{year_end}_monthly.nc'
+            else:
+                era5_mean_file = f'{era5_folder}{variable}_mean_{year_start}-{year_end}.nc'
+            print('Calculating ERA5 mean')
+            ERA5_time_mean = era5_time_mean_forcing(varname, year_start=year_start, year_end=year_end, out_file=era5_mean_file, era5_folder=era5_folder, monthly=monthly)
+        if variable=='QREFHT':
+           # convert dewpoint temperature to specific humidity
+           varname='specific_humidity'
+        
+        ERA5_time_mean = ERA5_time_mean.rename({varname:variable, 'longitude':'lon', 'latitude':'lat'})
         
         # Adjust the longitude and regrid time means to NEMO configuration grid, so that they can be used to bias correct
-        ERA5_regridded = regrid_era5_to_cesm2(CESM2_time_mean, ERA5_time_mean, variable)
+        print('Regridding ERA5 to NEMO')
+        if monthly:
+            for m in ERA5_time_mean.month:
+                #ERA5_month_regridded = regrid_era5_to_cesm2(CESM2_time_mean.sel(month=m), ERA5_time_mean.sel(month=m), variable)
+                ERA5_month_regridded = regrid_to_NEMO(ERA5_time_mean.sel(month=m), variable, calc_regrid_operator=False, method=method,
+                                                      ro_filename=f'/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/cf-regridding/ERA5-to-NEMO-{method}.pickle')
+                if m > 1:
+                    ERA5_regridded = xr.concat([ERA5_regridded, ERA5_month_regridded], dim='month')
+                else:
+                    ERA5_regridded = ERA5_month_regridded
+        else:
+            ERA5_regridded = regrid_to_NEMO(ERA5_time_mean, variable, calc_regrid_operator=True, method=method,
+                                            ro_filename=f'/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/cf-regridding/ERA5-to-NEMO-{method}.pickle')
+            #ERA5_regridded = regrid_era5_to_cesm2(CESM2_time_mean, ERA5_time_mean, variable)
  
         # thermodynamic correction
         if variable in ['TREFHT','QREFHT','FLDS','FSDS','PRECS','PRECT']:
             print('Correcting thermodynamics')
-            out_file = f'{out_folder}{source}-{expt}_{variable}_bias_corr.nc'
-            thermo_correction(CESM2_time_mean, ERA5_regridded, variable, out_file, fill_land=fill_land)
+            if monthly:
+                out_file = f'{out_folder}{source}-{expt}_{variable}_bias_corr_monthly.nc'
+            else:
+                out_file = f'{out_folder}{source}-{expt}_{variable}_bias_corr_highres.nc'
+            CESM2_regridded.to_netcdf(f'{out_folder}CESM2_{variable}_monthly_mean_regridded.nc')
+            ERA5_regridded.to_netcdf(f'{out_folder}ERA5_{variable}_monthly_mean_regridded.nc')
+            thermo_correction(CESM2_regridded, ERA5_regridded, variable, out_file, fill_land=fill_land, monthly=monthly)
         else:
             raise Exception(f'Variable {variable} does not need bias correction. Check that this is true.')
     else:
@@ -526,7 +615,7 @@ def atm_bias_correction(source, variable, expt='LE2', year_start=1979, year_end=
 # - ERA5_mean  : xarray Dataset containing the time mean of the ERA5 variable
 # - out_file   : string to path to write NetCDF file to
 # - fill_land (optional) : boolean indicating whether to fill areas that are land in the source mask with nearest values or whether to just leave it as is
-def thermo_correction(source_mean, ERA5_mean, variable, out_file, fill_land=True):
+def thermo_correction(source_mean, ERA5_mean, variable, out_file, fill_land=True, monthly=False):
     
     # Calculate difference:
     bias = ERA5_mean - source_mean
@@ -535,10 +624,16 @@ def thermo_correction(source_mean, ERA5_mean, variable, out_file, fill_land=True
        # bias = bias.interpolate_na(dim='lat', method='nearest', fill_value="extrapolate")
        src_to_fill = xr.where(np.isnan(bias), -9999, bias) # which cells need to be filled
        var_filled  = extend_into_mask(src_to_fill[variable].values, missing_val=-9999, fill_val=np.nan, use_2d=True, use_3d=False, num_iters=100)
-       bias[variable] = (('lat','lon'), var_filled)
+       if monthly:
+           bias[variable] = (('time','lat','lon'), var_filled)
+       else:
+           bias[variable] = (('lat','lon'), var_filled)
 
     # write to file
-    bias.to_netcdf(out_file)
+    if monthly:
+        bias.to_netcdf(out_file, unlimited_dims='month')
+    else:
+        bias.to_netcdf(out_file)
     
     return
 
