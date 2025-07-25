@@ -108,10 +108,18 @@ def plot_SSH_trend(run_folder, fig_name, style='lineplot', dpi=None, nemo_mesh='
     return
 
 # Evaluate bottom temperature and salinity with WOA output (two plots: (1) average over time series (2) end state of timeseries)
-def plot_WOA_eval(run_folder, figname1, figname2, figname3, nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc', dpi=None):
+def plot_WOA_eval(run_folder, figname1, figname2, figname3, nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc', dpi=None, reanalysis=False):
 
     # Load gridT files into dataset:
-    gridT_files = glob.glob(f'{run_folder}*grid_T*')
+    gridT_files = np.sort(glob.glob(f'{run_folder}*grid_T*'))
+    if reanalysis:
+        index_start = [idx for idx, s in enumerate(gridT_files) if '1979' in s][0]
+        try:
+            index_end = [idx for idx, s in enumerate(gridT_files) if '2023' in s][0] + 1
+        except:
+            index_end = None 
+        gridT_files = gridT_files[index_start:index_end]
+    
     nemo_ds     = xr.open_mfdataset(gridT_files) # load all the gridT files in the run folder
 
     nemo_ds = nemo_ds.rename({'e3t':'thkcello', 'x_grid_T':'x', 'y_grid_T':'y', 'area_grid_T':'area', 'e3t':'thkcello',
