@@ -301,9 +301,12 @@ def mask_obs_region(fileT, fileS, mask, nemo_domcfg='/gws/nopw/j04/anthrofail/bi
 # fig_name    (optional) : string of path to save figure to
 # dir_obs     (optional) : string of path to observation directory
 # nemo_domcfg (optional) : string of path to NEMO domain_cfg file 
+# years_show             : which years to show, defaults to only show simulated profiles during overlap with obs, otherwise pass a list or range of the years to include
 def regional_profile_TS_std(run_folder, region, option='shelf', fig_name=None, dpi=None, conf=None,
                             dir_obs='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/observations/pierre-dutrieux/',
-                            nemo_domcfg='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/domain_cfg-20240305.nc'):
+                            nemo_domcfg='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/domain_cfg-20240305.nc',
+                            years_show=np.arange(2000,2020)):
+    from datetime import datetime
 
     # Get NEMO domain grid and mask for the specified region
     nemo_file = xr.open_dataset(nemo_domcfg).squeeze()
@@ -317,9 +320,14 @@ def regional_profile_TS_std(run_folder, region, option='shelf', fig_name=None, d
 
     # Find list of observations and simulation files
     # observations span 1994-2019, with mostly 2000-2019, so only take simulation files between 2000-2019 onwards
-    yearly_Tobs = glob.glob(f'{dir_obs}ASEctd_griddedMean????_PT.nc')
-    yearly_Sobs = glob.glob(f'{dir_obs}ASEctd_griddedMean????_S.nc')
-    yearly_TSsim = glob.glob(f'{run_folder}*1m*20[0-1][0-9]0101*grid_T*')
+    yearly_Tobs  = glob.glob(f'{dir_obs}ASEctd_griddedMean????_PT.nc')
+    yearly_Sobs  = glob.glob(f'{dir_obs}ASEctd_griddedMean????_S.nc')
+    file_list    = glob.glob(f'{run_folder}*1m*grid_T*')
+    yearly_TSsim = []
+    for file in file_list:
+        year = datetime.strptime(file.split('1m_')[1].split('_')[0], '%Y%m%d').year
+        if year in years_show:
+            yearly_TSsim = yearly_TSsim + [file]
 
     #----------- Figure ----------
     fig, ax = plt.subplots(1,4, figsize=(12,6), dpi=dpi, gridspec_kw={'width_ratios': [2, 1, 2, 1]})
@@ -510,20 +518,15 @@ def frames_transect_Amundsen_sims(run_folder, savefig=False, transect_location='
 # run_folder : string path to folder containing NEMO simulations (gridT files)
 # savefig    : (optional) boolean whether to save figure within figures sub-directory in run_folder
 def transects_Amundsen(run_folder, transect_locations=['Getz_left','Getz_right','Dotson','PI_trough','shelf_west','shelf_mid','shelf_east','shelf_edge'], 
-                       time_slice=slice(180,None), tmin=-2, tmax=0.5, smin=33, smax=35, savefig=False, ylim=(1300, -20), 
-                       nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc', fig_name=''):
+                       time_slice=("2000-01-01", "2015-12-31"), tmin=-2, tmax=0.5, smin=33, smax=35, savefig=False, ylim=(1300, -20), 
+                       nemo_mesh='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/mesh_mask-20240305.nc', fig_dir='', fig_name=''):
+    
     # load nemo simulations
     gridT_files  = glob.glob(f'{run_folder}*grid_T*')
-    nemo_ds      = xr.open_mfdataset(gridT_files) # load all the gridT files in the run folder
+    nemo_ds      = xr.open_mfdataset(gridT_files).sel(time_counter=time_slice) # load all the gridT files in the run folder
     nemo_ds      = nemo_ds.rename({'x_grid_T':'x', 'y_grid_T':'y', 'nav_lon_grid_T':'nav_lon', 'nav_lat_grid_T':'nav_lat', 'deptht':'depth'})
-    if time_slice:
-        try:
-            nemo_results = nemo_ds.isel(time_counter=time_slice).mean(dim='time_counter')
-        except:
-            nemo_results = nemo_ds.isel(time_counter=time_slice) 
-    else:
-        nemo_results = nemo_ds.mean(dim='time_counter')
-    nemo_mesh_ds  = xr.open_dataset(nemo_mesh).isel(time_counter=0)
+    nemo_results = nemo_ds.mean(dim='time_counter')
+    nemo_mesh_ds = xr.open_dataset(nemo_mesh).squeeze()
     
     # load observations:
     obs          = read_dutrieux(eos='teos10')
@@ -565,9 +568,9 @@ def transects_Amundsen(run_folder, transect_locations=['Getz_left','Getz_right',
 
         if savefig:
             if fig_name:
-                finished_plot(fig, fig_name=f'{run_folder}figures/evaluation_transect_{transect}_{fig_name}.jpg')
+                finished_plot(fig, fig_name=f'{fig_dir}evaluation_transect_{transect}_{fig_name}.jpg')
             else:
-                finished_plot(fig, fig_name=f'{run_folder}figures/evaluation_transect_{transect}.jpg')
+                finished_plot(fig, fig_name=f'{fig_dir}evaluation_transect_{transect}.jpg')
 
     return
 
