@@ -45,10 +45,18 @@ region_bounds = {
     'dotson_bay': [-114, -110.5, -74.3, -73.5],
     'amundsen_west_shelf_break': [-115, -112, -72, -71],
     'weddell_gyre': [-60., 30., -90., -50.],
+    'filchner_trough': [-45, -30, -79, -75],
+    'ronne_depression': [-70, -55, -76, -73],
+    'LAB_trough': [-166, -157, -80, -75],
+    'drygalski_trough': [163, 168.5, -80, -71],
 }
-# Isobaths restricting some regions
+# Isobaths restricting some regions: shallow bound, then deep bound
 region_bathy_bounds = {
-    'bear_ridge_N': [350, None],
+    'bear_ridge_N': [None, 350],
+    'filchner_trough': [600, 1200],
+    'ronne_depression': [525, None],
+    'LAB_trough': [525, 800],
+    'drygalski_trough': [500, 1200],
 }
 # Latitude to bound continental shelf
 shelf_lat = -58
@@ -143,12 +151,19 @@ region_names = {
     'ross'              : 'Ross',
     'thwaites'          : 'Thwaites Ice Shelf',
     'west_antarctica'   : 'West Antarctica',
+    'filchner_trough'   : 'Filchner Trough',
+    'ronne_depression'  : 'Ronne Depression',
+    'LAB_trough'        : 'Little America Basin Trough',
+    'drygalski_trough'  : 'Drygalski Trough',
 }
 # Default colours to use for plotting lines
 line_colours = ['black', 'Crimson', 'blue', 'DarkMagenta', 'DimGrey', 'DarkGreen', 'DeepPink', 'DeepSkyBlue']
 land_colour     = '#9999a3'
 iceshelf_colour = '#d4d5da' 
 
-# Keep track of ensemble members downloaded for all variables: 
-cesm2_ensemble_members = ['1011.001','1031.002','1051.003','1071.004','1091.005','1111.006','1131.007','1151.008','1171.009','1191.010',\
-                          '1231.011','1251.011','1281.011','1301.011'] 
+# Keep track of ensemble members downloaded for all variables:
+cesm2_ensemble_members = ['1011.001','1031.002','1051.003','1071.004','1091.005','1111.006','1131.007','1151.008','1171.009','1191.010'] + \
+                         [f'1231.0{i:02}' for i in range(11,15)] + [f'1251.0{i:02}' for i in range(11,15)] + [f'1281.0{i:02}' for i in range(11,15)] + \
+                         [f'1301.0{i:02}' for i in range(11,15)]
+
+

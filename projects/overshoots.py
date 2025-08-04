@@ -44,9 +44,9 @@ suites_by_scenario = {'piControl_static_ice' : ['cs495'],
                       '2K_ramp_down': ['di335','dc051', 'da800', 'dc565', 'df025', 'df027'],
                       '2.5K_stabilise' : ['cz374','cz859'],
                       '3K_stabilise' : ['cz375','db587','db597'],
-                      '3K_ramp_down' : ['dc032', 'dc249', 'df453', 'df028', 'df023', 'df021'],
+                      '3K_ramp_down' : ['dc032', 'dc249', 'df453', 'df028', 'do136', 'df021'],
                       '4K_stabilise' : ['cz376','db723','db733'],
-                      '4K_ramp_down' : ['da892', 'dc123', 'dh859', 'dd210', 'dh541'],
+                      '4K_ramp_down' : ['da892', 'do135', 'dh859', 'dd210', 'dh541'],
                       '5K_stabilise' : ['cz377','db731','dc324'],
                       '5K_ramp_down' : ['dc251', 'dc130', 'dg095', 'dg093', 'dg094'],
                       '6K_stabilise' : ['cz378'],
@@ -79,6 +79,8 @@ suites_branched = {'cx209':None, 'cw988':None, 'cw989':None, 'cw990':None, 'cz82
 
 tipping_threshold = -1.9  # If cavity mean temp is warmer than surface freezing point, it's tipped
 temp_correction = 1.1403043611842025 # Precomputed by warming_implied_by_salinity_bias()
+temp_correction_lower = 0.15386275907205732
+temp_correction_upper = 2.004807510160955  # 10-90% bounds precomputed by temp_correction_uncertainty
 
 # End global vars
 
@@ -960,6 +962,8 @@ def build_timeseries_trajectory (suite_list, var_name, base_dir='./', timeseries
         ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
         data = ds[var_name] + offset
         data = data.assign_coords(scenario_type=('time_centered', np.ones(data.size)*stype))
+        if 'time_counter' in data.coords:
+            data = data.drop_vars(['time_counter'])
         if suite != suite_list[0]:
             # Find the starting date of the current suite
             start_date = data.time_centered[0]
@@ -1189,8 +1193,8 @@ def tipping_stats (base_dir='./'):
                     print('Significant difference (p='+str(p_val)+')')
                 else:
                     print('No significant difference (p='+str(p_val)+')')
-        if recovery_floor is not None:
-            print('Trajectories as cool as '+str(recovery_floor+temp_correction)+'K still have not recovered')
+        '''if recovery_floor is not None:
+            print('Trajectories as cool as '+str(recovery_floor+temp_correction)+'K still have not recovered')'''
         # Save results for plotting
         all_temp_tip.append(warming_at_tip)
         all_temp_recover.append(warming_at_recovery)
@@ -1208,6 +1212,9 @@ def tipping_stats (base_dir='./'):
         threshold_max = np.amin(max_warming[max_warming > last_notip]) + temp_correction
         threshold_bounds.append([threshold_min, threshold_max])
         print('Threshold lies between '+str(threshold_min)+' and '+str(threshold_max)+', or '+str(0.5*(threshold_min+threshold_max))+' +/- '+str(0.5*(threshold_max-threshold_min)))
+        threshold_min_uncertainty = threshold_min - temp_correction + temp_correction_lower
+        threshold_max_uncertainty = threshold_max - temp_correction + temp_correction_upper
+        print('Accounting for uncertainty in temperature correction, threshold lies between '+str(threshold_min_uncertainty)+' and '+str(threshold_max_uncertainty)+', or '+str(0.5*(threshold_min_uncertainty+threshold_max_uncertainty))+' +/- '+str(0.5*(threshold_max_uncertainty-threshold_min_uncertainty)))
 
     # Plot
     fig = plt.figure(figsize=(6,5))
@@ -1258,8 +1265,8 @@ def tipping_stats (base_dir='./'):
     handles = []
     for m in range(len(colours)):
         handles.append(Line2D([0], [0], marker='o', markersize=4, color=colours[m], label=labels[m], linestyle=''))
-    if any([x is not None for x in all_recovery_floor]):
-        handles.append(Line2D([0], [0], marker='o', markersize=4, color='white', markeredgecolor='DodgerBlue', label='not yet recovered', linestyle=''))
+    '''if any([x is not None for x in all_recovery_floor]):
+        handles.append(Line2D([0], [0], marker='o', markersize=4, color='white', markeredgecolor='DodgerBlue', label='not yet recovered', linestyle=''))'''
     plt.legend(handles=handles, loc='center left', bbox_to_anchor=(-0.35, 1.2), fontsize=9)
     finished_plot(fig, fig_name='figures/tipping_stats.png', dpi=300)
     
@@ -1326,14 +1333,16 @@ def plot_bwtemp_massloss_by_gw_panels (base_dir='./', static_ice=False):
     if static_ice:
         fig_name += '_static_ice'
     fig_name += '.png'
-    finished_plot(fig) #, fig_name=fig_name, dpi=300)
+    finished_plot(fig, fig_name=fig_name, dpi=300)
 
 
 # Calculate UKESM's bias in bottom salinity on the continental shelf of Ross and FRIS (both regions together). To do this, find the global warming level averaged over 1995-2014 of a historical simulation with static cavities (cy691) and identify the corresponding 10-year period in each ramp-up ensemble member. Then, average bottom salinity over those years and ensemble members, compare to observational climatologies interpolated to NEMO grid, and calculate the area-averaged bias.
 # Before running this on Jasmin, do "source ~/pyenv/bin/activate" so we can use gsw
-def calc_salinity_bias (base_dir='./', eos='eos80'):
+def calc_salinity_bias (base_dir='./', eos='eos80', plot=False, out_file='bwsalt_bias.nc'):
 
-    regions = ['ross', 'filchner_ronne']
+    regions = ['ross', 'filchner_ronne']  # Both together
+    labels_lon = [-166, -45, -158, 162, -30, -70]
+    labels_lat = [-72, -71, -79, -75, -78, -76.5]
     pi_suite = 'cs495'  # Preindustrial, static cavities
     hist_suite = 'cy691'  # Historical, static cavities: to get UKESM's idea of warming relative to preindustrial
     timeseries_file_um = 'timeseries_um.nc'
@@ -1391,31 +1400,47 @@ def calc_salinity_bias (base_dir='./', eos='eos80'):
     obs_interp = interp_latlon_cf(obs, ds, method='bilinear')
     obs_bwsalt = obs_interp['salt']
 
-    # Make a quick plot
-    fig = plt.figure(figsize=(8,3))
-    gs = plt.GridSpec(1,3)
-    gs.update(left=0.1, right=0.9, bottom=0.05, top=0.8, wspace=0.1)
-    ukesm_plot = ramp_up_bwsalt.where(ramp_up_bwsalt!=0).squeeze()
-    obs_plot = obs_bwsalt.where(ukesm_plot.notnull()*obs_bwsalt.notnull())
-    obs_plot = obs_plot.where(ramp_up_bwsalt!=0).squeeze()
-    data_plot = [ukesm_plot, obs_plot, ukesm_plot-obs_plot]
-    titles = ['UKESM', 'Observations', 'Model bias']
-    vmin = [34, 34, -0.5]
-    vmax = [34.85, 34.85, 0.5]
-    ctype = ['RdBu_r', 'RdBu_r', 'plusminus']
-    for n in range(3):
-        ax = plt.subplot(gs[0,n])
-        ax.axis('equal')
-        img = circumpolar_plot(data_plot[n], ds, ax=ax, masked=True, make_cbar=False, title=titles[n], titlesize=14, vmin=vmin[n], vmax=vmax[n], ctype=ctype[n], lat_max=-63)
-        if n != 1:
-            cax = cax = fig.add_axes([0.01+0.45*n, 0.1, 0.02, 0.6])
-            plt.colorbar(img, cax=cax, extend='both')
-    plt.suptitle('Bottom salinity (psu)', fontsize=18)
-    finished_plot(fig, fig_name='figures/bwsalt_bias.png')
-
-    # Construct a mask which is both regions together
+    # Prepare masks of each region
     masks = [region_mask(region, ds, option='shelf')[0] for region in regions]
+    # Make combined mask
     mask = masks[0] + masks[1]
+    # Prepare coordinates for plotting masks
+    x, y = polar_stereo(ds['nav_lon'], ds['nav_lat'])
+
+    if plot:
+        # Make a quick plot
+        fig = plt.figure(figsize=(8,3))
+        gs = plt.GridSpec(1,3)
+        gs.update(left=0.1, right=0.9, bottom=0.05, top=0.8, wspace=0.1)
+        ukesm_plot = ramp_up_bwsalt.where(ramp_up_bwsalt!=0).squeeze()
+        obs_plot = obs_bwsalt.where(ukesm_plot.notnull()*obs_bwsalt.notnull())
+        obs_plot = obs_plot.where(ramp_up_bwsalt!=0).squeeze()
+        data_plot = [ukesm_plot, obs_plot, ukesm_plot-obs_plot]
+        titles = ['a) UKESM', 'b) Observations', 'c) Model bias']
+        vmin = [34, 34, -0.5]
+        vmax = [34.85, 34.85, 0.5]
+        ctype = ['RdBu_r', 'RdBu_r', 'plusminus']
+        region_colours = ['magenta']*2 + ['black']*4
+        for n in range(3):
+            ax = plt.subplot(gs[0,n])
+            ax.axis('equal')
+            img = circumpolar_plot(data_plot[n], ds, ax=ax, masked=True, make_cbar=False, title=titles[n], titlesize=13, vmin=vmin[n], vmax=vmax[n], ctype=ctype[n], lat_max=-63)
+            if n == 2:
+                ax.contour(x, y, mask, levels=[0.5], colors=('magenta'), linewidths=0.5)
+            if n != 1:
+                cax = cax = fig.add_axes([0.01+0.45*n, 0.1, 0.02, 0.6])
+                plt.colorbar(img, cax=cax, extend='both')
+        plt.suptitle('Bottom salinity (psu)', fontsize=18)
+        finished_plot(fig, fig_name='figures/bwsalt_bias.png', dpi=300)
+
+    # Save bias to NetCDF file
+    data_diff = (ramp_up_bwsalt - obs_bwsalt).squeeze()
+    data_diff = data_diff.where((ramp_up_bwsalt!=0)*ramp_up_bwsalt.notnull()*obs_bwsalt.notnull())
+    ds_save = xr.Dataset({'bwsalt_bias':data_diff})
+    print('Writing '+out_file)        
+    ds_save.to_netcdf(out_file)
+
+    # Calculate area-averaged bias
     dA = ds['area']*mask
     ukesm_mean = (ramp_up_bwsalt*dA).sum(dim=['x','y'])/dA.sum(dim=['x','y'])
     print('UKESM mean '+str(ukesm_mean.data)+' psu')
@@ -1443,7 +1468,6 @@ def warming_implied_by_salinity_bias (salt_bias=None, base_dir='./'):
     sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'
 
     if salt_bias is None:
-        # Salinity bias is not precomputed
         salt_bias = calc_salinity_bias(base_dir=base_dir)
 
     # Calculate area-weighting of each region
@@ -1456,16 +1480,31 @@ def warming_implied_by_salinity_bias (salt_bias=None, base_dir='./'):
     total_area = area[0] + area[1]
     weights = [a/total_area for a in area]
 
-    # Set up a scatterplot
-    fig, ax = plt.subplots()
+    # Calculate regression for each region and ramp-up member
+    num_ens = len(suites_by_scenario['ramp_up'])
     slopes = []
+    intercepts = []
     r2 = []
-    # Loop over ramp-up ensemble members
-    for suite in suites_by_scenario['ramp_up']:
+    all_warming = []
+    all_bwsalt = []
+    for n in range(num_ens):
+        suite = suites_by_scenario['ramp_up'][n]
         # Get timeseries of global warming
-        warming = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
-        # Get timeseries of bottom salinity on shelf; area-averaged over Ross and FRIS regions together (i.e. weighted mean)
+        warming_orig = global_warming(suite, pi_suite=pi_suite, base_dir=base_dir)
         ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+        # Get timeseries of Ross cavity temp to determine tipping: only want untipped sections, and Ross alway tips first
+        ross_temp_orig = ds['ross_cavity_temp']
+        # Trim and align; smooth
+        warming, ross_temp = align_timeseries(warming_orig, ross_temp_orig)
+        warming = moving_average(warming, smooth)
+        ross_temp = moving_average(ross_temp, smooth)
+        if ross_temp.max() > tipping_threshold:
+            # Trim to just before the Ross tips
+            t_end = np.argwhere(ross_temp.data > tipping_threshold)[0][0]
+            warming = warming.isel(time_centered=slice(0,t_end))
+        all_warming.append(warming)
+        # Get timeseries of bottom salinity on the shelf
+        # Area-average over Ross and FRIS regions together (i.e. weighted mean)
         bwsalt = None
         for region, weight in zip(regions, weights):
             bwsalt_tmp = ds[region+'_shelf_bwsalt']
@@ -1473,44 +1512,44 @@ def warming_implied_by_salinity_bias (salt_bias=None, base_dir='./'):
                 bwsalt = weight*bwsalt_tmp
             else:
                 bwsalt += weight*bwsalt_tmp
-        # Get timeseries of Ross cavity temp to determine tipping: only want untipped sections, and Ross alway tips first
-        ross_temp = ds['ross_cavity_temp']
-        ds.close()
-        # Trim and align
-        warming, bwsalt = align_timeseries(warming, bwsalt)
-        ross_temp = align_timeseries(ross_temp, warming)[0]
-        # Smooth
-        warming = moving_average(warming, smooth)
+        # Trim and align; smooth; trim to just before Ross tips
+        bwsalt = align_timeseries(warming_orig, bwsalt)[1]
         bwsalt = moving_average(bwsalt, smooth)
-        ross_temp = moving_average(ross_temp, smooth)
         if ross_temp.max() > tipping_threshold:
-            # Trim to just before the Ross tips
-            t_end = np.argwhere(ross_temp.data > tipping_threshold)[0][0]
-            warming = warming.isel(time_centered=slice(0,t_end))
             bwsalt = bwsalt.isel(time_centered=slice(0,t_end))
-        # Add to plot
-        ax.plot(warming, bwsalt, '-', linewidth=1.5)
         # Now find a linear regression of bwsalt in response to warming
         slope, intercept, r_value, p_value, std_err = linregress(warming, bwsalt)
         if p_value > p0:
-            print('Warning: no significant trend for '+suite)
-        # Add regression line to plot
-        x_vals = np.array([warming.min(), warming.max()])
-        y_vals = slope*x_vals + intercept
-        ax.plot(x_vals, y_vals, '-', color='black', linewidth=1)
-        # Save slope and r2
+            print('Warning: no significant trend for '+suite+', '+region)
         slopes.append(slope)
+        intercepts.append(intercept)
         r2.append(r_value**2)
+        all_bwsalt.append(bwsalt)
+        ds.close()
     mean_slope = np.mean(slopes)
     implied_warming = salt_bias/mean_slope
+    
+    print('Temperature correction is '+str(implied_warming)+' degC')
+
+    # Scatterplot
+    fig, ax = plt.subplots()
+    for n in range(num_ens):
+        warming = all_warming[n]
+        ax.plot(warming, all_bwsalt[n], '-', linewidth=1.5)
+        # Add regression line
+        x_vals = np.array([warming.min(), warming.max()])
+        y_vals = slopes[n]*x_vals + intercepts[n]
+        ax.plot(x_vals, y_vals, '-', color='black', linewidth=1)
     ax.grid(linestyle='dotted')
-    plt.text(0.95, 0.95, str(np.round(mean_slope,4))+' +/- '+str(np.round(np.std(slopes),4))+ ' psu/'+deg_string+'C', ha='right', va='top', transform=ax.transAxes)
-    plt.text(0.95, 0.88, r'r$^2$='+str(np.round(np.mean(r2),3))+' +/- '+str(np.round(np.std(r2),3)), ha='right', va='top', transform=ax.transAxes)
-    plt.text(0.95, 0.81, 'Salinity bias of '+str(np.round(salt_bias,3))+' implies\ntemperature correction of '+str(np.round(implied_warming,2))+deg_string+'C', ha='right', va='top', transform=ax.transAxes)
+    plt.text(0.95, 0.95, 'Salinity bias '+str(np.round(salt_bias,3))+' psu', ha='right', va='top', transform=ax.transAxes)
+    plt.text(0.95, 0.88, 'Ensemble mean slope '+str(np.round(mean_slope,3))+' psu/'+deg_string+'C', ha='right', va='top', transform=ax.transAxes)
+    plt.text(0.95, 0.81, r'r$^2$ = '+str(np.round(np.amin(r2),3))+' - '+str(np.round(np.amax(r2),3)), ha='right', va='top', transform=ax.transAxes)
+    plt.text(0.95, 0.74, 'Temperature correction '+str(np.round(implied_warming,3))+deg_string+'C', ha='right', va='top', transform=ax.transAxes)
     ax.set_xlabel('Global warming ('+deg_string+'C)')
     ax.set_ylabel('Bottom salinity on Ross and FRIS shelves (psu)')
     ax.set_title('Calculation of temperature correction', fontsize=14)
-    finished_plot(fig, fig_name='figures/bwsalt_warming_regression.png')
+    finished_plot(fig, fig_name='figures/bwsalt_warming_regression.png', dpi=300)
+    
 
 
 # Plot cavity-mean temperature beneath Ross and FRIS as a function of shelf-mean bottom water salinity, in all scenarios. Colour the lines based on the global warming level relative to preindustrial, and indicate the magnitude of the salinity bias.
@@ -1611,8 +1650,9 @@ def plot_ross_fris_by_bwsalt (base_dir='./'):
             threshold_recover.append(None)
         print('Freshening of absolute salinity between beginning of ramp-up and tipping point has mean '+str(np.mean(freshening_to_tip))+', std '+str(np.std(freshening_to_tip)))
         if region == 'ross':
-            # Calculate Ross bwsalt bias in TEOS-10
-            ross_bias = calc_salinity_bias(base_dir=base_dir, eos='teos10')[0]
+            # Calculate bwsalt bias in TEOS-10
+            # Note this is both regions together!
+            ross_bias = calc_salinity_bias(base_dir=base_dir, eos='teos10')
             # Compare observed freshening to freshening required to tip (plus correction)
             fresh_fraction = obs_freshening/(np.mean(freshening_to_tip)+ross_bias)*100
             print('Observed freshening is '+str(fresh_fraction)+'% of what is needed to tip')
@@ -2173,6 +2213,12 @@ def sfc_FW_timeseries (suite='cx209', base_dir='./'):
     update_simulation_timeseries(suite, ['all_iceberg_melt', 'all_pminuse', 'all_runoff', 'all_seaice_meltfreeze'], timeseries_file='timeseries_sfc.nc', sim_dir=base_dir+'/'+suite+'/', freq='m', halo=True, gtype='T')
 
 
+def bwsalt_timeseries (suite, base_dir='./'):
+
+    regions = ['filchner_trough', 'ronne_depression', 'LAB_trough', 'drygalski_trough']
+    update_simulation_timeseries(suite, [region+'_shelf_bwsalt' for region in regions], timeseries_file='timeseries_bwsalt.nc', sim_dir=base_dir+'/'+suite+'/', freq='m', halo=True, gtype='T')
+    
+
 # Helper function to get the start and end dates of each suite-segment in a trajectory
 def find_stages_start_end (suite_list, base_dir='./', timeseries_file='timeseries.nc'):
     stage_start = []
@@ -2208,7 +2254,7 @@ def plot_FW_timeseries (base_dir='./'):
     #ismr_colours = [(0,0.45,0.7), (0.8,0.47,0.65), (0,0.62,0.45), (0.9,0.62,0), (0.6,0.6,0.6)]
     tip_regions = ['ross', 'filchner_ronne'] 
     tip_titles = ['Ross', 'FRIS']
-    smooth = 20*months_per_year
+    smooth = 10*months_per_year
     stage_colours = ['Crimson', 'white', 'DodgerBlue']
     label_y = 120
     #sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'
@@ -2892,13 +2938,20 @@ def plot_SLR_timeseries (base_dir='./', draft=False):
                     data = slr_trim - pi_slr_trim
                 tips, date_tip = check_tip(suite=suite, region=regions[n], return_date=True, base_dir=base_dir)
                 if tips:
+                    # Check if parent suite also tipped before branching point; if so, tipping pre-dates this suite
+                    parent_suite = suites_branched[suite]
                     year_tip = date_tip.dt.year
+                    if parent_suite is not None:
+                        parent_tips, parent_date_tip = check_tip(suite=parent_suite, region=regions[n], return_date=True, base_dir=base_dir)
+                        if parent_tips and parent_date_tip.dt.year < time[0]:
+                            year_tip = time[0]
                     if year_tip <= time[-1]:
                         num_tip += 1
                     else:
                         print('Warning: '+suite+' does not extend to tipping date')
+                        continue
                     # Select untipped section
-                    untipped = data.where(time < year_tip, drop=True)  # 1-year offset as before
+                    untipped = data.where(time < year_tip, drop=True)
                     recovers, date_recover = check_recover(suite=suite, region=regions[n], return_date=True, base_dir=base_dir)
                     if recovers:
                         year_recover = date_recover.dt.year
@@ -3063,7 +3116,8 @@ def find_corrupted_files (base_dir='./', log=False):
                             if is_ref:
                                 print('Draft matches reference geometry')
                                 num_blocks_ref += 1
-                                f_log2.write(nemo_file+'\n')
+                                if log:
+                                    f_log2.write(nemo_file+'\n')
                             else:
                                 print('Draft is something different')
                                 num_blocks_other +=1
@@ -3565,15 +3619,272 @@ def check_rampdown_tip (base_dir='./'):
                 stype = cavity_temp.scenario_type[tip_t]
                 if stype == -1:
                     print(suite_string+': '+region+' tips during ramp-down')
+
+
+# Calculate linear regression of bottom salinity against global temperature for every point in the Ross and FRIS shelf regions, and every ramp-up ensemble member.
+def spatial_regression_bwsalt_gw (base_dir='./', out_file='bwsalt_warming_regression.nc'):
+
+    num_ens = len(suites_by_scenario['ramp_up'])
+    regions = ['ross', 'filchner_ronne']
+    sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'
+    timeseries_file = 'timeseries.nc'
+    timeseries_file_um = 'timeseries_um.nc'
+    smooth_years = 5
+    smooth = smooth_years*months_per_year
+
+    # Make combined mask
+    ds = xr.open_dataset(sample_file)
+    masks = [region_mask(region, ds, option='shelf')[0] for region in regions]
+    mask = (masks[0] + masks[1]).squeeze()
+    ds.close()
+
+    # Set up array to save slopes
+    slopes = (0*mask).expand_dims(dim={'ens':np.arange(num_ens)})
+
+    # Loop over ensemble members
+    for n, suite in zip(range(num_ens), suites_by_scenario['ramp_up']):
+        
+        print('Processing '+suite)
+        # Read global temperature
+        warming = global_warming(suite, base_dir=base_dir)
+        # Find date at which Ross tips
+        tips, tip_date = check_tip(suite=suite, region='ross', return_date=True)
+        tip_year = tip_date.dt.year
+        print('Ross tips in '+str(tip_year.item()))
+        
+        # Make list of files to read; stop 5 years after tipping
+        sim_dir = base_dir+'/'+suite+'/'
+        file_head = 'nemo_'+suite+'o_1m_'
+        file_tail = '_grid-T.nc'
+        nemo_files = []
+        for f in os.listdir(sim_dir):
+            if f.startswith(file_head) and f.endswith(file_tail):
+                year = int(f[len(file_head):len(file_head)+4])
+                if year < tip_year + smooth_years:
+                    nemo_files.append(sim_dir+f)
+        # Make sure in chronological order
+        nemo_files.sort()
+        
+        print('Reading data')
+        # Read bottom salinity from every file
+        for file_path in nemo_files:
+            ds = xr.open_dataset(file_path)
+            # Only keep the indices inside the mask to save memory
+            bwsalt = ds['sob'].where(mask).swap_dims({'time_counter':'time_centered'})
+            bwsalt = bwsalt.where(bwsalt.notnull(), drop=True)
+            if file_path == nemo_files[0]:
+                bwsalt_all = bwsalt
+            else:
+                # Concatenate to previous data
+                bwsalt_all = xr.concat([bwsalt_all, bwsalt], dim='time_centered')
+            ds.close()
             
-        
-        
-        
-        
+        # Align with warming timeseries - should work even though bwsalt_all has extra dimensions
+        warming, bwsalt_all = align_timeseries(warming, bwsalt_all)
+        warming_smooth = moving_average(warming, smooth)
+
+        print('Calculating regressions')
+        # Loop over x and y dimensions (restricted by dropping points outside mask)
+        for y0 in bwsalt_all.coords['y']:
+            for x0 in bwsalt_all.coords['x']:
+                # Extract timeseries at this point
+                bwsalt_ts = bwsalt_all.isel(y=y0, x=x0)
+                if all(bwsalt_ts.isnull()):
+                    # Not inside mask
+                    continue                
+                # Smooth
+                bwsalt_smooth = moving_average(bwsalt_ts, smooth)
+                # Calculate regression of bwsalt in response to warming
+                slope0 = linregress(warming_smooth, bwsalt_smooth)[0]
+                # Save to master slope array
+                slopes = xr.where((slopes.ens==n)*(slopes['nav_lat']==bwsalt_all['nav_lat'].isel(x=x0, y=y0))*(slopes['nav_lon']==bwsalt_all['nav_lon'].isel(x=x0, y=y0)), slope0, slopes)
+
+    # Save to file
+    ds = xr.Dataset({'slope':slopes})
+    print('Writing '+out_file)
+    ds.to_netcdf(out_file)
+    ds.close()
+
+
+# List for Jing of if/when all the stabilisation runs tip.
+def stabilisation_tipping_list (base_dir='./', out_file='stabilisation_tipping_times'):
+
+    regions = ['ross', 'filchner_ronne']
+    f = open(out_file, 'w')
+    timeseries_file = 'timeseries.nc'
+
+    for scenario in suites_by_scenario:
+        if 'stabilise' not in scenario:
+            continue
+        for suite in suites_by_scenario[scenario]:
+            f.write(suite+' ('+scenario+')\n')
+            # Get starting date
+            ds = xr.open_dataset(suite+'/'+timeseries_file)
+            date0 = ds['time_centered'][0]
+            ds.close()
+            f.write('Starts in '+str(date0.dt.year.item())+'\n')
+            for region in regions:
+                region_name = region_names[region]
+                # Check if parent ramp-up tips before starting date
+                parent_suite = suites_branched[suite]
+                parent_tips, parent_tip_date = check_tip(suite=parent_suite, region=region, return_date=True)
+                if parent_tips and parent_tip_date < date0:
+                    f.write(region_name+' tips before stabilisation\n')
+                else:
+                    # Check if stabilisation run tips
+                    tips, tip_date = check_tip(suite=suite, region=region, return_date=True)
+                    if tips:
+                        f.write(region_name+' tips in '+str(tip_date.dt.year.item())+'\n')
+                    else:
+                        f.write(region_name+' does not tip\n')
+            f.write('\n')
+    f.close()
+
+
+def temp_correction_uncertainty (base_dir='./', bias_file='bwsalt_bias.nc', slope_file='bwsalt_warming_regression.nc'):
+
+    sample_file = base_dir+'/time_averaged/piControl_grid-T.nc'
+    regions = ['ross', 'filchner_ronne']
+    cutoff = 3
+    p0 = 0.05
+
+    # Make combined mask
+    ds_grid = xr.open_dataset(sample_file)
+    masks = [region_mask(region, ds_grid, option='shelf')[0] for region in regions]
+    mask = (masks[0] + masks[1]).squeeze()
+
+    # Read bias and slopes
+    ds = xr.open_dataset(bias_file)
+    bias = ds['bwsalt_bias'].squeeze().where(mask)
+    ds.close()
+    ds = xr.open_dataset(slope_file)
+    slopes = ds['slope'].where(mask)
+    ds.close()
+    # Get ensemble mean slope and mask out regions where not significant
+    slope = slopes.mean(dim='ens')
+    t_val, p_val = ttest_1samp(slopes.data, 0, axis=0)
+    p_val = xr.DataArray(p_val, coords=slope.coords)
+    slope = slope.where(p_val < p0)
+    # Mask out regions where it doesn't freshen - CDW on continental slope, different water mass.
+    bias = bias.where(slope<0)
+    slope = slope.where(slope<0)
+    # Calculate temperature correction at every point
+    temp_correction_2D = bias/slope
+
+    # Calculate 10-90% range
+    pc10 = temp_correction_2D.quantile(0.1)
+    pc90 = temp_correction_2D.quantile(0.9)
+    print('10-90% range '+str(pc10.item())+' - '+str(pc90.item())+' degC')
+
+    # 3-panel plot for supplementary
+    fig = plt.figure(figsize=(8,6))
+    gs = plt.GridSpec(2,2)
+    gs.update(left=0.08, right=0.95, bottom=0.08, top=0.9, hspace=0.2, wspace=0.1)
+    # Map of slope
+    ax = plt.subplot(gs[0,0])
+    ax.axis('equal')
+    circumpolar_plot(slope, ds_grid, ax=ax, title='a) Ensemble mean slope (psu/'+deg_string+'C)', titlesize=14, lat_max=-66, ctype='plusminus')
+    # Map of temperature correction
+    ax = plt.subplot(gs[0,1])
+    ax.axis('equal')
+    circumpolar_plot(temp_correction_2D, ds_grid, ax=ax, title='b) Temperature correction ('+deg_string+'C)', titlesize=14, lat_max=-66, ctype='plusminus', vmin=-cutoff, vmax=cutoff, cbar_kwags={'extend':'both'})
+    # Histogram showing distribution of points
+    ax = plt.subplot(gs[1,:])    
+    temp_correction_2D = temp_correction_2D.where((temp_correction_2D >= -cutoff)*(temp_correction_2D < cutoff))
+    [n, bins, patches] = ax.hist(temp_correction_2D.data.ravel(), bins=50)
+    ax.axvline(temp_correction, linestyle='dashed', color='black')
+    ax.axvline(pc10, color='black')
+    ax.axvline(pc90, color='black')
+    ax.grid(linestyle='dotted')
+    ax.set_title('c) Distribution of temperature correction values', fontsize=14)
+    ax.set_xlabel(deg_string+'C', fontsize=12)
+    ax.set_ylabel('# grid cells', fontsize=12)
+    finished_plot(fig, fig_name='figures/temp_correction_uncertainty.png', dpi=300)
+
+    # Print central value of top 10 bins sorted by frequency; from this can determine two peaks of distribution
+    print('Top 10 bins:')
+    bin_centres = 0.5*(bins[:-1] + bins[1:])
+    for i in range(10):
+        print(bin_centres[n.argmax()])
+        n[n.argmax()] = 0
+
+
+# A couple of the re-run problem simulations ran for long enough to replace the old ones. Merge into the old simulations where they branched just before the first problem.
+def merge_rerun_suite (suite_old, suite_new, base_dir='./'):
+
+    timeseries_files = ['timeseries.nc', 'timeseries_um.nc']
+
+    for ts_file in timeseries_files:
+        file_old = base_dir+'/'+suite_old+'/'+ts_file
+        file_new = base_dir+'/'+suite_new+'/'+ts_file
+        ds_old = xr.open_dataset(file_old)
+        ds_new = xr.open_dataset(file_new)
+        date_branch = ds_new['time_centered'][0]
+        print('Merging at '+str(date_branch.dt.year.item())+'-'+str(date_branch.dt.month.item()))
+        t_merge = np.argwhere(ds_old['time_centered'].data == date_branch.data)[0][0]
+        ds_merge = xr.concat([ds_old.isel(time_centered=slice(0,t_merge)), ds_new], dim='time_centered')
+        ds_old.close()
+        ds_new.close()
+        print('Overwriting '+file_new)
+        overwrite_file(ds_merge, file_new)
+
+
+# Compare the global mean SAT at the time of Ross recovery between a particularly badly affected problem suite, and a re-run suite.
+def problem_effect_recovery (base_dir='./'):
+
+    suite_old = 'dc123'
+    suite_new = 'do135'
+    region = 'ross'
+    smooth = 5*months_per_year
+    timeseries_file = 'timeseries.nc'
+    
+    for suite in [suite_old, suite_new]:
+        print(suite)
+        warming = moving_average(global_warming(suite, base_dir=base_dir), smooth)
+        ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+        cavity_temp = moving_average(ds[region+'_cavity_temp'], smooth)
+        cavity_temp, warming = align_timeseries(cavity_temp, warming)
+        recovers, date_recovers, t_recovers = check_recover(cavity_temp=cavity_temp, smoothed=True, return_date=True, return_t=True, base_dir=base_dir)
+        recover_warming = warming.isel(time_centered=t_recovers)
+        print('Recovers in '+str(date_recovers.dt.year.item())+'-'+str(date_recovers.dt.month.item())+'; global warming '+str(recover_warming.item())+' C')
+        ds.close()
+
+
+# Check for drift in piControl mass loss for the two caviites.
+def check_pi_drift (base_dir='./'):
+
+    regions = ['ross', 'filchner_ronne']
+    timeseries_file = 'timeseries.nc'
+    smooth = 5*months_per_year
+    p0 = 0.05
+
+    # Identify the piControl suites
+    for scenario in suites_by_scenario:
+        if 'piControl' in scenario:
+            for suite in suites_by_scenario[scenario]:
+                print(suite+' ('+scenario+')')
+                ds = xr.open_dataset(base_dir+'/'+suite+'/'+timeseries_file)
+                for region in regions:
+                    print(region+', '+suite)
+                    massloss = moving_average(ds[region+'_massloss'], smooth)
+                    time_years = [(t.dt.year.item() - massloss.coords['time_centered'][0].dt.year.item()) + (t.dt.month.item() - 1)/months_per_year + 0.5 for t in massloss.coords['time_centered']]
+                    slope, intercept, r_value, p_value, std_err = linregress(time_years, massloss)
+                    if p_value < p0:
+                        # Convert to % of baseline / century
+                        baseline = massloss.mean(dim='time_centered').item()
+                        trend_percent = slope/baseline*1e4
+                        print('Significant trend of '+str(slope)+' Gt/y/y, or '+str(trend_percent)+' %/century')
+                    else:
+                        print('No significant trend')
+                ds.close()
+                    
+                
+    
+    
 
     
-            
-            
+
+    
             
     
 

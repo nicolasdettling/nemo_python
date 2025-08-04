@@ -6,7 +6,7 @@
 import numpy as np
 import xarray as xr
 from .interpolation import neighbours
-from .constants import region_edges, region_edges_flag, region_names, region_points, shelf_lat, shelf_depth, shelf_point0
+from .constants import region_edges, region_edges_flag, region_names, region_points, shelf_lat, shelf_depth, shelf_point0, region_bounds, region_bathy_bounds
 from .utils import remove_disconnected, closest_point
 
 # Helper function to calculate a bunch of grid variables (bathymetry, draft, ocean mask, ice shelf mask) from a NEMO output file, only using thkcello and the mask on a 3D data variable (current options are to look for thetao and so).
@@ -160,7 +160,27 @@ def region_mask (region, ds, option='all', return_name=False):
     # Get mask for entire continental shelf and cavities
     mask, ds = build_shelf_mask(ds)
     mask = mask.copy()
-    if region != 'all':
+    if region == 'all':
+        # No further restrictions needed
+        pass
+    elif region in region_bounds:
+        # Restrict based on lat-lon box
+        [xmin, xmax, ymin, ymax] = region_bounds[region]
+        lon = ds['nav_lon']
+        lat = ds['nav_lat']
+        mask = xr.where((lon >= xmin)*(lon <= xmax)*(lat >= ymin)*(lat <= ymax), mask, 0)
+        if region in region_bathy_bounds:
+            # Also restrict based on isobaths
+            bathy = calc_geometry(ds)[0]
+            [z_shallow, z_deep] = region_bathy_bounds[region]
+            if z_shallow is None:
+                z_shallow = bathy.min()
+            if z_deep is None:
+                z_deep = bathy.max()
+            mask = xr.where((bathy >= z_shallow)*(bathy <= z_deep), mask, 0)
+        # In all cases, these are shelf-only regions
+        option = 'shelf'
+    elif region in region_edges:
         # Restrict to a specific region of the coast
         # Select one point each on western and eastern boundaries
         [coord_W, coord_E] = region_edges[region]
@@ -226,6 +246,8 @@ def region_mask (region, ds, option='all', return_name=False):
             mask_region2 = remove_disconnected(mask, cell_to_west(point0_E, flag_E))
             mask_region += mask_region2
         mask.data = mask_region
+    else:
+        raise Exception('Undefined region '+region)
 
     # Special cases (where common boundaries didn't agree for eORCA1 and eORCA025)
     if region == 'amundsen_sea':
@@ -331,7 +353,7 @@ def create_regions_file(nemo_mesh, option, out_file):
 # nemo_domain  : (optional) string path to NEMO domain cfg file to create mask from
 def extract_var_region(ds_nemo, nemo_var, region, 
                        region_type='all', regions_file='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/output/regions_all.nc', 
-                       nemo_domain='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/domain_cfg-20240305.nc'):
+                       nemo_domain='/gws/nopw/j04/anthrofail/birgal/NEMO_AIS/bathymetry/domain_cfg-20250715.nc'):
 
     # Get mask for Amundsen Sea region
     if not regions_file:
@@ -407,3 +429,97 @@ def transect_coords_from_latlon_waypoints(data, waypoints, opt_float=True):
         return vector_x, vector_y
     else:
         return vector_x.astype(int), vector_y.astype(int)
+
+
+# Given a boolean mask of up to 3 dimensions (eg land mask, ice mask...) and the coordinates of a point in which that mask is True (eg [j,i]), return another mask which is True at all the points which are connected to the original point. For example, to isolate an individual ice shelf, or a subglacial lake.
+def connected_mask (point0, mask):
+
+    dim = len(point0)
+    if dim == 1:
+        [nx] = mask.shape
+    elif dim == 2:
+        [ny,nx] = mask.shape
+    elif dim == 3:
+        [nz,ny,nx] = mask.shape
+    elif dim > 3:
+        print(f'Error (connected_mask): not implemented for more than 3 dimensions. This array has {dim} dimensions.')
+        sys.exit()
+    if not mask[tuple(point0)]:
+        print('Error (connected_mask): the given mask is False at the given point.')
+        sys.exit()
+
+    # Initialise connected mask to all False
+    connected = np.zeros(mask.shape).astype(bool)
+
+    # Inner function to check if a given neighbour to the given point is valid
+    def check_neighbour (point, dimension, increment, neighbours):
+        new_point = np.copy(point)
+        new_point[dimension] = point[dimension] + increment
+        if mask[tuple(new_point)]:
+            neighbours.append(new_point)
+        return neighbours
+
+    # Inner function to get valid immediate neighbours at any point (up to 2*dim)
+    def get_immediate_neighbours (point):
+        neighbours = []
+        if dim == 1:
+            [i] = point
+        elif dim == 2:
+            [j,i] = point
+        elif dim == 3:
+            [k,j,i] = point
+        if i > 0:
+            neighbours = check_neighbour(point, -1, -1, neighbours)
+        if i+1 < nx:
+            neighbours = check_neighbour(point, -1, 1, neighbours)
+        if dim > 1:
+            if j > 0:
+                neighbours = check_neighbour(point, -2, -1, neighbours)
+            if j+1 < ny:
+                neighbours = check_neighbour(point, -2, 1, neighbours)
+        if dim > 2:
+            if k > 0:
+                neighbours = check_neighbour(point, -3, -1, neighbours)
+            if k+1 < nz:
+                neighbours = check_neighbour(point, -3, 1, neighbours)
+        return neighbours
+
+    # Get started with just point0 to initialise a LIFO stack
+    stack = [point0]
+
+    while len(stack) > 0:
+        new_point = stack.pop()
+        # Update connected mask
+        connected[tuple(new_point)] = True
+        # Get its immediate neighbours
+        neighbours = get_immediate_neighbours(new_point)
+        # Loop over these neighbours and add to the stack if they haven't already been dealt with
+        for possible_point in neighbours:
+            if not connected[tuple(possible_point)]:
+                stack.append(possible_point)
+
+    return connected
+
+# Build and return a mask for grounding line points: ice shelf points with at least one neighbour which is grounded ice.
+# The default is to only consider grounding lines connected to the "proper" grounded ice sheet (defined as the central southern point of the domain)
+# , and to exclude the grounding lines of pinning points etc, but you can override this by setting pinning_points=True.
+# Inputs:
+#  mesh --- xarray dataset of NEMO mesh_mask file
+def get_grounding_line_mask(mesh, pinning_points=False, return_grounded_mask=False):
+
+    land_mask = (mesh.mbathy.squeeze()==0)
+    ice_mask  = (mesh.misf.squeeze()!=0)
+
+    if pinning_points:
+        # Consider the grounding lines of pinning points too
+        grounded_mask = land_mask
+    else:
+        # Only consider "proper" grounding lines of the grounded ice sheet
+        ice_sheet_point0 = [0, round(mesh.x.size/2)]
+        grounded_mask = connected_mask(ice_sheet_point0, land_mask)
+        num_grounded_neighbours = neighbours(grounded_mask, missing_val=0)[-1]
+        gl_mask = (ice_mask*(num_grounded_neighbours > 0)).astype(bool)
+        if return_grounded_mask:
+            return gl_mask, grounded_mask
+        else:
+            return gl_mask
